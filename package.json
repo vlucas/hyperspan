@@ -1,0 +1,28 @@
+{
+  "name": "@hyperspan/framework",
+  "version": "0.0.1",
+  "description": "Hyperspan Web Framework",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/vlucas/hyperspan-framework.git"
+  },
+  "keywords": [
+    "framework",
+    "node",
+    "bun",
+    "web",
+    "framework",
+    "javascript",
+    "typescript"
+  ],
+  "author": "Vance Lucas <vance@vancelucas.com>",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/vlucas/hyperspan-framework/issues"
+  },
+  "homepage": "https://github.com/vlucas/hyperspan-framework#readme"
+}
