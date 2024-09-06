@@ -2,27 +2,33 @@
   "name": "@hyperspan/framework",
   "version": "0.0.1",
   "description": "Hyperspan Web Framework",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "bun test"
+    "build": "bun run clean && bun run build:client && bun run build:server",
+    "build:client": "bun build ./src/index.ts --outdir ./dist --target browser",
+    "build:server": "bun build ./src/server.ts --outdir ./dist --target bun",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "prepack": "npm run clean && npm run build"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/vlucas/hyperspan-framework.git"
+    "url": "https://github.com/vlucas/hyperspan-framework"
   },
-  "keywords": [
-    "framework",
-    "node",
-    "bun",
-    "web",
-    "framework",
-    "javascript",
-    "typescript"
-  ],
+  "keywords": ["framework", "node", "bun", "web", "framework", "javascript", "typescript"],
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan-framework/issues"
   },
-  "homepage": "https://github.com/vlucas/hyperspan-framework#readme"
+  "homepage": "https://www.hyperspan.dev",
+  "dependencies": {
+    "@fastify/deepmerge": "^2.0.0",
+    "@mjackson/headers": "^0.7.2",
+    "escape-html": "^1.0.3",
+    "isbot": "^5.1.17",
+    "trek-middleware": "^1.2.0",
+    "trek-router": "^1.2.0"
+  }
 }

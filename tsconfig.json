@@ -1,19 +1,26 @@
 {
+  "compileOnSave": true,
   "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "target": "es2019",
     "lib": ["ESNext", "dom", "dom.iterable"],
     "module": "esnext",
-    "target": "esnext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
+    "esModuleInterop": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "composite": true,
     "strict": true,
+    "declaration": true,
+    "sourceMap": true,
     "downlevelIteration": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "types": ["bun-types"]
-  }
+  },
+  "exclude": ["node_modules", "__tests__", "*.test.ts"]
 }

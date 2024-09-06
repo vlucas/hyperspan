@@ -12,4 +12,3 @@ export {
   renderToStream,
   renderToString,
 } from './html';
-export { IS_CLIENT } from './client';

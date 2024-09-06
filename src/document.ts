@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html } from './html';
 import { clientCSSFile, clientJSFile } from './server';
 
 export function HyperspanStyles() {

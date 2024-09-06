@@ -1,4 +1,4 @@
-import { html, renderToString } from '@hyperspan/html';
+import { html, renderToString } from '../html';
 import { Idiomorph } from './idomorph.esm';
 
 function setupAsyncContentObserver() {
