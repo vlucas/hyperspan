@@ -4,6 +4,10 @@
   "description": "Hyperspan Web Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "public": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun run clean && bun run build:client && bun run build:server",
     "build:client": "bun build ./src/index.ts --outdir ./dist --target browser",
