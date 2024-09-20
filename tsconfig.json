@@ -19,8 +19,7 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
-    "types": ["bun-types"]
+    "allowJs": true
   },
   "exclude": ["node_modules", "__tests__", "*.test.ts"]
 }

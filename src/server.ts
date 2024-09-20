@@ -1,11 +1,12 @@
 import { readdir } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, extname, join, resolve } from 'node:path';
 import { html, renderToStream, renderToString } from './html';
 import { isbot } from 'isbot';
 import { HSTemplate } from './html';
 import { HSApp, HSRequestContext, normalizePath } from './app';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
+const CWD = import.meta.dir;
 const STATIC_FILE_MATCHER = /[^/\\&\?]+\.([a-zA-Z]+)$/;
 
 // Cached route components
@@ -215,14 +216,14 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
 
   // Scan routes folder and add all file routes to the router
   const fileRoutes = await buildRoutes(config);
+  const routeMap = [];
 
   for (let i = 0; i < fileRoutes.length; i++) {
     let route = fileRoutes[i];
     const fullRouteFile = join('../../', config.appDir, 'routes', route.file);
     const routePattern = normalizePath(route.route);
 
-    // @ts-ignore
-    console.log('[Hyperspan] Added route: ', routePattern);
+    routeMap.push({ route: routePattern, file: config.appDir + '/routes/' + route.file });
 
     app.all(routePattern, async (context) => {
       const matchedRoute = await runFileRoute(fullRouteFile, context);
@@ -232,6 +233,12 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
 
       return app._defaultRoute(context);
     });
+  }
+
+  // Display routing table for dev env
+  if (!IS_PROD) {
+    console.log('[Hyperspan] File system routes (in app/routes):');
+    console.table(routeMap);
   }
 
   // [Customization] After routes added...
@@ -267,8 +274,9 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
  */
 export let clientJSFile: string;
 export async function buildClientJS() {
+  const sourceFile = resolve(CWD, '../', './src/clientjs/hyperspan-client.ts');
   const output = await Bun.build({
-    entrypoints: ['./src/hyperspan/clientjs/hyperspan-client.ts'],
+    entrypoints: [sourceFile],
     outdir: `./public/_hs/js`,
     naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
     minify: IS_PROD,

@@ -9,9 +9,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun run clean && bun run build:client && bun run build:server",
-    "build:client": "bun build ./src/index.ts --outdir ./dist --target browser",
-    "build:server": "bun build ./src/server.ts --outdir ./dist --target bun",
+    "build": "bun ./build.ts",
     "clean": "rm -rf dist",
     "test": "bun test",
     "prepack": "npm run clean && npm run build"
@@ -34,5 +32,12 @@
     "isbot": "^5.1.17",
     "trek-middleware": "^1.2.0",
     "trek-router": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.9",
+    "@types/escape-html": "^1.0.4",
+    "@types/node": "^22.5.5",
+    "bun-plugin-dts": "^0.2.3",
+    "typescript": "^5.6.2"
   }
 }
