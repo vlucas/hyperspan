@@ -6,7 +6,8 @@ import { HSTemplate } from './html';
 import { HSApp, HSRequestContext, normalizePath } from './app';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
-const CWD = import.meta.dir;
+const PWD = import.meta.dir;
+const CWD = process.cwd();
 const STATIC_FILE_MATCHER = /[^/\\&\?]+\.([a-zA-Z]+)$/;
 
 // Cached route components
@@ -189,7 +190,7 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
     }
 
     routes.push({
-      file,
+      file: join('./', routesDir, file),
       route: route || '/',
       params,
     });
@@ -220,10 +221,10 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
 
   for (let i = 0; i < fileRoutes.length; i++) {
     let route = fileRoutes[i];
-    const fullRouteFile = join('../../', config.appDir, 'routes', route.file);
+    const fullRouteFile = join(CWD, route.file);
     const routePattern = normalizePath(route.route);
 
-    routeMap.push({ route: routePattern, file: config.appDir + '/routes/' + route.file });
+    routeMap.push({ route: routePattern, file: route.file });
 
     app.all(routePattern, async (context) => {
       const matchedRoute = await runFileRoute(fullRouteFile, context);
@@ -274,7 +275,7 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
  */
 export let clientJSFile: string;
 export async function buildClientJS() {
-  const sourceFile = resolve(CWD, '../', './src/clientjs/hyperspan-client.ts');
+  const sourceFile = resolve(PWD, '../', './src/clientjs/hyperspan-client.ts');
   const output = await Bun.build({
     entrypoints: [sourceFile],
     outdir: `./public/_hs/js`,

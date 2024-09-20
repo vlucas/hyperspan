@@ -68,7 +68,7 @@ async function* _render(
     value = obj;
   }
 
-  if (value instanceof HSTemplate) {
+  if (value instanceof HSTemplate || value.__hsTemplate) {
     yield* renderToStream(value);
   } else if (typeof value.render !== 'undefined') {
     value.id = id;
@@ -107,6 +107,9 @@ async function* _render(
         break;
       case 'json':
         yield ''; //JSON.stringify(value);
+        break;
+      case 'number':
+        yield String(value);
         break;
       case 'object':
         if (typeof value.render === 'function') {
