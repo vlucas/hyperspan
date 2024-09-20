@@ -2,9 +2,9 @@
 
 > [!NOTE] > **Hyperspan is still in the early stages of development, your feedback is appreciated.**
 
-No JSX. No Virtual DOM. No hydration time. No nonsense. Just blazing fast HTML strings with reactive templates.
+Hyperspan is a full-stack framework built with [Bun](https://bun.sh) that is focused on simplicity and ease of use.
 
-Hyperspan is a full-stack framework built with [Bun](https://bun.sh) that is focused on simplicity and perforamnce.
+No JSX. No Virtual DOM. No hydration time. No nonsense. Just blazing fast HTML strings with reactive templates.
 
 ## Who Is Hyperspan For?
 
