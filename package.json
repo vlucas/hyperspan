@@ -18,15 +18,7 @@
     "type": "git",
     "url": "https://github.com/vlucas/hyperspan-framework"
   },
-  "keywords": [
-    "framework",
-    "node",
-    "bun",
-    "web",
-    "framework",
-    "javascript",
-    "typescript"
-  ],
+  "keywords": ["framework", "node", "bun", "web", "framework", "javascript", "typescript"],
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
   "bugs": {
@@ -42,10 +34,10 @@
     "trek-router": "^1.2.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.9",
+    "@types/bun": "^1.1.11",
     "@types/escape-html": "^1.0.4",
-    "@types/node": "^22.5.5",
-    "bun-plugin-dts": "^0.2.3",
-    "typescript": "^5.6.2"
+    "@types/node": "^22.7.5",
+    "bun-plugin-dts": "^0.3.0",
+    "typescript": "^5.6.3"
   }
 }
