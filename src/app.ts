@@ -4,6 +4,9 @@ import Router from 'trek-router';
 import Middleware from 'trek-middleware';
 import deepmerge from '@fastify/deepmerge';
 import Headers from '@mjackson/headers';
+import { HSTemplate } from './html';
+import { html } from './html';
+import type { ZodSchema } from 'zod';
 
 const mergeAll = deepmerge({ all: true });
 
@@ -46,7 +49,7 @@ export class HSRequestContext {
    * Response helper
    * Merges a Response object while preserving all headers added in context/middleware
    */
-  resMerge(res: Response) {
+  responseMerge(res: Response) {
     const cHeaders: Record<string, string> = {};
     for (let [name, value] of this.headers) {
       cHeaders[name] = value;
@@ -88,9 +91,76 @@ export class HSRequestContext {
   }
 }
 
-type THSRouteHandler = (
-  context: HSRequestContext
-) => (Response | null | void) | Promise<Response | null | void>;
+/**
+ * Types
+ */
+export type THSComponentReturn = HSTemplate | string | number | null;
+export type THSResponseTypes = HSTemplate | Response | string | null;
+export type THSRouteHandler = (
+  context: HSRequestContext,
+  middlewareResult?: Record<string, any> // @TODO: Move this to context...
+) => THSResponseTypes | Promise<THSResponseTypes>;
+export type THSFormRouteHandler = (
+  context: HSRequestContext,
+  formData?: Record<string, any> // Parsed data from 'formData' object or query string w/input validation
+) => THSResponseTypes | Promise<THSResponseTypes>;
+export type THSRouteHandlerNonAsync = (context: HSRequestContext) => THSResponseTypes;
+export const HS_DEFAULT_LOADING = () => html`<div>Loading...</div>`;
+
+/**
+ * Route handler helper
+ */
+export class HSRoute {
+  _kind = 'hsRoute';
+  _handler: THSRouteHandler;
+  _methods: null | string[] = null;
+  constructor(handler: THSRouteHandler) {
+    this._handler = handler;
+  }
+}
+
+/**
+ * Form route handler helper
+ */
+export class HSFormRoute {
+  _kind = 'hsFormRoute';
+  _handler: THSRouteHandler;
+  _methods: null | string[] = null;
+  _input: null | ZodSchema = null;
+  constructor(handler: THSRouteHandler) {
+    this._handler = handler;
+  }
+
+  input(schema: ZodSchema) {
+    this._input = schema;
+  }
+
+  get(ctx: HSRequestContext) {
+    return this._handler(ctx);
+  }
+
+  post(ctx: HSRequestContext) {
+    return ctx.responseMerge(new Response('Method not allowed', { status: 405 }));
+  }
+}
+
+/**
+ * Component helper
+ */
+export type THSComponentFn = (...args: any[]) => THSComponentReturn;
+export class HSComponent {
+  _kind = 'hsComponent';
+  _handler: THSComponentFn;
+  _loader: THSComponentFn = HS_DEFAULT_LOADING;
+  constructor(handler: THSComponentFn) {
+    this._handler = handler;
+  }
+
+  loading(fn: THSComponentFn): HSComponent {
+    this._loader = fn;
+    return this;
+  }
+}
 
 /**
  * App
@@ -140,7 +210,7 @@ export class HSApp {
   }
 
   async run(req: Request): Promise<Response> {
-    let response: Response;
+    let response: THSResponseTypes = null;
     let url = new URL(req.url);
     let urlPath = normalizePath(url.pathname);
 
@@ -157,13 +227,13 @@ export class HSApp {
       // Build params
       result[1].forEach((param: any) => (params[param.name] = param.value));
 
-      // Run route with context
+      // Run route with context + params
       const context = new HSRequestContext(req, params);
       response = result[0](context);
     }
 
-    // @ts-ignore
     if (response) {
+      // @ts-ignore
       return response;
     }
 

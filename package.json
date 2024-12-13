@@ -38,8 +38,10 @@
     "@mjackson/headers": "^0.7.2",
     "escape-html": "^1.0.3",
     "isbot": "^5.1.17",
+    "srvx": "^0.1.1",
     "trek-middleware": "^1.2.0",
-    "trek-router": "^1.2.0"
+    "trek-router": "^1.2.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bun": "^1.1.11",

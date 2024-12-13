@@ -92,6 +92,7 @@ async function* _render(
         });
         const pid = 'async_' + id;
         promises.push({ id: pid, pending: true, promise });
+        // @TODO: Make this configurable. Routes could have their own loading HTML...
         yield* renderToStream(html`<div id="${pid}">Loading...</div>`);
         break;
       case 'function':

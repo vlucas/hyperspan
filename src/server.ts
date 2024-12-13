@@ -2,16 +2,19 @@ import { readdir } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { html, renderToStream, renderToString } from './html';
 import { isbot } from 'isbot';
-import { HSTemplate } from './html';
-import { HSApp, HSRequestContext, normalizePath } from './app';
+import {
+  HSApp,
+  HSRequestContext,
+  HSRoute,
+  HSFormRoute,
+  normalizePath,
+  type THSRouteHandler,
+} from './app';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
 const CWD = process.cwd();
 const STATIC_FILE_MATCHER = /[^/\\&\?]+\.([a-zA-Z]+)$/;
-
-// Cached route components
-const _routeCache: { [key: string]: any } = {};
 
 /**
  * Did request come from a bot?
@@ -25,7 +28,7 @@ function requestIsBot(req: Request) {
 /**
  * Run route from file
  */
-export async function runFileRoute(routeFile: string, context: HSRequestContext) {
+export async function runFileRoute(RouteModule: any, context: HSRequestContext) {
   const req = context.req;
   const url = new URL(req.url);
   const qs = url.searchParams;
@@ -34,21 +37,13 @@ export async function runFileRoute(routeFile: string, context: HSRequestContext)
   const streamOpt = qs.get('__nostream') ? !Boolean(qs.get('__nostream')) : undefined;
   const streamingEnabled = streamOpt !== undefined ? streamOpt : true;
 
-  // Import route component
-  const RouteModule = _routeCache[routeFile] || (await import(routeFile));
-
-  if (IS_PROD) {
-    // Only cache routes in prod
-    _routeCache[routeFile] = RouteModule;
-  }
-
   // Route module
   const RouteComponent = RouteModule.default;
   const reqMethod = req.method.toUpperCase();
 
   // Middleware?
   const routeMiddleware = RouteModule.middleware || {}; // Example: { auth: apiAuth, logger: logMiddleware, }
-  const middlewareResult: any = {};
+  const middlewareResult: Record<string, any> = {};
 
   try {
     // Run middleware if present...
@@ -57,7 +52,7 @@ export async function runFileRoute(routeFile: string, context: HSRequestContext)
         const mRes = await routeMiddleware[mKey](context);
 
         if (mRes instanceof Response) {
-          return context.resMerge(mRes);
+          return context.responseMerge(mRes);
         }
 
         middlewareResult[mKey] = mRes;
@@ -69,15 +64,21 @@ export async function runFileRoute(routeFile: string, context: HSRequestContext)
       return await runAPIRoute(RouteModule[reqMethod], context, middlewareResult);
     }
 
+    let routeContent;
+
     // Route component
-    const routeContent = await RouteComponent(context, middlewareResult);
+    if (RouteComponent instanceof HSRoute) {
+      routeContent = await RouteComponent._handler(context, middlewareResult);
+    } else {
+      routeContent = await RouteComponent(context, middlewareResult);
+    }
 
     if (routeContent instanceof Response) {
-      return context.resMerge(routeContent);
+      return context.responseMerge(routeContent);
     }
 
     if (streamingEnabled && !requestIsBot(req)) {
-      return context.resMerge(new StreamResponse(renderToStream(routeContent)) as Response);
+      return context.responseMerge(new StreamResponse(renderToStream(routeContent)) as Response);
     } else {
       // Render content and template
       // TODO: Use any context variables from RouteComponent rendering to set values in layout (dynamic title, etc.)...
@@ -226,8 +227,11 @@ export async function createServer(config: THSServerConfig): Promise<HSApp> {
 
     routeMap.push({ route: routePattern, file: route.file });
 
+    // Import route
+    const routeModule = await import(fullRouteFile);
+
     app.all(routePattern, async (context) => {
-      const matchedRoute = await runFileRoute(fullRouteFile, context);
+      const matchedRoute = await runFileRoute(routeModule, context);
       if (matchedRoute) {
         return matchedRoute as Response;
       }
@@ -357,6 +361,18 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
 }
 
 /**
+ * ===========================================================================
+ */
+
+/**
+ * Route
+ * Define a route with an optional loading placeholder
+ */
+export function createRoute(handler: THSRouteHandler) {
+  return new HSRoute(handler);
+}
+
+/**
  * Form route
  * Automatically handles and parses form data
  *
@@ -367,9 +383,8 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
  * 5. All validation and save logic is on the server
  * 6. Handles any Exception thrown on server as error displayed in client
  */
-export type TFormRouteFn = (context: HSRequestContext) => HSTemplate | Response;
-export function formRoute(handlerFn: TFormRouteFn) {
-  return function _formRouteHandler(context: HSRequestContext) {
-    // @TODO: Parse form data and pass it into form route handler
-  };
+export function createFormRoute(handler: THSRouteHandler) {
+  const route = new HSFormRoute(handler);
+
+  return route;
 }
