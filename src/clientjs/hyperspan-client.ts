@@ -127,7 +127,7 @@ class HyperspanComponent extends HTMLElement {
     const comp = hyperspan.wc.get(this.id);
 
     if (comp) {
-      content = await renderToString(comp.render());
+      content = await renderToString(comp().render());
     }
 
     Idiomorph.morph(this, content, { morphStyle: 'innerHTML' });
@@ -137,7 +137,8 @@ class HyperspanComponent extends HTMLElement {
     const comp = hyperspan.wc.get(this.id);
 
     if (comp) {
-      comp.mount && comp.mount();
+      const c = comp();
+      c.mount && c.mount();
     }
   }
 

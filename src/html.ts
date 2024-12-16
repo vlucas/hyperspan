@@ -72,7 +72,7 @@ async function* _render(
     yield* renderToStream(value);
   } else if (typeof value.render !== 'undefined') {
     value.id = id;
-    yield await value.render();
+    yield* renderToStream(value.render());
   } else if (value === undefined || value === null) {
     yield '';
   } else {
@@ -111,15 +111,6 @@ async function* _render(
       case 'number':
         yield String(value);
         break;
-      case 'object':
-        if (typeof value.render === 'function') {
-          yield value.render();
-        } else if (typeof value.toString === 'function') {
-          yield value.toString();
-        } else {
-          yield value;
-        }
-        break;
       case 'generator':
         yield* value;
         break;
@@ -127,7 +118,13 @@ async function* _render(
         yield value.toISOString();
         break;
       default:
-        yield String(value);
+        if (typeof value.render === 'function') {
+          yield* renderToStream(value.render());
+        } else if (typeof value.toString === 'function') {
+          yield await value.toString();
+        } else {
+          yield String(value);
+        }
     }
   }
 }
@@ -270,13 +267,113 @@ export function clientComponent(id: string, wc: THSWCUser) {
   return (attrs?: Record<string, string>, state?: Record<string, any>) => {
     const _state = Object.assign({}, comp.state, state || {});
     return html`
-      <script>
-        ${html.raw(renderObjectToLiteralString(comp))};
+      <script type="module">
+        ${html.raw(renderComponentToScript(comp))};
       </script>
       <hs-wc id="${attrs?.id || id}" data-state="${JSON.stringify(_state)}"></hs-wc>
     `;
   };
 }
+
+/**
+ * New client component (function arg w/params)
+ */
+export function clientComponent2<T extends Record<string, any>>(fn: (args: T) => THSWCUser) {
+  let comp;
+  let compStr: string;
+  let cachedComp: any;
+  let cachedCompStr: string;
+
+  return (args: T) => {
+    if (!cachedComp) {
+      comp = fn(args);
+      compStr = renderComponentToScript(comp);
+      const id = md5(compStr);
+
+      if (typeof window !== 'undefined') {
+        // @ts-ignore
+        window.hyperspan.wc.set(id, comp);
+      }
+
+      cachedComp = {
+        args,
+        ...comp,
+        state: comp.state || {},
+        id,
+        setState(fn: THSWCSetStateArg): THSWCState {
+          try {
+            const val = typeof fn === 'function' ? fn(this.state) : fn;
+            this.state = val;
+            const el = document.getElementById(this.id);
+            if (el) {
+              el.dataset.state = JSON.stringify(val);
+              //this.render();
+            }
+          } catch (e) {
+            console.error(e);
+          }
+          return this.state;
+        },
+        mergeState(newState: THSWCState): THSWCState {
+          return this.setState(Object.assign(this.state, newState));
+        },
+      };
+      cachedCompStr = renderComponentToScript(cachedComp);
+    }
+
+    return {
+      render() {
+        return html`
+          <script>
+            ${html.raw(cachedCompStr)};
+          </script>
+          <hs-wc id="${cachedComp.id}" data-state="${JSON.stringify(cachedComp.state)}"></hs-wc>
+        `;
+      },
+    };
+  };
+}
+
+/*
+  const comp = {
+    ...wc,
+    state: wc.state || {},
+    id,
+    randomId() {
+      return Math.random().toString(36).substring(2, 9);
+    },
+    setState(fn: THSWCSetStateArg): THSWCState {
+      try {
+        const val = typeof fn === 'function' ? fn(this.state) : fn;
+        this.state = val;
+        const el = document.getElementById(this.id);
+        if (el) {
+          el.dataset.state = JSON.stringify(val);
+          //this.render();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      return this.state;
+    },
+  };
+
+  if (typeof window !== 'undefined') {
+    // @ts-ignore
+    window.hyperspan.wc.set(id, comp);
+  }
+
+  return (attrs?: Record<string, string>, state?: Record<string, any>) => {
+    const _state = Object.assign({}, comp.state, state || {});
+    return html`
+      <script type="module">
+        ${html.raw(renderComponentToScript(comp))};
+      </script>
+      <hs-wc id="${attrs?.id || id}" data-state="${JSON.stringify(_state)}"></hs-wc>
+    `;
+  };
+}
+*/
 
 export function renderFunctionToString(fn: Function): string {
   let fns = fn.toString();
@@ -304,14 +401,20 @@ export function renderFunctionToString(fn: Function): string {
 }
 
 /**
- * Render object out to string literal (one level only)
+ * Render object out to string literal (one level only) for <script> tag
  */
-function renderObjectToLiteralString(obj: Record<string, any>): string {
+function renderComponentToScript(obj: Record<string, any>): string {
   const lines: string[][] = [];
 
-  let str = 'hyperspan.wc.set("' + obj.id + '", {\n';
+  let str = `hyperspan.wc.set('${obj.id}', function () {\n`;
+  const { args, ...otherProps } = obj;
 
-  for (const prop in obj) {
+  for (const arg in args) {
+    str += `const ${arg} = ${JSON.stringify(args[arg])};\n`;
+  }
+
+  str += ' return {\n';
+  for (const prop in otherProps) {
     const kind = _typeOf(obj[prop]);
     let val = obj[prop];
 
@@ -321,7 +424,7 @@ function renderObjectToLiteralString(obj: Record<string, any>): string {
         break;
       case 'object':
       case 'json':
-        lines.push([prop, ': ', "JSON.parse('" + JSON.stringify(val) + "')"]);
+        lines.push([prop, ': ', JSON.stringify(val)]);
         break;
       case 'function':
         const fn = val.toString();
@@ -339,6 +442,7 @@ function renderObjectToLiteralString(obj: Record<string, any>): string {
   }
 
   str += lines.map((line) => line.join('') + ',').join('\n');
+  str += ' };';
   str += '\n})';
 
   return str;
