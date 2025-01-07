@@ -2,14 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { html, renderToStream, renderToString } from './html';
 import { isbot } from 'isbot';
-import {
-  HSApp,
-  HSRequestContext,
-  HSRoute,
-  HSFormRoute,
-  normalizePath,
-  type THSRouteHandler,
-} from './app';
+import { HSApp, HSRequestContext, normalizePath } from './app';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
@@ -66,9 +59,23 @@ export async function runFileRoute(RouteModule: any, context: HSRequestContext) 
 
     let routeContent;
 
+    // No default export in this file...
+    if (!RouteComponent) {
+      throw new Error('No route was exported by default in matched route file.');
+    }
+
     // Route component
-    if (RouteComponent instanceof HSRoute) {
-      routeContent = await RouteComponent._handler(context, middlewareResult);
+    if (typeof RouteComponent._handlers !== 'undefined') {
+      const routeMethodHandler = RouteComponent._handlers[reqMethod];
+
+      if (!routeMethodHandler) {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { 'content-type': 'text/plain' },
+        });
+      }
+
+      routeContent = await routeMethodHandler(context, middlewareResult);
     } else {
       routeContent = await RouteComponent(context, middlewareResult);
     }
@@ -358,33 +365,4 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
       }
     },
   });
-}
-
-/**
- * ===========================================================================
- */
-
-/**
- * Route
- * Define a route with an optional loading placeholder
- */
-export function createRoute(handler: THSRouteHandler) {
-  return new HSRoute(handler);
-}
-
-/**
- * Form route
- * Automatically handles and parses form data
- *
- * 1. Renders component as initial form markup
- * 2. Bind form onSubmit function to custom client JS handling
- * 3. Submits form with JavaScript fetch()
- * 4. Replaces form content with content from server
- * 5. All validation and save logic is on the server
- * 6. Handles any Exception thrown on server as error displayed in client
- */
-export function createFormRoute(handler: THSRouteHandler) {
-  const route = new HSFormRoute(handler);
-
-  return route;
 }
