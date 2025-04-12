@@ -1,0 +1,50 @@
+{
+  "name": "@hyperspan/framework",
+  "version": "0.0.3",
+  "description": "Hyperspan Web Framework",
+  "type": "module",
+  "module": "src/server.ts",
+  "public": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Vance Lucas <vance@vancelucas.com>",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "framework",
+    "node",
+    "bun",
+    "web",
+    "framework",
+    "javascript",
+    "typescript"
+  ],
+  "homepage": "https://www.hyperspan.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vlucas/hyperspan-framework"
+  },
+  "bugs": {
+    "url": "https://github.com/vlucas/hyperspan-framework/issues"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.9",
+    "@types/node": "^22.5.5",
+    "@types/react": "^19.1.0",
+    "bun-types": "latest",
+    "prettier": "^3.2.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@hyperspan/html": "workspace:*",
+    "@preact/compat": "^18.3.1",
+    "hono": "^4.7.4",
+    "isbot": "^5.1.25",
+    "valibot": "^1.0.0-rc.3"
+  }
+}
