@@ -1,29 +1,37 @@
 {
   "name": "@hyperspan/html",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hyperspan HTML Templates",
-  "type": "module",
-  "module": "src/html.ts",
+  "main": "dist/html.js",
+  "types": "dist/html.d.ts",
   "public": true,
   "publishConfig": {
     "access": "public"
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": ["template", "template literal", "html template", "streaming template"],
+  "keywords": [
+    "template",
+    "template literal",
+    "html template",
+    "streaming template"
+  ],
   "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "test": "bun test"
+    "build": "bun ./build.ts",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "prepack": "npm run clean && npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@types/node": "^22.5.5",
+    "bun-plugin-dts": "^0.3.0",
     "prettier": "^3.2.5",
     "typescript": "^5.0.0"
   },
