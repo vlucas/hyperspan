@@ -8,10 +8,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://www.hyperspan.dev/docs/html",
-  "keywords": ["template", "template literal", "html template", "streaming template"],
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
+  "keywords": ["template", "template literal", "html template", "streaming template"],
+  "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vlucas/hyperspan"
+    "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
     "@types/node": "^22.5.5",

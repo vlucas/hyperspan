@@ -23,10 +23,10 @@
   "homepage": "https://www.hyperspan.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vlucas/hyperspan-framework"
+    "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "bugs": {
-    "url": "https://github.com/vlucas/hyperspan-framework/issues"
+    "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
     "test": "bun test"
