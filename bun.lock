@@ -6,9 +6,9 @@
     },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "0.0.3",
+      "version": "0.1.0",
       "dependencies": {
-        "@hyperspan/html": "workspace:*",
+        "@hyperspan/html": "^0.1.0",
         "@preact/compat": "^18.3.1",
         "hono": "^4.7.4",
         "isbot": "^5.1.25",
@@ -27,7 +27,7 @@
     },
     "packages/html": {
       "name": "@hyperspan/html",
-      "version": "0.0.3",
+      "version": "0.1.0",
       "devDependencies": {
         "@types/node": "^22.5.5",
         "prettier": "^3.2.5",
@@ -67,5 +67,7 @@
     "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "valibot": ["valibot@1.0.0", "", { "peerDependencies": { "typescript": ">=5" }, "optionalPeers": ["typescript"] }, "sha512-1Hc0ihzWxBar6NGeZv7fPLY0QuxFMyxwYR2sF1Blu7Wq7EnremwY2W02tit2ij2VJT8HcSkHAQqmFfl77f73Yw=="],
+
+    "@hyperspan/framework/@hyperspan/html": ["@hyperspan/html@0.1.0", "", {}, "sha512-u47dXxPYiL6j1n7dSo9oKXy52jJ20Rwf+Somma8jrorrAr+QN5/XfcaJUK4EB5bm0pQ2NkfrixsgndzYLQurtg=="],
   }
 }

@@ -16,10 +16,7 @@
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "build": "bun ./build.ts",
-    "clean": "rm -rf dist",
-    "test": "bun test",
-    "prepack": "npm run clean && npm run build"
+    "test": "bun test"
   },
   "repository": {
     "type": "git",

@@ -10,7 +10,16 @@
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": ["framework", "node", "bun", "web", "framework", "javascript", "typescript"],
+  "keywords": [
+    "framework",
+    "node",
+    "bun",
+    "web framework",
+    "javascript",
+    "typescript",
+    "streaming",
+    "hypermedia"
+  ],
   "homepage": "https://www.hyperspan.dev",
   "repository": {
     "type": "git",
@@ -33,7 +42,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@hyperspan/html": "latest",
+    "@hyperspan/html": "^0.1.0",
     "@preact/compat": "^18.3.1",
     "hono": "^4.7.4",
     "isbot": "^5.1.25",
