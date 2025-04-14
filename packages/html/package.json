@@ -1,12 +1,19 @@
 {
   "name": "@hyperspan/html",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Hyperspan HTML Templates",
-  "main": "dist/html.js",
-  "types": "dist/html.d.ts",
+  "type": "module",
+  "module": "src/html.ts",
   "public": true,
   "publishConfig": {
     "access": "public"
+  },
+  "homepage": "https://www.hyperspan.dev/docs/html",
+  "keywords": ["template", "template literal", "html template", "streaming template"],
+  "author": "Vance Lucas <vance@vancelucas.com>",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
     "build": "bun ./build.ts",
@@ -16,15 +23,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vlucas/hyperspan-framework"
+    "url": "https://github.com/vlucas/hyperspan"
   },
-  "keywords": ["template", "template literal", "html template", "streaming template"],
-  "author": "Vance Lucas <vance@vancelucas.com>",
-  "license": "BSD-3-Clause",
-  "bugs": {
-    "url": "https://github.com/vlucas/hyperspan-framework/issues"
-  },
-  "homepage": "https://www.hyperspan.dev/docs/html",
   "devDependencies": {
     "@types/node": "^22.5.5",
     "prettier": "^3.2.5",
