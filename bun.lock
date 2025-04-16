@@ -6,19 +6,20 @@
     },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@hyperspan/html": "^0.1.1",
         "@preact/compat": "^18.3.1",
         "hono": "^4.7.4",
         "isbot": "^5.1.25",
         "valibot": "^1.0.0-rc.3",
-        "zod": "^4.0.0-beta.20250414T061543",
+        "zod": "^4.0.0-beta.20250415T232143",
       },
       "devDependencies": {
         "@types/bun": "^1.1.9",
         "@types/node": "^22.5.5",
         "@types/react": "^19.1.0",
+        "bun-plugin-dts": "^0.3.0",
         "bun-types": "latest",
         "prettier": "^3.2.5",
       },
@@ -51,7 +52,7 @@
 
     "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
 
-    "@zod/core": ["@zod/core@0.5.0", "", {}, "sha512-9EW5fOng5558DM68WmVtecPzHuROdB5AcBVOBVqtPIup1quYRxxzwzT9+BPNX5Pr+so0wP/Hxv8+pCrBbjKQeg=="],
+    "@zod/core": ["@zod/core@0.5.1", "", {}, "sha512-Iqa3r1weIYaG1pjR+vNhfmaQ+5YtdQEp839R7bil0CC30cwiExXuBI5AAEjZMMS2CzGcBlAWca+0+vxzUmdJ6Q=="],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 
@@ -113,8 +114,6 @@
 
     "yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
 
-    "zod": ["zod@4.0.0-beta.20250414T061543", "", { "dependencies": { "@zod/core": "0.5.0" } }, "sha512-1X7/cVHAWBt9jEIIg2Q2GFEApZy1VYe+YBxsjwVMmDZfMvn09CylsKLGZtfjZ/cwYrJha0OIWOh+MouaOj3Zdg=="],
-
-    "@hyperspan/framework/@hyperspan/html": ["@hyperspan/html@0.1.1", "", {}, "sha512-o3D3+UzKeUqU/6/ZU9uMwgIsCj/tvXAVV8BAYd/F95xf4zoIgk4QLyuJiVskA3ma2Yy9W9JCvCaTdoBWuJAfbQ=="],
+    "zod": ["zod@4.0.0-beta.20250415T232143", "", { "dependencies": { "@zod/core": "0.5.1" } }, "sha512-qy5jcyX/4Vt003S9II2NxTeAU31CQ71wJxk54stbrU+dhF+RcZL6xMwj8vGBbRVJi26pjCbTe2BldpK75nzlDw=="],
   }
 }

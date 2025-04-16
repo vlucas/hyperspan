@@ -1,85 +1,15 @@
-import { readdir } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
-import { TmplHtml, html, renderStream, renderAsync, render } from '@hyperspan/html';
-import { isbot } from 'isbot';
-import { buildClientJS, buildClientCSS } from './assets';
-import { Hono } from 'hono';
-import { serveStatic } from 'hono/bun';
-import type { Context, Handler } from 'hono';
-
-import * as v from 'valibot';
-import type {
-  AnySchema,
-  ArraySchema,
-  BigintSchema,
-  BooleanSchema,
-  DateSchema,
-  EnumSchema,
-  GenericIssue,
-  IntersectSchema,
-  LazySchema,
-  LiteralSchema,
-  NullSchema,
-  NullableSchema,
-  NullishSchema,
-  NumberSchema,
-  ObjectSchema,
-  ObjectWithRestSchema,
-  OptionalSchema,
-  PicklistSchema,
-  PipeItem,
-  RecordSchema,
-  SchemaWithPipe,
-  StrictObjectSchema,
-  StrictTupleSchema,
-  StringSchema,
-  TupleSchema,
-  TupleWithRestSchema,
-  UndefinedSchema,
-  UnionSchema,
-  VariantSchema,
-} from 'valibot';
+import {readdir} from 'node:fs/promises';
+import {basename, extname, join} from 'node:path';
+import {TmplHtml, html, renderStream, renderAsync, render} from '@hyperspan/html';
+import {isbot} from 'isbot';
+import {buildClientJS, buildClientCSS} from './assets';
+import {Hono} from 'hono';
+import {serveStatic} from 'hono/bun';
+import * as z from 'zod';
+import type {Context, Handler} from 'hono';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
-const PWD = import.meta.dir;
 const CWD = process.cwd();
-
-type NonPipeSchemas =
-  | AnySchema
-  | LiteralSchema<any, any>
-  | NullSchema<any>
-  | NumberSchema<any>
-  | BigintSchema<any>
-  | StringSchema<any>
-  | BooleanSchema<any>
-  | NullableSchema<any, any>
-  | StrictObjectSchema<any, any>
-  | ObjectSchema<any, any>
-  | ObjectWithRestSchema<any, any, any>
-  | RecordSchema<any, any, any>
-  | ArraySchema<any, any>
-  | TupleSchema<any, any>
-  | StrictTupleSchema<any, any>
-  | TupleWithRestSchema<readonly any[], any, any>
-  | IntersectSchema<any, any>
-  | UnionSchema<any, any>
-  | VariantSchema<any, any, any>
-  | PicklistSchema<any, any>
-  | EnumSchema<any, any>
-  | LazySchema<any>
-  | DateSchema<any>
-  | NullishSchema<any, any>
-  | OptionalSchema<any, any>
-  | UndefinedSchema<any>;
-
-type PipeSchema = SchemaWithPipe<[NonPipeSchemas, ...PipeItem<any, any, GenericIssue<any>>[]]>;
-// Type inference for valibot taken from:
-// @link https://github.com/gcornut/valibot-json-schema/blob/main/src/toJSONSchema/schemas.ts
-export type TSupportedSchema = NonPipeSchemas | PipeSchema;
-
-/**
- * ===========================================================================
- */
 
 /**
  * Route
@@ -114,7 +44,7 @@ export function createComponent(render: () => THSComponentReturn | Promise<THSCo
  */
 export function createForm(
   renderForm: (data?: any) => THSResponseTypes,
-  schema?: TSupportedSchema | null
+  schema?: z.ZodSchema | null
 ): HSFormRoute {
   return new HSFormRoute(renderForm, schema);
 }
@@ -165,12 +95,12 @@ export class HSFormRoute {
   _handlers: Record<string, Handler> = {};
   _form: THSFormRenderer;
   _methods: null | string[] = null;
-  _schema: null | TSupportedSchema = null;
+  _schema: null | z.ZodSchema = null;
 
-  constructor(renderForm: THSFormRenderer, schema: TSupportedSchema | null = null) {
+  constructor(renderForm: THSFormRenderer, schema: z.ZodSchema | null = null) {
     // Haz schema?
     if (schema) {
-      type TSchema = v.InferInput<typeof schema>;
+      type TSchema = z.infer<typeof schema>;
       this._form = renderForm as (data: TSchema) => THSResponseTypes;
       this._schema = schema;
     } else {
@@ -178,7 +108,7 @@ export class HSFormRoute {
     }
 
     // GET request is render form by default
-    this._handlers.GET = (ctx: Context) => renderForm(this.getDefaultData());
+    this._handlers.GET = () => renderForm(this.getDefaultData());
   }
 
   // Form data
@@ -187,8 +117,8 @@ export class HSFormRoute {
       return {};
     }
 
-    type TSchema = v.InferInput<typeof this._schema>;
-    const data = v.parse(this._schema, {});
+    type TSchema = z.infer<typeof this._schema>;
+    const data = z.parse(this._schema, {});
     return data as TSchema;
   }
 
@@ -263,7 +193,7 @@ export async function runFileRoute(RouteModule: any, context: Context): Promise<
       if (!routeMethodHandler) {
         return new Response('Method Not Allowed', {
           status: 405,
-          headers: { 'content-type': 'text/plain' },
+          headers: {'content-type': 'text/plain'},
         });
       }
 
@@ -305,13 +235,13 @@ async function runAPIRoute(routeFn: any, context: Context, middlewareResult?: an
 
     return context.json(
       {
-        meta: { success: false },
+        meta: {success: false},
         data: {
           message: e.message,
           stack: IS_PROD ? undefined : e.stack?.split('\n'),
         },
       },
-      { status: 500 }
+      {status: 500}
     );
   }
 }
@@ -337,7 +267,7 @@ async function showErrorReponse(context: Context, err: Error) {
 export type THSServerConfig = {
   appDir: string;
   staticFileRoot: string;
-  rewrites?: Array<{ source: string; destination: string }>;
+  rewrites?: Array<{source: string; destination: string}>;
   // For customizing the routes and adding your own...
   beforeRoutesAdded?: (app: Hono) => void;
   afterRoutesAdded?: (app: Hono) => void;
@@ -357,7 +287,7 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
   // Walk all pages and add them as routes
   const routesDir = join(config.appDir, 'routes');
   console.log(routesDir);
-  const files = await readdir(routesDir, { recursive: true });
+  const files = await readdir(routesDir, {recursive: true});
   const routes: THSRouteMap[] = [];
 
   for (const file of files) {
@@ -379,7 +309,7 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
 
     if (dynamicPaths) {
       params = [];
-      route = route.replace(ROUTE_SEGMENT, (match: string, p1: string, offset: number) => {
+      route = route.replace(ROUTE_SEGMENT, (match: string) => {
         const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
 
         if (match.includes('...')) {
@@ -423,7 +353,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     const fullRouteFile = join(CWD, route.file);
     const routePattern = normalizePath(route.route);
 
-    routeMap.push({ route: routePattern, file: route.file });
+    routeMap.push({route: routePattern, file: route.file});
 
     // Import route
     const routeModule = await import(fullRouteFile);
@@ -443,7 +373,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     app.get('/', (context) => {
       return context.text(
         'No routes found. Add routes to app/routes. Example: `app/routes/index.ts`',
-        { status: 404 }
+        {status: 404}
       );
     });
   }
@@ -466,7 +396,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
   );
 
   app.notFound((context) => {
-    return context.text('Not... found?', { status: 404 });
+    return context.text('Not... found?', {status: 404});
   });
 
   return app;
@@ -501,7 +431,7 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
   return new ReadableStream({
     async start(controller) {
       while (true) {
-        const { done, value } = await output.next();
+        const {done, value} = await output.next();
 
         if (done) {
           controller.close();

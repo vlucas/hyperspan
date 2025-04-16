@@ -3,7 +3,7 @@ import { md5 } from './clientjs/md5';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-export const IS_PROD = process.env.NODE_ENV === 'production';
+const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
 
 /**

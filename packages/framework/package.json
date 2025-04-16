@@ -1,12 +1,21 @@
 {
   "name": "@hyperspan/framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hyperspan Web Framework",
-  "type": "module",
-  "module": "src/server.ts",
+  "main": "dist/index.js",
   "public": true,
   "publishConfig": {
     "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./assets": {
+      "types": "./dist/assets.d.ts",
+      "default": "./dist/assets.js"
+    }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
@@ -29,12 +38,16 @@
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "test": "bun test"
+    "build": "bun ./build.ts",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "prepack": "npm run clean && npm run build"
   },
   "devDependencies": {
     "@types/bun": "^1.1.9",
     "@types/node": "^22.5.5",
     "@types/react": "^19.1.0",
+    "bun-plugin-dts": "^0.3.0",
     "bun-types": "latest",
     "prettier": "^3.2.5"
   },
@@ -46,7 +59,6 @@
     "@preact/compat": "^18.3.1",
     "hono": "^4.7.4",
     "isbot": "^5.1.25",
-    "valibot": "^1.0.0-rc.3",
-    "zod": "^4.0.0-beta.20250414T061543"
+    "zod": "^4.0.0-beta.20250415T232143"
   }
 }
