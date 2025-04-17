@@ -22,8 +22,6 @@ export async function buildClientJS() {
   const jsFile = output.outputs[0].path.split('/').reverse()[0];
 
   clientJSFiles.set('_hs', { src: '/_hs/js/' + jsFile });
-
-  console.log({ output, jsFile, clientJSFiles });
 }
 
 /**
@@ -73,8 +71,6 @@ export function hyperspanStyleTags() {
  */
 export function hyperspanScriptTags() {
   const jsFiles = Array.from(clientJSFiles.entries());
-
-  console.log({ jsFiles });
 
   return html`
     <script type="importmap">
