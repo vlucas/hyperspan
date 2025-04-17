@@ -1,5 +1,5 @@
-import { html } from '../html';
-import { Idiomorph } from './idiomorph.esm';
+import {html} from '@hyperspan/html';
+import {Idiomorph} from './idiomorph.esm';
 
 /**
  * Used for streaming content from the server to the client.
@@ -20,7 +20,7 @@ function htmlAsyncContentObserver() {
       asyncContent.forEach((el: any) => {
         try {
           // Also observe child nodes for nested async content
-          asyncContentObserver.observe(el.content, { childList: true, subtree: true });
+          asyncContentObserver.observe(el.content, {childList: true, subtree: true});
 
           const slotId = el.id.replace('_content', '');
           const slotEl = document.getElementById(slotId);
@@ -41,7 +41,7 @@ function htmlAsyncContentObserver() {
         }
       });
     });
-    asyncContentObserver.observe(document.body, { childList: true, subtree: true });
+    asyncContentObserver.observe(document.body, {childList: true, subtree: true});
   }
 }
 htmlAsyncContentObserver();

@@ -1,12 +1,12 @@
-import {readdir} from 'node:fs/promises';
-import {basename, extname, join} from 'node:path';
-import {TmplHtml, html, renderStream, renderAsync, render} from '@hyperspan/html';
-import {isbot} from 'isbot';
-import {buildClientJS, buildClientCSS} from './assets';
-import {Hono} from 'hono';
-import {serveStatic} from 'hono/bun';
+import { readdir } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
+import { TmplHtml, html, renderStream, renderAsync, render } from '@hyperspan/html';
+import { isbot } from 'isbot';
+import { buildClientJS, buildClientCSS } from './assets';
+import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
 import * as z from 'zod';
-import type {Context, Handler} from 'hono';
+import type { Context, Handler } from 'hono';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
@@ -193,7 +193,7 @@ export async function runFileRoute(RouteModule: any, context: Context): Promise<
       if (!routeMethodHandler) {
         return new Response('Method Not Allowed', {
           status: 405,
-          headers: {'content-type': 'text/plain'},
+          headers: { 'content-type': 'text/plain' },
         });
       }
 
@@ -206,8 +206,15 @@ export async function runFileRoute(RouteModule: any, context: Context): Promise<
       return routeContent;
     }
 
+    let routeKind = typeof routeContent;
+
     // Render TmplHtml if returned from route handler
-    if (routeContent instanceof TmplHtml) {
+    if (
+      routeKind === 'object' &&
+      (routeContent instanceof TmplHtml ||
+        routeContent.constructor.name === 'TmplHtml' ||
+        routeContent?._kind === 'TmplHtml')
+    ) {
       if (streamingEnabled) {
         return new StreamResponse(renderStream(routeContent)) as Response;
       } else {
@@ -215,6 +222,8 @@ export async function runFileRoute(RouteModule: any, context: Context): Promise<
         return context.html(output);
       }
     }
+
+    console.log('Returning unknown type... ', routeContent);
 
     return routeContent;
   } catch (e) {
@@ -235,13 +244,13 @@ async function runAPIRoute(routeFn: any, context: Context, middlewareResult?: an
 
     return context.json(
       {
-        meta: {success: false},
+        meta: { success: false },
         data: {
           message: e.message,
           stack: IS_PROD ? undefined : e.stack?.split('\n'),
         },
       },
-      {status: 500}
+      { status: 500 }
     );
   }
 }
@@ -267,7 +276,7 @@ async function showErrorReponse(context: Context, err: Error) {
 export type THSServerConfig = {
   appDir: string;
   staticFileRoot: string;
-  rewrites?: Array<{source: string; destination: string}>;
+  rewrites?: Array<{ source: string; destination: string }>;
   // For customizing the routes and adding your own...
   beforeRoutesAdded?: (app: Hono) => void;
   afterRoutesAdded?: (app: Hono) => void;
@@ -287,7 +296,7 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
   // Walk all pages and add them as routes
   const routesDir = join(config.appDir, 'routes');
   console.log(routesDir);
-  const files = await readdir(routesDir, {recursive: true});
+  const files = await readdir(routesDir, { recursive: true });
   const routes: THSRouteMap[] = [];
 
   for (const file of files) {
@@ -353,7 +362,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     const fullRouteFile = join(CWD, route.file);
     const routePattern = normalizePath(route.route);
 
-    routeMap.push({route: routePattern, file: route.file});
+    routeMap.push({ route: routePattern, file: route.file });
 
     // Import route
     const routeModule = await import(fullRouteFile);
@@ -373,7 +382,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     app.get('/', (context) => {
       return context.text(
         'No routes found. Add routes to app/routes. Example: `app/routes/index.ts`',
-        {status: 404}
+        { status: 404 }
       );
     });
   }
@@ -396,7 +405,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
   );
 
   app.notFound((context) => {
-    return context.text('Not... found?', {status: 404});
+    return context.text('Not... found?', { status: 404 });
   });
 
   return app;
@@ -431,7 +440,7 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
   return new ReadableStream({
     async start(controller) {
       while (true) {
-        const {done, value} = await output.next();
+        const { done, value } = await output.next();
 
         if (done) {
           controller.close();
