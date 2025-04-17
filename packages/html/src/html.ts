@@ -5,7 +5,7 @@ export class TmplHtml {
   content = '';
   asyncContent: Array<{
     id: string;
-    promise: Promise<{id: string; value: unknown}>;
+    promise: Promise<{ id: string; value: unknown }>;
   }>;
 
   constructor(props: Pick<TmplHtml, 'content' | 'asyncContent'>) {
@@ -25,23 +25,21 @@ export function html(strings: TemplateStringsArray, ...values: any[]): TmplHtml 
   for (let i = 0; i < strings.length; i++) {
     const value = values[i];
     const kind = _typeOf(value);
-    const renderValue = _renderValue(value, {kind, asyncContent}) || '';
+    const renderValue = _renderValue(value, { kind, asyncContent }) || '';
 
     content += strings[i] + (renderValue ? renderValue : '');
   }
-  return new TmplHtml({content, asyncContent});
+  return new TmplHtml({ content, asyncContent });
 }
 // Insert raw HTML as string (do not escape HTML characters)
-html.raw = (content: string) => ({_kind: 'html_safe', content});
+html.raw = (content: string) => ({ _kind: 'html_safe', content });
 
 // Internal method. Render unknown value based on type
 // Will always render a string for every value (possibly empty)
 // MAY also push new items into 'asyncContent' option to resolve in the future
 function _renderValue(
   value: unknown,
-  opts: {kind?: string; id?: string; asyncContent: any[]} = {
-    kind: undefined,
-    id: undefined,
+  opts: { kind?: string; id?: string; asyncContent: any[] } = {
     asyncContent: [],
   }
 ): string {
@@ -54,7 +52,7 @@ function _renderValue(
   switch (kind) {
     case 'array':
       return (value as any[])
-        .map((v) => _renderValue(v, {id, asyncContent: opts.asyncContent}))
+        .map((v) => _renderValue(v, { id, asyncContent: opts.asyncContent }))
         .join('');
     case 'object':
       id = `async_loading_${htmlId++}`;
@@ -108,8 +106,6 @@ function _renderValue(
       return render(_htmlPlaceholder(id));
     case 'generator':
       throw new Error('Generators are not supported as a template value at this time. Sorry :(');
-    default:
-      console.log('_renderValue kind =', kind, value);
   }
 
   return escapeHtml(String(value));
@@ -138,7 +134,7 @@ export function render(tmpl: TmplHtml): string {
  * If you want streaming rendering, use 'renderStream' instead.
  */
 export async function renderAsync(tmpl: TmplHtml): Promise<string> {
-  let {content, asyncContent} = tmpl;
+  let { content, asyncContent } = tmpl;
 
   while (asyncContent.length !== 0) {
     // @TODO: Use Promise.allSettled() instead with error handling
@@ -151,7 +147,7 @@ export async function renderAsync(tmpl: TmplHtml): Promise<string> {
       const found = content.match(r);
 
       if (found) {
-        content = content.replace(found[0], _renderValue(obj.value, {asyncContent}));
+        content = content.replace(found[0], _renderValue(obj.value, { asyncContent }));
       }
     });
   }

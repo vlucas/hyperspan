@@ -1,7 +1,7 @@
-import {html} from '@hyperspan/html';
-import {md5} from './clientjs/md5';
-import {readdir} from 'node:fs/promises';
-import {resolve} from 'node:path';
+import { html } from '@hyperspan/html';
+import { md5 } from './clientjs/md5';
+import { readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
@@ -9,7 +9,7 @@ const PWD = import.meta.dir;
 /**
  * Build client JS for end users (minimal JS for Hyperspan to work)
  */
-export const clientJSFiles = new Map<string, {src: string; type?: string}>();
+export const clientJSFiles = new Map<string, { src: string; type?: string }>();
 export async function buildClientJS() {
   const sourceFile = resolve(PWD, '../', './src/clientjs/hyperspan-client.ts');
   const output = await Bun.build({
@@ -20,8 +20,10 @@ export async function buildClientJS() {
   });
 
   const jsFile = output.outputs[0].path.split('/').reverse()[0];
-  clientJSFiles.set('_hs', {src: '/_hs/js/' + jsFile});
-  return jsFile;
+
+  clientJSFiles.set('_hs', { src: '/_hs/js/' + jsFile });
+
+  console.log({ output, jsFile, clientJSFiles });
 }
 
 /**
@@ -71,6 +73,9 @@ export function hyperspanStyleTags() {
  */
 export function hyperspanScriptTags() {
   const jsFiles = Array.from(clientJSFiles.entries());
+
+  console.log({ jsFiles });
+
   return html`
     <script type="importmap">
       {
@@ -84,13 +89,13 @@ export function hyperspanScriptTags() {
       }
     </script>
     ${jsFiles.map(
-    ([key, file]) =>
-      html`<script
+      ([key, file]) =>
+        html`<script
           id="js-${key}"
           type="${file.type || 'text/javascript'}"
           src="${file.src}"
         ></script>`
-  )}
+    )}
   `;
 }
 

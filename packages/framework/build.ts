@@ -1,27 +1,29 @@
 import {build} from 'bun';
 import dts from 'bun-plugin-dts';
 
-const filesToBuild = ['./src/index.ts', './src/server.ts', './src/assets.ts'];
+const entrypoints = ['./src/server.ts', './src/assets.ts'];
+const external = ['@hyperspan/html'];
 const outdir = './dist';
 const target = 'node';
+const splitting = true;
 
-await Promise.all(
-  filesToBuild.map((file) =>
-    Promise.all([
-      // Build JS
-      build({
-        entrypoints: [file],
-        outdir,
-        target,
-      }),
+await Promise.all([
+  // Build JS
+  build({
+    entrypoints,
+    external,
+    outdir,
+    target,
+    splitting,
+  }),
 
-      // Build type files for TypeScript
-      build({
-        entrypoints: [file],
-        outdir,
-        target,
-        plugins: [dts()],
-      }),
-    ])
-  )
-);
+  // Build type files for TypeScript
+  build({
+    entrypoints,
+    external,
+    outdir,
+    target,
+    splitting,
+    plugins: [dts()],
+  }),
+]);

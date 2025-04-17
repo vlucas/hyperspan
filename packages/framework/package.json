@@ -2,15 +2,19 @@
   "name": "@hyperspan/framework",
   "version": "0.1.2",
   "description": "Hyperspan Web Framework",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "public": true,
   "publishConfig": {
     "access": "public"
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
     },
     "./assets": {
       "types": "./dist/assets.d.ts",
@@ -55,7 +59,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@hyperspan/html": "^0.1.1",
+    "@hyperspan/html": "^0.1.2",
     "@preact/compat": "^18.3.1",
     "hono": "^4.7.4",
     "isbot": "^5.1.25",
