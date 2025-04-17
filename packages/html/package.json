@@ -10,12 +10,7 @@
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": [
-    "template",
-    "template literal",
-    "html template",
-    "streaming template"
-  ],
+  "keywords": ["template", "template literal", "html template", "streaming template"],
   "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
@@ -24,7 +19,7 @@
     "build": "bun ./build.ts",
     "clean": "rm -rf dist",
     "test": "bun test",
-    "prepack": "npm run clean && npm run build"
+    "prepack": "bun run clean && bun run build"
   },
   "repository": {
     "type": "git",

@@ -45,7 +45,7 @@
     "build": "bun ./build.ts",
     "clean": "rm -rf dist",
     "test": "bun test",
-    "prepack": "npm run clean && npm run build"
+    "prepack": "bun run clean && bun run build"
   },
   "devDependencies": {
     "@types/bun": "^1.1.9",
