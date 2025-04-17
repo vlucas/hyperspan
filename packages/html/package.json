@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/html",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Hyperspan HTML Templates",
   "main": "dist/html.js",
   "types": "dist/html.d.ts",
@@ -10,7 +10,12 @@
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": ["template", "template literal", "html template", "streaming template"],
+  "keywords": [
+    "template",
+    "template literal",
+    "html template",
+    "streaming template"
+  ],
   "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
