@@ -9,15 +9,19 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/server.d.ts",
+      "types": "./src/server.ts",
       "default": "./dist/server.js"
     },
     "./server": {
-      "types": "./dist/server.d.ts",
+      "types": "./src/server.ts",
       "default": "./dist/server.js"
     },
+    "./actions": {
+      "types": "./src/actions.ts",
+      "default": "./src/actions.ts"
+    },
     "./assets": {
-      "types": "./dist/assets.d.ts",
+      "types": "./src/assets.ts",
       "default": "./dist/assets.js"
     }
   },

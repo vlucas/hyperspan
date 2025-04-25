@@ -401,6 +401,12 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     '*',
     serveStatic({
       root: config.staticFileRoot,
+      onFound: IS_PROD
+        ? (_, c) => {
+            // Cache static assets in prod (default 30 days)
+            c.header('Cache-Control', 'public, max-age=2592000');
+          }
+        : undefined,
     })
   );
 
@@ -422,8 +428,9 @@ export class StreamResponse extends Response {
     return new Response(stream, {
       status: 200,
       headers: {
-        'Content-Type': 'text/html',
         'Transfer-Encoding': 'chunked',
+        'Content-Type': 'text/html; charset=UTF-8',
+        'Content-Encoding': 'Identity',
         // @ts-ignore
         ...(options?.headers ?? {}),
       },
