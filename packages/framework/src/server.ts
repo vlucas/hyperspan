@@ -3,11 +3,9 @@ import { basename, extname, join } from 'node:path';
 import { TmplHtml, html, renderStream, renderAsync, render } from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { buildClientJS, buildClientCSS } from './assets';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
-import type { Context, Handler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { create } from 'node:domain';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
@@ -18,19 +16,28 @@ const CWD = process.cwd();
 export type THSResponseTypes = TmplHtml | Response | string | null;
 export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
 
+export type THSRoute = {
+  _kind: 'hsRoute';
+  get: (handler: THSRouteHandler) => THSRoute;
+  post: (handler: THSRouteHandler) => THSRoute;
+  put: (handler: THSRouteHandler) => THSRoute;
+  delete: (handler: THSRouteHandler) => THSRoute;
+  patch: (handler: THSRouteHandler) => THSRoute;
+  run: (method: string, context: Context) => Promise<Response>;
+};
+
 /**
- * Route
- * Define a route that can handle a direct HTTP request
- * Route handlers should return a Response or TmplHtml object
+ * Define a route that can handle a direct HTTP request.
+ * Route handlers should return a TmplHtml or Response object
  */
-export function createRoute(handler?: THSRouteHandler) {
+export function createRoute(handler?: THSRouteHandler): THSRoute {
   let _handlers: Record<string, THSRouteHandler> = {};
 
   if (handler) {
     _handlers['GET'] = handler;
   }
 
-  const api = {
+  const api: THSRoute = {
     _kind: 'hsRoute',
     get(handler: THSRouteHandler) {
       _handlers['GET'] = handler;
@@ -95,20 +102,19 @@ export function createRoute(handler?: THSRouteHandler) {
 
   return api;
 }
-export type THSRoute = ReturnType<typeof createRoute>;
 
 /**
  * Create new API Route
  * API Route handlers should return a JSON object or a Response
  */
-export function createAPIRoute(handler?: THSRouteHandler) {
+export function createAPIRoute(handler?: THSRouteHandler): THSRoute {
   let _handlers: Record<string, THSRouteHandler> = {};
 
   if (handler) {
     _handlers['GET'] = handler;
   }
 
-  const api = {
+  const api: THSRoute = {
     _kind: 'hsRoute',
     get(handler: THSRouteHandler) {
       _handlers['GET'] = handler;
@@ -168,7 +174,6 @@ export function createAPIRoute(handler?: THSRouteHandler) {
 
   return api;
 }
-export type THSAPIRoute = ReturnType<typeof createAPIRoute>;
 
 /**
  * Get a Hyperspan runnable route from a module import
@@ -176,7 +181,7 @@ export type THSAPIRoute = ReturnType<typeof createAPIRoute>;
  */
 export function getRunnableRoute(route: unknown): THSRoute {
   // Runnable already? Just return it
-  if (isRouteRunnable(route)) {
+  if (isRunnableRoute(route)) {
     return route as THSRoute;
   }
 
@@ -199,7 +204,7 @@ export function getRunnableRoute(route: unknown): THSRoute {
   );
 }
 
-export function isRouteRunnable(route: unknown): boolean {
+export function isRunnableRoute(route: unknown): boolean {
   // @ts-ignore
   return typeof route === 'object' && 'run' in route;
 }
@@ -337,9 +342,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     routeMap.push({ route: routePattern, file: route.file });
 
     // Import route
-    const routeModule = await import(fullRouteFile);
-
-    app.all(routePattern, createRouteFromModule(routeModule));
+    app.all(routePattern, createRouteFromModule(await import(fullRouteFile)));
   }
 
   // Help route if no routes found
