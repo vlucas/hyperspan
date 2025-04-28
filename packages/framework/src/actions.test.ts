@@ -54,7 +54,7 @@ describe('createAction', () => {
         },
       } as Context;
 
-      const response = await action.run(mockContext);
+      const response = await action.run('POST', mockContext);
 
       const formResponse = render(response as TmplHtml);
       expect(formResponse).toContain('Thanks for submitting the form, John!');
@@ -86,7 +86,7 @@ describe('createAction', () => {
         },
       } as Context;
 
-      const response = await action.run(mockContext);
+      const response = await action.run('POST', mockContext);
 
       const formResponse = render(response as TmplHtml);
       expect(formResponse).toContain('There was an error!');

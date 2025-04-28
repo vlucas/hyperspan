@@ -5,254 +5,203 @@ import { isbot } from 'isbot';
 import { buildClientJS, buildClientCSS } from './assets';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
-import * as z from 'zod';
 import type { Context, Handler } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { create } from 'node:domain';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
+
+/**
+ * Types
+ */
+export type THSResponseTypes = TmplHtml | Response | string | null;
+export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
 
 /**
  * Route
  * Define a route that can handle a direct HTTP request
  * Route handlers should return a Response or TmplHtml object
  */
-export function createRoute(handler: Handler): HSRoute {
-  return new HSRoute(handler);
-}
+export function createRoute(handler?: THSRouteHandler) {
+  let _handlers: Record<string, THSRouteHandler> = {};
 
-/**
- * Component
- * Define a component or partial with an optional loading placeholder
- * These can be rendered anywhere inside other templates - even if async.
- */
-export function createComponent(render: () => THSComponentReturn | Promise<THSComponentReturn>) {
-  return new HSComponent(render);
-}
-
-/**
- * Form + route handler
- * Automatically handles and parses form data
- *
- * INITIAL IDEA OF HOW THIS WILL WORK:
- * ---
- * 1. Renders component as initial form markup for GET request
- * 2. Bind form onSubmit function to custom client JS handling
- * 3. Submits form with JavaScript fetch()
- * 4. Replaces form content with content from server
- * 5. All validation and save logic is on the server
- * 6. Handles any Exception thrown on server as error displayed in client
- */
-export function createForm(
-  renderForm: (data?: any) => THSResponseTypes,
-  schema?: z.ZodSchema | null
-): HSFormRoute {
-  return new HSFormRoute(renderForm, schema);
-}
-
-/**
- * Types
- */
-export type THSComponentReturn = TmplHtml | string | number | null;
-export type THSResponseTypes = TmplHtml | Response | string | null;
-export const HS_DEFAULT_LOADING = () => html`<div>Loading...</div>`;
-
-/**
- * Route handler helper
- */
-export class HSComponent {
-  _kind = 'hsComponent';
-  _handlers: Record<string, Handler> = {};
-  _loading?: () => TmplHtml;
-  render: () => THSComponentReturn | Promise<THSComponentReturn>;
-  constructor(render: () => THSComponentReturn | Promise<THSComponentReturn>) {
-    this.render = render;
+  if (handler) {
+    _handlers['GET'] = handler;
   }
 
-  loading(fn: () => TmplHtml) {
-    this._loading = fn;
-    return this;
-  }
-}
-
-/**
- * Route handler helper
- */
-export class HSRoute {
-  _kind = 'hsRoute';
-  _handlers: Record<string, Handler> = {};
-  _methods: null | string[] = null;
-  constructor(handler: Handler) {
-    this._handlers.GET = handler;
-  }
-}
-
-/**
- * Form route handler helper
- */
-export type THSFormRenderer = (data?: any) => THSResponseTypes;
-export class HSFormRoute {
-  _kind = 'hsFormRoute';
-  _handlers: Record<string, Handler> = {};
-  _form: THSFormRenderer;
-  _methods: null | string[] = null;
-  _schema: null | z.ZodSchema = null;
-
-  constructor(renderForm: THSFormRenderer, schema: z.ZodSchema | null = null) {
-    // Haz schema?
-    if (schema) {
-      type TSchema = z.infer<typeof schema>;
-      this._form = renderForm as (data: TSchema) => THSResponseTypes;
-      this._schema = schema;
-    } else {
-      this._form = renderForm;
-    }
-
-    // GET request is render form by default
-    this._handlers.GET = () => renderForm(this.getDefaultData());
-  }
-
-  // Form data
-  getDefaultData() {
-    if (!this._schema) {
-      return {};
-    }
-
-    type TSchema = z.infer<typeof this._schema>;
-    const data = z.parse(this._schema, {});
-    return data as TSchema;
-  }
-
-  /**
-   * Get form renderer method
-   */
-  renderForm(data?: any) {
-    return this._form(data || this.getDefaultData());
-  }
-
-  // HTTP handlers
-  get(handler: Handler) {
-    this._handlers.GET = handler;
-    return this;
-  }
-
-  patch(handler: Handler) {
-    this._handlers.PATCH = handler;
-    return this;
-  }
-
-  post(handler: Handler) {
-    this._handlers.POST = handler;
-    return this;
-  }
-
-  put(handler: Handler) {
-    this._handlers.PUT = handler;
-    return this;
-  }
-
-  delete(handler: Handler) {
-    this._handlers.DELETE = handler;
-    return this;
-  }
-}
-
-/**
- * Run route from file
- */
-export async function runFileRoute(RouteModule: any, context: Context): Promise<Response | false> {
-  const req = context.req;
-  const url = new URL(req.url);
-  const qs = url.searchParams;
-
-  // @TODO: Move this to config or something...
-  const userIsBot = isbot(context.req.header('User-Agent'));
-  const streamOpt = qs.get('__nostream') ? !Boolean(qs.get('__nostream')) : undefined;
-  const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
-
-  // Route module
-  const RouteComponent = RouteModule.default;
-  const reqMethod = req.method.toUpperCase();
-
-  try {
-    // API Route?
-    if (RouteModule[reqMethod] !== undefined) {
-      return await runAPIRoute(RouteModule[reqMethod], context);
-    }
-
-    let routeContent;
-
-    // No default export in this file...
-    if (!RouteComponent) {
-      throw new Error('No route was exported by default in matched route file.');
-    }
-
-    // Route component
-    if (typeof RouteComponent._handlers !== 'undefined') {
-      const routeMethodHandler = RouteComponent._handlers[reqMethod];
-
-      if (!routeMethodHandler) {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: { 'content-type': 'text/plain' },
-        });
+  const api = {
+    _kind: 'hsRoute',
+    get(handler: THSRouteHandler) {
+      _handlers['GET'] = handler;
+      return api;
+    },
+    post(handler: THSRouteHandler) {
+      _handlers['POST'] = handler;
+      return api;
+    },
+    put(handler: THSRouteHandler) {
+      _handlers['PUT'] = handler;
+      return api;
+    },
+    delete(handler: THSRouteHandler) {
+      _handlers['DELETE'] = handler;
+      return api;
+    },
+    patch(handler: THSRouteHandler) {
+      _handlers['PATCH'] = handler;
+      return api;
+    },
+    async run(method: string, context: Context): Promise<Response> {
+      const handler = _handlers[method];
+      if (!handler) {
+        throw new HTTPException(405, { message: 'Method not allowed' });
       }
 
-      routeContent = await routeMethodHandler(context);
-    } else {
-      routeContent = await RouteComponent(context);
-    }
+      const routeContent = await handler(context);
 
-    if (routeContent instanceof Response) {
-      return routeContent;
-    }
-
-    let routeKind = typeof routeContent;
-
-    // Render TmplHtml if returned from route handler
-    if (
-      routeKind === 'object' &&
-      (routeContent instanceof TmplHtml ||
-        routeContent.constructor.name === 'TmplHtml' ||
-        routeContent?._kind === 'TmplHtml')
-    ) {
-      if (streamingEnabled) {
-        return new StreamResponse(renderStream(routeContent)) as Response;
-      } else {
-        const output = await renderAsync(routeContent);
-        return context.html(output);
+      // Return Response if returned from route handler
+      if (routeContent instanceof Response) {
+        return routeContent;
       }
-    }
 
-    console.log('Returning unknown type... ', routeContent);
+      // @TODO: Move this to config or something...
+      const userIsBot = isbot(context.req.header('User-Agent'));
+      const streamOpt = context.req.query('__nostream');
+      const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
+      const routeKind = typeof routeContent;
 
-    return routeContent;
-  } catch (e) {
-    console.error(e);
-    return await showErrorReponse(context, e as Error);
-  }
+      // Render TmplHtml if returned from route handler
+      if (
+        routeContent &&
+        routeKind === 'object' &&
+        (routeContent instanceof TmplHtml ||
+          routeContent.constructor.name === 'TmplHtml' ||
+          // @ts-ignore
+          routeContent?._kind === 'TmplHtml')
+      ) {
+        if (streamingEnabled) {
+          return new StreamResponse(renderStream(routeContent as TmplHtml)) as Response;
+        } else {
+          const output = await renderAsync(routeContent as TmplHtml);
+          return context.html(output);
+        }
+      }
+
+      // Return unknown content - not specifically handled above
+      return context.text(String(routeContent));
+    },
+  };
+
+  return api;
 }
+export type THSRoute = ReturnType<typeof createRoute>;
 
 /**
- * Run route and handle response
+ * Create new API Route
+ * API Route handlers should return a JSON object or a Response
  */
-async function runAPIRoute(routeFn: any, context: Context, middlewareResult?: any) {
-  try {
-    return await routeFn(context, middlewareResult);
-  } catch (err) {
-    const e = err as Error;
-    console.error(e);
+export function createAPIRoute(handler?: THSRouteHandler) {
+  let _handlers: Record<string, THSRouteHandler> = {};
 
-    return context.json(
-      {
-        meta: { success: false },
-        data: {
-          message: e.message,
-          stack: IS_PROD ? undefined : e.stack?.split('\n'),
-        },
-      },
-      { status: 500 }
-    );
+  if (handler) {
+    _handlers['GET'] = handler;
   }
+
+  const api = {
+    _kind: 'hsRoute',
+    get(handler: THSRouteHandler) {
+      _handlers['GET'] = handler;
+      return api;
+    },
+    post(handler: THSRouteHandler) {
+      _handlers['POST'] = handler;
+      return api;
+    },
+    put(handler: THSRouteHandler) {
+      _handlers['PUT'] = handler;
+      return api;
+    },
+    delete(handler: THSRouteHandler) {
+      _handlers['DELETE'] = handler;
+      return api;
+    },
+    patch(handler: THSRouteHandler) {
+      _handlers['PATCH'] = handler;
+      return api;
+    },
+    async run(method: string, context: Context): Promise<Response> {
+      const handler = _handlers[method];
+      if (!handler) {
+        throw new Error('Method not allowed');
+      }
+
+      try {
+        const response = await handler(context);
+
+        if (response instanceof Response) {
+          return response;
+        }
+
+        return context.json(
+          { meta: { success: true, dtResponse: new Date() }, data: response },
+          { status: 200 }
+        );
+      } catch (err) {
+        const e = err as Error;
+        console.error(e);
+
+        return context.json(
+          {
+            meta: { success: false, dtResponse: new Date() },
+            data: {},
+            error: {
+              message: e.message,
+              stack: IS_PROD ? undefined : e.stack?.split('\n'),
+            },
+          },
+          { status: 500 }
+        );
+      }
+    },
+  };
+
+  return api;
+}
+export type THSAPIRoute = ReturnType<typeof createAPIRoute>;
+
+/**
+ * Get a Hyperspan runnable route from a module import
+ * @throws Error if no runnable route found
+ */
+export function getRunnableRoute(route: unknown): THSRoute {
+  // Runnable already? Just return it
+  if (isRouteRunnable(route)) {
+    return route as THSRoute;
+  }
+
+  const kind = typeof route;
+
+  // Plain function - wrap in createRoute()
+  if (kind === 'function') {
+    return createRoute(route as THSRouteHandler);
+  }
+
+  // Module - get default and use it
+  // @ts-ignore
+  if (kind === 'object' && 'default' in route) {
+    return getRunnableRoute(route.default);
+  }
+
+  // No route -> error
+  throw new Error(
+    'Route not runnable. Use "export default createRoute()" to create a Hyperspan route.'
+  );
+}
+
+export function isRouteRunnable(route: unknown): boolean {
+  // @ts-ignore
+  return typeof route === 'object' && 'run' in route;
 }
 
 /**
@@ -342,6 +291,29 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
 }
 
 /**
+ * Run route from file
+ */
+export function createRouteFromModule(RouteModule: any): (context: Context) => Promise<Response> {
+  return async (context: Context) => {
+    const reqMethod = context.req.method.toUpperCase();
+
+    try {
+      const runnableRoute = getRunnableRoute(RouteModule);
+      const content = await runnableRoute.run(reqMethod, context);
+
+      if (content instanceof Response) {
+        return content;
+      }
+
+      return context.text(String(content));
+    } catch (e) {
+      console.error(e);
+      return await showErrorReponse(context, e as Error);
+    }
+  };
+}
+
+/**
  * Create and start Bun HTTP server
  */
 export async function createServer(config: THSServerConfig): Promise<Hono> {
@@ -367,14 +339,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     // Import route
     const routeModule = await import(fullRouteFile);
 
-    app.all(routePattern, async (context) => {
-      const matchedRoute = await runFileRoute(routeModule, context);
-      if (matchedRoute) {
-        return matchedRoute as Response;
-      }
-
-      return context.notFound();
-    });
+    app.all(routePattern, createRouteFromModule(routeModule));
   }
 
   // Help route if no routes found

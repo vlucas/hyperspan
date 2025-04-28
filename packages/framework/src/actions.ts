@@ -1,7 +1,9 @@
-import type { THSResponseTypes } from './server';
-import type { Context } from 'hono';
 import { html } from '@hyperspan/html';
 import * as z from 'zod';
+import { HTTPException } from 'hono/http-exception';
+
+import type { THSResponseTypes } from './server';
+import type { Context } from 'hono';
 
 /**
  * Actions = Form + route handler
@@ -27,7 +29,7 @@ export interface HSAction<T extends z.ZodTypeAny> {
     ) => THSResponseTypes
   ): HSAction<T>;
   render(props?: { data: z.infer<T>; error?: z.ZodError | Error }): THSResponseTypes;
-  run(c: Context): Promise<THSResponseTypes>;
+  run(method: 'GET' | 'POST', c: Context): Promise<THSResponseTypes>;
 }
 
 export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
@@ -72,7 +74,15 @@ export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
      * Returns result from form processing if successful
      * Re-renders form with data and error information otherwise
      */
-    async run(c) {
+    async run(method: 'GET' | 'POST', c: Context) {
+      if (method === 'GET') {
+        return api.render();
+      }
+
+      if (method !== 'POST') {
+        throw new HTTPException(405, { message: 'Actions only support GET and POST requests' });
+      }
+
       const formData = await c.req.formData();
       const jsonData = formDataToJSON(formData);
       const schemaData = schema ? schema.safeParse(jsonData) : null;
