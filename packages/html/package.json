@@ -1,9 +1,9 @@
 {
   "name": "@hyperspan/html",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Hyperspan HTML Templates",
   "main": "dist/html.js",
-  "types": "dist/html.d.ts",
+  "types": "src/html.ts",
   "public": true,
   "publishConfig": {
     "access": "public"
@@ -31,7 +31,7 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "bun-plugin-dts": "^0.3.0",
+    "@types/bun": "^1.2.11",
     "prettier": "^3.2.5",
     "typescript": "^5.0.0"
   },

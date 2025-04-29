@@ -34,6 +34,21 @@ export function html(strings: TemplateStringsArray, ...values: any[]): TmplHtml 
 // Insert raw HTML as string (do not escape HTML characters)
 html.raw = (content: string) => ({ _kind: 'html_safe', content });
 
+/**
+ * Provide a custom placeholder for async content.
+ * The async content will replace this placeholder when it resolves.
+ */
+export function placeholder(content: TmplHtml, promise: Promise<unknown>) {
+  return {
+    render() {
+      return content;
+    },
+    async renderAsync() {
+      return promise;
+    },
+  };
+}
+
 // Internal method. Render unknown value based on type
 // Will always render a string for every value (possibly empty)
 // MAY also push new items into 'asyncContent' option to resolve in the future
@@ -184,7 +199,7 @@ export async function* renderStream(tmpl: TmplHtml): AsyncGenerator<string> {
 /**
  * LOL JavaScript typeof...
  */
-function _typeOf(obj: any): string {
+export function _typeOf(obj: any): string {
   if (obj instanceof Promise) return 'promise';
   if (obj instanceof Date) return 'date';
   if (obj instanceof String) return 'string';

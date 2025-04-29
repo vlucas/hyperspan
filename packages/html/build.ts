@@ -1,18 +1,7 @@
-import dts from 'bun-plugin-dts';
+import { build } from 'bun';
 
-await Promise.all([
-  // Build JS
-  Bun.build({
-    entrypoints: ['./src/html.ts'],
-    outdir: './dist',
-    target: 'browser',
-  }),
-
-  // Build type files for TypeScript
-  Bun.build({
-    entrypoints: ['./src/html.ts'],
-    outdir: './dist',
-    target: 'browser',
-    plugins: [dts()],
-  }),
-]);
+await build({
+  entrypoints: ['./src/html.ts'],
+  outdir: './dist',
+  target: 'browser',
+});
