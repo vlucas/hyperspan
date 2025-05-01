@@ -1,7 +1,8 @@
 import { build } from 'bun';
 
 await build({
-  entrypoints: ['./src/html.ts'],
+  entrypoints: ['./src/index.ts'],
+  external: ['bun', '@hyperspan/html', '@hyperspan/framework'],
   outdir: './dist',
-  target: 'browser',
+  target: 'node',
 });

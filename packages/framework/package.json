@@ -64,7 +64,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@hyperspan/html": "^0.1.5",
+    "@hyperspan/html": "^0.1.6",
     "hono": "^4.7.4",
     "isbot": "^5.1.25",
     "preact": "^10.26.5",

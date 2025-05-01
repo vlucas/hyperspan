@@ -10,12 +10,7 @@
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": [
-    "template",
-    "template literal",
-    "html template",
-    "streaming template"
-  ],
+  "keywords": ["template", "template literal", "html template", "streaming template"],
   "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
@@ -34,6 +29,10 @@
     "@types/bun": "^1.2.11",
     "prettier": "^3.2.5",
     "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@hyperspan/html": "^0.0.16",
+    "@hyperspan/framework": "^0.0.17"
   },
   "dependencies": {
     "preact": "^10.26.5"
