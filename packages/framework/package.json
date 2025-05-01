@@ -1,8 +1,9 @@
 {
   "name": "@hyperspan/framework",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Hyperspan Web Framework",
   "main": "dist/server.js",
+  "types": "src/server.ts",
   "public": true,
   "publishConfig": {
     "access": "public"
