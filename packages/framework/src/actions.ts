@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html, TmplHtml } from '@hyperspan/html';
 import * as z from 'zod';
 import { HTTPException } from 'hono/http-exception';
 
@@ -20,21 +20,24 @@ import type { Context } from 'hono';
  */
 export interface HSAction<T extends z.ZodTypeAny> {
   _kind: string;
-  form(renderForm: (data: z.infer<T>) => THSResponseTypes): HSAction<T>;
-  handler(handler: (c: Context, { data }: { data: z.infer<T> }) => THSResponseTypes): HSAction<T>;
+  form(renderForm: ({ data }: { data?: z.infer<T> }) => TmplHtml): HSAction<T>;
+  post(handler: (c: Context, { data }: { data?: z.infer<T> }) => THSResponseTypes): HSAction<T>;
   error(
     handler: (
       c: Context,
-      { data, error }: { data: z.infer<T>; error?: z.ZodError | Error }
+      { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
     ) => THSResponseTypes
   ): HSAction<T>;
-  render(props?: { data: z.infer<T>; error?: z.ZodError | Error }): THSResponseTypes;
+  render(props?: { data?: z.infer<T>; error?: z.ZodError | Error }): THSResponseTypes;
   run(method: 'GET' | 'POST', c: Context): Promise<THSResponseTypes>;
 }
 
-export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
-  let _handler: Parameters<HSAction<T>['handler']>[0] | null = null,
-    _form: Parameters<HSAction<T>['form']>[0] | null = null,
+export function createAction<T extends z.ZodTypeAny>(
+  schema: T | null = null,
+  form: Parameters<HSAction<T>['form']>[0] | null = null
+) {
+  let _handler: Parameters<HSAction<T>['post']>[0] | null = null,
+    _form: Parameters<HSAction<T>['form']>[0] | null = form,
     _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null;
 
   const api: HSAction<T> = {
@@ -50,7 +53,7 @@ export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
      * Returns result from form processing if successful
      * Re-renders form with data and error information otherwise
      */
-    handler(handler) {
+    post(handler) {
       _handler = handler;
       return api;
     },
@@ -63,8 +66,8 @@ export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
     /**
      * Get form renderer method
      */
-    render(data) {
-      const form = _form ? _form(data || { data: {} }) : null;
+    render(formState?: { data?: z.infer<T>; error?: z.ZodError | Error }) {
+      const form = _form ? _form(formState || {}) : null;
       return form ? html`<hs-action>${form}</hs-action>` : null;
     },
 
@@ -86,7 +89,7 @@ export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
       const formData = await c.req.formData();
       const jsonData = formDataToJSON(formData);
       const schemaData = schema ? schema.safeParse(jsonData) : null;
-      const data = schemaData?.success ? (schemaData.data as z.infer<T>) : {};
+      const data = schemaData?.success ? (schemaData.data as z.infer<T>) : undefined;
       let error: z.ZodError | Error | null = null;
 
       try {
@@ -95,7 +98,7 @@ export function createAction<T extends z.ZodTypeAny>(schema: T | null = null) {
         }
 
         if (!_handler) {
-          throw new Error('Action handler not set! Every action must have a handler.');
+          throw new Error('Action POST handler not set! Every action must have a POST handler.');
         }
 
         return _handler(c, { data });

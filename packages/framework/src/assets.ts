@@ -1,10 +1,11 @@
 import { html } from '@hyperspan/html';
-import { md5 } from './clientjs/md5';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
+
+export const clientImportMap = new Map<string, string>();
 
 /**
  * Build client JS for end users (minimal JS for Hyperspan to work)
@@ -93,50 +94,4 @@ export function hyperspanScriptTags() {
         ></script>`
     )}
   `;
-}
-
-/**
- * Return a Preact component, mounted as an island in a <script> tag so it can be embedded into the page response.
- */
-export async function createPreactIsland(file: string) {
-  let filePath = file.replace('file://', '');
-
-  let resultStr = 'import{h,render}from"preact";';
-  const build = await Bun.build({
-    entrypoints: [filePath],
-    minify: true,
-    external: ['react', 'preact'],
-    // @ts-ignore
-    env: 'APP_PUBLIC_*', // Inlines any ENV that starts with 'APP_PUBLIC_'
-  });
-
-  for (const output of build.outputs) {
-    resultStr += await output.text(); // string
-  }
-
-  // Find default export - this is our component
-  const r = /export\{([a-zA-Z]+) as default\}/g;
-  const matchExport = r.exec(resultStr);
-  const jsId = md5(resultStr);
-
-  if (!matchExport) {
-    throw new Error(
-      'File does not have a default export! Ensure a function has export default to use this.'
-    );
-  }
-
-  // Preact render/mount component
-  const fn = matchExport[1];
-  let _mounted = false;
-
-  // Return HTML that will embed this component
-  return (props: any) => {
-    if (!_mounted) {
-      _mounted = true;
-      resultStr += `render(h(${fn}, ${JSON.stringify(props)}), document.getElementById("${jsId}"));`;
-    }
-    return html.raw(
-      `<div id="${jsId}"></div><script type="module" data-source-id="${jsId}">${resultStr}</script>`
-    );
-  };
 }

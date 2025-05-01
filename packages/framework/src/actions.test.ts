@@ -1,16 +1,16 @@
 import z from 'zod';
-import { createAction, THSFormData } from './actions';
+import { createAction } from './actions';
 import { describe, it, expect } from 'bun:test';
 import { html, render, type TmplHtml } from '@hyperspan/html';
 import type { Context } from 'hono';
 
 describe('createAction', () => {
-  const formWithNameOnly = ({ data }: THSFormData) => {
+  const formWithNameOnly = ({ data }: { data?: { name: string } }) => {
     return html`
       <form>
         <p>
           Name:
-          <input type="text" name="name" value="${data.name || ''}" />
+          <input type="text" name="name" value="${data?.name || ''}" />
         </p>
         <button type="submit">Submit</button>
       </form>
@@ -22,7 +22,7 @@ describe('createAction', () => {
       const schema = z.object({
         name: z.string(),
       });
-      const action = createAction(schema).form(formWithNameOnly);
+      const action = createAction(schema, formWithNameOnly);
 
       const formResponse = render(action.render({ data: { name: 'John' } }) as TmplHtml);
       expect(formResponse).toContain('value="John"');
@@ -34,10 +34,9 @@ describe('createAction', () => {
       const schema = z.object({
         name: z.string().nonempty(),
       });
-      const action = createAction(schema)
-        .form(formWithNameOnly)
-        .handler((c, { data }) => {
-          return html`<div>Thanks for submitting the form, ${data.name}!</div>`;
+      const action = createAction(schema, formWithNameOnly)
+        .post((c, { data }) => {
+          return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;
         })
         .error((c, { error }) => {
           return html`<div>There was an error! ${error?.message}</div>`;
@@ -68,8 +67,8 @@ describe('createAction', () => {
       });
       const action = createAction(schema)
         .form(formWithNameOnly)
-        .handler((c, { data }) => {
-          return html`<div>Thanks for submitting the form, ${data.name}!</div>`;
+        .post((c, { data }) => {
+          return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;
         })
         .error((c, { error }) => {
           return html`<div>There was an error! ${error?.message}</div>`;

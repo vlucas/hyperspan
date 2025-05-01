@@ -35,11 +35,25 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/plugin-preact": {
+      "name": "@hyperspan/plugin-preact",
+      "version": "0.0.1",
+      "dependencies": {
+        "preact": "^10.26.5",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.11",
+        "prettier": "^3.2.5",
+        "typescript": "^5.0.0",
+      },
+    },
   },
   "packages": {
     "@hyperspan/framework": ["@hyperspan/framework@workspace:packages/framework"],
 
     "@hyperspan/html": ["@hyperspan/html@workspace:packages/html"],
+
+    "@hyperspan/plugin-preact": ["@hyperspan/plugin-preact@workspace:packages/plugin-preact"],
 
     "@preact/compat": ["@preact/compat@18.3.1", "", { "peerDependencies": { "preact": "*" } }, "sha512-Kog4PSRxtT4COtOXjsuQPV1vMXpUzREQfv+6Dmcy9/rMk0HOPK0HTE9fspFjAmY8R80T/T8gtgmZ68u5bOSngw=="],
 
@@ -114,6 +128,8 @@
     "zod": ["zod@4.0.0-beta.20250415T232143", "", { "dependencies": { "@zod/core": "0.5.1" } }, "sha512-qy5jcyX/4Vt003S9II2NxTeAU31CQ71wJxk54stbrU+dhF+RcZL6xMwj8vGBbRVJi26pjCbTe2BldpK75nzlDw=="],
 
     "@hyperspan/html/@types/bun": ["@types/bun@1.2.11", "", { "dependencies": { "bun-types": "1.2.11" } }, "sha512-ZLbbI91EmmGwlWTRWuV6J19IUiUC5YQ3TCEuSHI3usIP75kuoA8/0PVF+LTrbEnVc8JIhpElWOxv1ocI1fJBbw=="],
+
+    "@hyperspan/plugin-preact/@types/bun": ["@types/bun@1.2.11", "", { "dependencies": { "bun-types": "1.2.11" } }, "sha512-ZLbbI91EmmGwlWTRWuV6J19IUiUC5YQ3TCEuSHI3usIP75kuoA8/0PVF+LTrbEnVc8JIhpElWOxv1ocI1fJBbw=="],
 
     "@types/bun/bun-types": ["bun-types@1.2.9", "", { "dependencies": { "@types/node": "*", "@types/ws": "*" } }, "sha512-dk/kOEfQbajENN/D6FyiSgOKEuUi9PWfqKQJEgwKrCMWbjS/S6tEXp178mWvWAcUSYm9ArDlWHZKO3T/4cLXiw=="],
   }
