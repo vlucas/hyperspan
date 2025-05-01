@@ -1,25 +1,37 @@
 import escapeHtml from './escape-html';
 
-export class TmplHtml {
-  _kind = 'hstmpl';
+export class HSHtml {
+  _kind = 'HSHtml';
   content = '';
   asyncContent: Array<{
     id: string;
     promise: Promise<{ id: string; value: unknown }>;
   }>;
 
-  constructor(props: Pick<TmplHtml, 'content' | 'asyncContent'>) {
+  constructor(props: Pick<HSHtml, 'content' | 'asyncContent'>) {
     this.content = props.content;
     this.asyncContent = props.asyncContent;
   }
+}
+
+/**
+ * Check if the value is a HSHtml object
+ */
+export function isHSHtml(value: unknown): boolean {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    // @ts-ignore
+    (value instanceof HSHtml || value.constructor.name === 'HSHtml' || value?._kind === 'HSHtml')
+  );
 }
 
 let htmlId = 0;
 /**
  * Create a new HTML template
  */
-export function html(strings: TemplateStringsArray, ...values: any[]): TmplHtml {
-  const asyncContent: TmplHtml['asyncContent'] = [];
+export function html(strings: TemplateStringsArray, ...values: any[]): HSHtml {
+  const asyncContent: HSHtml['asyncContent'] = [];
 
   let content = '';
   for (let i = 0; i < strings.length; i++) {
@@ -29,7 +41,7 @@ export function html(strings: TemplateStringsArray, ...values: any[]): TmplHtml 
 
     content += strings[i] + (renderValue ? renderValue : '');
   }
-  return new TmplHtml({ content, asyncContent });
+  return new HSHtml({ content, asyncContent });
 }
 // Insert raw HTML as string (do not escape HTML characters)
 html.raw = (content: string) => ({ _kind: 'html_safe', content });
@@ -38,7 +50,7 @@ html.raw = (content: string) => ({ _kind: 'html_safe', content });
  * Provide a custom placeholder for async content.
  * The async content will replace this placeholder when it resolves.
  */
-export function placeholder(content: TmplHtml, promise: Promise<unknown>) {
+export function placeholder(content: HSHtml, promise: Promise<unknown>) {
   return {
     render() {
       return content;
@@ -64,6 +76,14 @@ function _renderValue(
   const kind = opts.kind || _typeOf(value);
   let id = opts.id;
 
+  // THtmlReturn (HTML template)
+  if (isHSHtml(value)) {
+    // @ts-ignore  value is HSHtml!
+    opts.asyncContent.push(...value.asyncContent);
+    // @ts-ignore  value is HSHtml!
+    return value.content;
+  }
+
   switch (kind) {
     case 'array':
       return (value as any[])
@@ -71,18 +91,6 @@ function _renderValue(
         .join('');
     case 'object':
       id = `async_loading_${htmlId++}`;
-      // THtmlReturn (HTML template)
-      if (
-        value instanceof TmplHtml ||
-        value.constructor.name === 'TmplHtml' ||
-        // @ts-ignore
-        value?._kind === 'hstmpl'
-      ) {
-        // @ts-ignore  value is TmplHtml!
-        opts.asyncContent.push(...value.asyncContent);
-        // @ts-ignore  value is TmplHtml!
-        return value.content;
-      }
       // @ts-ignore - this is "raw HTML" object - do not escape
       if (value?._kind === 'html_safe') {
         // @ts-ignore
@@ -139,7 +147,7 @@ function _htmlPlaceholder(id: string | number, content: any = 'Loading...') {
  * Renders all static markup and non-async content for provided template.
  * This will NOT render any async content. For that, use renderAsync or renderStream.
  */
-export function render(tmpl: TmplHtml): string {
+export function render(tmpl: HSHtml): string {
   return tmpl.content;
 }
 
@@ -148,7 +156,7 @@ export function render(tmpl: TmplHtml): string {
  * This will wait for ALL async chunks in the template to resolve before rendering.
  * If you want streaming rendering, use 'renderStream' instead.
  */
-export async function renderAsync(tmpl: TmplHtml): Promise<string> {
+export async function renderAsync(tmpl: HSHtml): Promise<string> {
   let { content, asyncContent } = tmpl;
 
   while (asyncContent.length !== 0) {
@@ -175,7 +183,7 @@ export async function renderAsync(tmpl: TmplHtml): Promise<string> {
  * Uses Promise.race() to output new resolved chunks of HTML as soon as each promise resolves.
  * Primary render method for streaming HTML from server
  */
-export async function* renderStream(tmpl: TmplHtml): AsyncGenerator<string> {
+export async function* renderStream(tmpl: HSHtml): AsyncGenerator<string> {
   yield render(tmpl);
   let asyncContent = tmpl.asyncContent;
 
