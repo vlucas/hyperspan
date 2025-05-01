@@ -26,14 +26,10 @@ function htmlAsyncContentObserver() {
           const slotEl = document.getElementById(slotId);
 
           if (slotEl) {
-            // Wait until next paint for streaming content to finish writing to DOM
-            // @TODO: Need a more guaranteed way to know HTML element is done streaming in...
-            // Maybe some ".end" element that is hidden and then removed before insertion?
-            requestAnimationFrame(() => {
-              setTimeout(() => {
-                Idiomorph.morph(slotEl, el.content.cloneNode(true));
-                el.parentNode.removeChild(el);
-              }, 100);
+            // Only insert the content if it is done streaming in
+            waitForEndContent(el.content).then(() => {
+              Idiomorph.morph(slotEl, el.content.cloneNode(true));
+              el.parentNode.removeChild(el);
             });
           }
         } catch (e) {
@@ -45,6 +41,25 @@ function htmlAsyncContentObserver() {
   }
 }
 htmlAsyncContentObserver();
+
+/**
+ * Wait until ALL of the content inside an element is present from streaming in.
+ * Large chunks of content can sometimes take more than a single tick to write to DOM.
+ */
+async function waitForEndContent(el: HTMLElement) {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const endComment = Array.from(el.childNodes).find((node) => {
+        return node.nodeType === Node.COMMENT_NODE && node.nodeValue === 'end';
+      });
+      if (endComment) {
+        el.removeChild(endComment);
+        clearInterval(interval);
+        resolve(true);
+      }
+    }, 10);
+  });
+}
 
 /**
  * Server action component to handle the client-side form submission and HTML replacement

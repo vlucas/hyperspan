@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import { TmplHtml, html, renderStream, renderAsync, render } from '@hyperspan/html';
+import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { buildClientJS, buildClientCSS } from './assets';
 import { Hono, type Context } from 'hono';
@@ -13,7 +13,7 @@ const CWD = process.cwd();
 /**
  * Types
  */
-export type THSResponseTypes = TmplHtml | Response | string | null;
+export type THSResponseTypes = HSHtml | Response | string | null;
 export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
 
 export type THSRoute = {
@@ -28,7 +28,7 @@ export type THSRoute = {
 
 /**
  * Define a route that can handle a direct HTTP request.
- * Route handlers should return a TmplHtml or Response object
+ * Route handlers should return a HSHtml or Response object
  */
 export function createRoute(handler?: THSRouteHandler): THSRoute {
   let _handlers: Record<string, THSRouteHandler> = {};
@@ -78,19 +78,12 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
       const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
       const routeKind = typeof routeContent;
 
-      // Render TmplHtml if returned from route handler
-      if (
-        routeContent &&
-        routeKind === 'object' &&
-        (routeContent instanceof TmplHtml ||
-          routeContent.constructor.name === 'TmplHtml' ||
-          // @ts-ignore
-          routeContent?._kind === 'TmplHtml')
-      ) {
+      // Render HSHtml if returned from route handler
+      if (isHSHtml(routeContent)) {
         if (streamingEnabled) {
-          return new StreamResponse(renderStream(routeContent as TmplHtml)) as Response;
+          return new StreamResponse(renderStream(routeContent as HSHtml)) as Response;
         } else {
-          const output = await renderAsync(routeContent as TmplHtml);
+          const output = await renderAsync(routeContent as HSHtml);
           return context.html(output);
         }
       }

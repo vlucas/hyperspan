@@ -1,7 +1,7 @@
 import z from 'zod';
 import { createAction } from './actions';
 import { describe, it, expect } from 'bun:test';
-import { html, render, type TmplHtml } from '@hyperspan/html';
+import { html, render, type HSHtml } from '@hyperspan/html';
 import type { Context } from 'hono';
 
 describe('createAction', () => {
@@ -24,7 +24,7 @@ describe('createAction', () => {
       });
       const action = createAction(schema, formWithNameOnly);
 
-      const formResponse = render(action.render({ data: { name: 'John' } }) as TmplHtml);
+      const formResponse = render(action.render({ data: { name: 'John' } }) as HSHtml);
       expect(formResponse).toContain('value="John"');
     });
   });
@@ -55,7 +55,7 @@ describe('createAction', () => {
 
       const response = await action.run('POST', mockContext);
 
-      const formResponse = render(response as TmplHtml);
+      const formResponse = render(response as HSHtml);
       expect(formResponse).toContain('Thanks for submitting the form, John!');
     });
   });
@@ -87,7 +87,7 @@ describe('createAction', () => {
 
       const response = await action.run('POST', mockContext);
 
-      const formResponse = render(response as TmplHtml);
+      const formResponse = render(response as HSHtml);
       expect(formResponse).toContain('There was an error!');
     });
   });

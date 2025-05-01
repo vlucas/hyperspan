@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Hyperspan Web Framework",
   "main": "dist/server.js",
   "types": "src/server.ts",
@@ -65,9 +65,9 @@
   },
   "dependencies": {
     "@hyperspan/html": "^0.1.5",
-    "@preact/compat": "^18.3.1",
     "hono": "^4.7.4",
     "isbot": "^5.1.25",
+    "preact": "^10.26.5",
     "zod": "^4.0.0-beta.20250415T232143"
   }
 }

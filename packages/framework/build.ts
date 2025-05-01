@@ -1,4 +1,4 @@
-import {build} from 'bun';
+import { build } from 'bun';
 
 const entrypoints = ['./src/server.ts', './src/assets.ts'];
 const external = ['@hyperspan/html'];

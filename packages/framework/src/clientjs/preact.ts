@@ -1,1 +1,2 @@
-export * from '@preact/compat';
+export * from 'preact/compat';
+export { h, render } from 'preact';

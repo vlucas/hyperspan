@@ -1,4 +1,4 @@
-import { html, TmplHtml } from '@hyperspan/html';
+import { html, HSHtml } from '@hyperspan/html';
 import * as z from 'zod';
 import { HTTPException } from 'hono/http-exception';
 
@@ -20,7 +20,7 @@ import type { Context } from 'hono';
  */
 export interface HSAction<T extends z.ZodTypeAny> {
   _kind: string;
-  form(renderForm: ({ data }: { data?: z.infer<T> }) => TmplHtml): HSAction<T>;
+  form(renderForm: ({ data }: { data?: z.infer<T> }) => HSHtml): HSAction<T>;
   post(handler: (c: Context, { data }: { data?: z.infer<T> }) => THSResponseTypes): HSAction<T>;
   error(
     handler: (
