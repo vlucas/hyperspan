@@ -244,7 +244,6 @@ const ROUTE_SEGMENT = /(\[[a-zA-Z_\.]+\])/g;
 export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[]> {
   // Walk all pages and add them as routes
   const routesDir = join(config.appDir, 'routes');
-  console.log(routesDir);
   const files = await readdir(routesDir, { recursive: true });
   const routes: THSRouteMap[] = [];
 

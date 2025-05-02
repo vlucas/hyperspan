@@ -1,0 +1,27 @@
+{
+  "name": "",
+  "description": "Hyperspan.dev starter template",
+  "version": "0.0.1",
+  "scripts": {
+    "build:styles": "bun run clean:styles && bunx @tailwindcss/cli -i ./app/styles/globals.css -o ./public/_hs/css/styles-$(date \"+%Y%m%d%H%M%S\").css --minify",
+    "build:styles:dev": "bun run clean:styles && bunx @tailwindcss/cli -i ./app/styles/globals.css -o ./public/_hs/css/styles-$(date \"+%Y%m%d%H%M%S\").css --watch",
+    "clean:styles": "rm ./public/styles-*.css 2> /dev/null || true && rm ./public/_hs/css/styles-*.css 2> /dev/null || true",
+    "dev": "bun run build:styles && PORT=3005 bun run --watch app/server.ts",
+    "start": "bun run build:styles && bun run app/server.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.17",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/bun": "^1.1.9",
+    "@types/node": "^22.5.5",
+    "@types/react": "^19.1.0",
+    "prettier": "^3.2.5",
+    "tailwindcss": "^4.0.17",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@hyperspan/framework": "^0.1.7",
+    "@hyperspan/html": "^0.1.6"
+  }
+}
