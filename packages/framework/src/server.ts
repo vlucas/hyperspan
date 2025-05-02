@@ -15,6 +15,8 @@ const CWD = process.cwd();
  */
 export type THSResponseTypes = HSHtml | Response | string | null;
 export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
+export type THSAPIResponseTypes = Response | Record<any, any> | void;
+export type THSAPIRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
 
 export type THSRoute = {
   _kind: 'hsRoute';
@@ -100,8 +102,8 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
  * Create new API Route
  * API Route handlers should return a JSON object or a Response
  */
-export function createAPIRoute(handler?: THSRouteHandler): THSRoute {
-  let _handlers: Record<string, THSRouteHandler> = {};
+export function createAPIRoute(handler?: THSAPIRouteHandler): THSRoute {
+  let _handlers: Record<string, THSAPIRouteHandler> = {};
 
   if (handler) {
     _handlers['GET'] = handler;
@@ -109,23 +111,23 @@ export function createAPIRoute(handler?: THSRouteHandler): THSRoute {
 
   const api: THSRoute = {
     _kind: 'hsRoute',
-    get(handler: THSRouteHandler) {
+    get(handler: THSAPIRouteHandler) {
       _handlers['GET'] = handler;
       return api;
     },
-    post(handler: THSRouteHandler) {
+    post(handler: THSAPIRouteHandler) {
       _handlers['POST'] = handler;
       return api;
     },
-    put(handler: THSRouteHandler) {
+    put(handler: THSAPIRouteHandler) {
       _handlers['PUT'] = handler;
       return api;
     },
-    delete(handler: THSRouteHandler) {
+    delete(handler: THSAPIRouteHandler) {
       _handlers['DELETE'] = handler;
       return api;
     },
-    patch(handler: THSRouteHandler) {
+    patch(handler: THSAPIRouteHandler) {
       _handlers['PATCH'] = handler;
       return api;
     },

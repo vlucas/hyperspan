@@ -101,7 +101,7 @@ function md5(content: string): string {
  */
 async function copyPreactToPublicFolder() {
   const sourceFile = resolve(PWD, '../', './src/clientjs/preact.ts');
-  const preactClient = Bun.build({
+  await Bun.build({
     entrypoints: [sourceFile],
     outdir: './public/_hs/js',
     minify: true,
