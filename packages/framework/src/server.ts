@@ -205,6 +205,14 @@ export function isRunnableRoute(route: unknown): boolean {
 }
 
 /**
+ * Create a layout for a Hyperspan app. Passthrough for now.
+ * Future intent is to be able to conditionally render a layout for full page content vs. partial content.
+ */
+export function createLayout<T>(layout: (props: T) => HSHtml | Promise<HSHtml>) {
+  return layout;
+}
+
+/**
  * Basic error handling
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
