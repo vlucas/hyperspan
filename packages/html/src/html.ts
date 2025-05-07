@@ -50,7 +50,7 @@ html.raw = (content: string) => ({ _kind: 'html_safe', content });
  * Provide a custom placeholder for async content.
  * The async content will replace this placeholder when it resolves.
  */
-export function placeholder(content: HSHtml, promise: Promise<unknown>) {
+export function placeholder(content: HSHtml | HSHtml[], promise: Promise<unknown>) {
   return {
     render() {
       return content;
@@ -140,7 +140,7 @@ function _renderValue(
  */
 function _htmlPlaceholder(id: string | number, content: any = 'Loading...') {
   // prettier-ignore
-  return html`<!--hs:loading:${id}--><slot id="${id}">${content}</slot><!--/hs:loading:${id}-->`
+  return html`<!--hs:loading:${id}--><slot id="${id}" style="display: contents;">${content}</slot><!--/hs:loading:${id}-->`
 }
 
 /**
