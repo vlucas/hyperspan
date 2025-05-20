@@ -1,4 +1,4 @@
-import z from 'zod';
+import z from 'zod/v4';
 import { createAction } from './actions';
 import { describe, it, expect } from 'bun:test';
 import { html, render, type HSHtml } from '@hyperspan/html';

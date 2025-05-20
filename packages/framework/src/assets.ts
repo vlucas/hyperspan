@@ -2,6 +2,8 @@ import { html } from '@hyperspan/html';
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { createElement } from 'preact';
+import { render as renderToString } from 'preact-render-to-string';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
@@ -89,9 +91,6 @@ export function hyperspanScriptTags() {
   `;
 }
 
-// External ESM = https://esm.sh/preact@10.26.4/compat
-const PREACT_PUBLIC_FILE_PATH = '/_hs/js/preact.js';
-
 function md5(content: string): string {
   return createHash('md5').update(content).digest('hex');
 }
@@ -110,12 +109,34 @@ async function copyPreactToPublicFolder() {
   });
 }
 
+// External ESM = https://esm.sh/preact@10.26.4/compat
+const PREACT_PUBLIC_FILE_PATH = '/_hs/js/preact.js';
+export const ISLAND_PUBLIC_PATH = '/_hs/js/islands';
+export const ISLAND_DEFAULTS = () => ({
+  ssr: false,
+  inline: true,
+  externals: [],
+});
+const ISLAND_CACHE = new Map<string, (props: any) => any>();
+
 /**
  * Return a Preact component, mounted as an island in a <script> tag so it can be embedded into the page response.
  */
-export async function createPreactIsland(file: string) {
+export async function createPreactIsland(
+  file: string,
+  options: {
+    ssr?: boolean;
+    inline?: boolean;
+    externals?: string[];
+  } = ISLAND_DEFAULTS()
+) {
   let filePath = file.replace('file://', '');
-  const jsId = md5(filePath);
+  const jsId = md5(filePath + JSON.stringify(options));
+
+  // Don't compile the same file twice!
+  if (ISLAND_CACHE.has(jsId)) {
+    return ISLAND_CACHE.get(jsId);
+  }
 
   // Add Preact to client import map if not already present
   if (!clientImportMap.has('preact')) {
@@ -130,41 +151,91 @@ export async function createPreactIsland(file: string) {
     clientImportMap.set('react-dom', '.' + PREACT_PUBLIC_FILE_PATH);
   }
 
+  options.externals = ['react', 'react-dom', 'preact', 'preact/hooks', 'preact/compat'].concat(
+    options.externals || []
+  );
+
   let resultStr = 'import{h,render}from"preact";';
   const buildResult = await Bun.build({
+    outdir: options.inline ? undefined : `./public/${ISLAND_PUBLIC_PATH}`,
     entrypoints: [filePath],
-    minify: true,
-    external: ['react', 'preact'],
-    // @ts-ignore
+    naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+    minify: IS_PROD || options.inline,
+    external: options.externals,
+    splitting: true,
     env: 'APP_PUBLIC_*', // Inlines any ENV that starts with 'APP_PUBLIC_'
   });
 
-  for (const output of buildResult.outputs) {
-    resultStr += await output.text(); // string
+  if (options.inline) {
+    for (const output of buildResult.outputs) {
+      resultStr += await output.text(); // string
+    }
+
+    // Find default export - this is our component
+    const r = /export\{([a-zA-Z]+) as default\}/g;
+    const matchExport = r.exec(resultStr);
+
+    if (!matchExport) {
+      console.log('resultStr', resultStr);
+      throw new Error(
+        'File does not have a default export! Ensure a function has export default to use this.'
+      );
+    }
+
+    const fn = matchExport[1];
+    let _mounted = false;
+
+    const island = (props: any) => {
+      if (!_mounted) {
+        _mounted = true;
+        resultStr += `render(h(${fn}, ${JSON.stringify(props)}), document.getElementById("${jsId}"));`;
+      }
+
+      if (options.inline) {
+        return html.raw(
+          `<div id="${jsId}"></div><script type="module" data-source-id="${jsId}">${resultStr}</script>`
+        );
+      }
+    };
+
+    ISLAND_CACHE.set(jsId, island);
+    return island;
   }
 
-  // Find default export - this is our component
-  const r = /export\{([a-zA-Z]+) as default\}/g;
-  const matchExport = r.exec(resultStr);
+  const islandPath = ISLAND_PUBLIC_PATH + buildResult.outputs[0].path.split(ISLAND_PUBLIC_PATH)[1];
+  clientImportMap.set(jsId, islandPath);
+  clientJSFiles.set(jsId, { src: islandPath, type: 'module' });
 
-  if (!matchExport) {
+  const Component = await import(filePath);
+
+  console.log('islandPath', {
+    islandPath,
+    filePath,
+    jsId,
+    options,
+  });
+
+  if (!Component.default) {
     throw new Error(
       'File does not have a default export! Ensure a function has export default to use this.'
     );
   }
 
-  // Preact render/mount component
-  const fn = matchExport[1];
-  let _mounted = false;
-
   // Return HTML that will embed this component
-  return (props: any) => {
-    if (!_mounted) {
-      _mounted = true;
-      resultStr += `render(h(${fn}, ${JSON.stringify(props)}), document.getElementById("${jsId}"));`;
-    }
+  const island = (props: any) => {
+    const ssrContent = renderToString(createElement(Component.default, props));
     return html.raw(
-      `<div id="${jsId}"></div><script type="module" data-source-id="${jsId}">${resultStr}</script>`
+      `<div id="${jsId}">${ssrContent}</div>
+       <script type="module" src="${clientImportMap.get(jsId)}"></script>
+       <script type="module">
+        import {h,hydrate} from "preact";
+        import Component from "${jsId}";
+        hydrate(h(Component, ${JSON.stringify(props)}), document.getElementById("${jsId}"));
+      </script>
+      `
     );
   };
+
+  ISLAND_CACHE.set(jsId, island);
+  return island;
 }

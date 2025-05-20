@@ -1,5 +1,5 @@
 import { html, HSHtml } from '@hyperspan/html';
-import * as z from 'zod';
+import * as z from 'zod/v4';
 import { HTTPException } from 'hono/http-exception';
 
 import type { THSResponseTypes } from './server';

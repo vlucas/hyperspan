@@ -1,2 +1,3 @@
 export * from 'preact/compat';
-export { h, render } from 'preact';
+export * from 'preact/hooks';
+export { h, render, hydrate } from 'preact';
