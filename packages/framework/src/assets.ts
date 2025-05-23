@@ -98,17 +98,11 @@ export function assetHash(content: string): string {
  */
 export const ISLAND_PUBLIC_PATH = '/_hs/js/islands';
 export const ISLAND_DEFAULTS = () => ({
-  ssr: false,
-  inline: true,
-  externals: [],
+  ssr: true,
 });
 
-export function renderIsland(Component: any, props: any) {
-  if (!clientImportMap.has('preact')) {
-    clientImportMap.set('preact', '/_hs/js/preact.js');
-  }
-
-  if (Component.__HS_PLUGIN?.ssr) {
+export function renderIsland(Component: any, props: any, options = ISLAND_DEFAULTS()) {
+  if (Component.__HS_PLUGIN?.ssr && options.ssr) {
     return Component.__HS_PLUGIN.ssr(props);
   }
 
