@@ -28,6 +28,10 @@ export type THSRoute = {
   run: (method: string, context: Context) => Promise<Response>;
 };
 
+export function createConfig(config: THSServerConfig): THSServerConfig {
+  return config;
+}
+
 /**
  * Define a route that can handle a direct HTTP request.
  * Route handlers should return a HSHtml or Response object
@@ -234,6 +238,7 @@ export type THSServerConfig = {
   appDir: string;
   staticFileRoot: string;
   rewrites?: Array<{ source: string; destination: string }>;
+  islandPlugins?: Array<any>; // Loaders for client islands
   // For customizing the routes and adding your own...
   beforeRoutesAdded?: (app: Hono) => void;
   afterRoutesAdded?: (app: Hono) => void;

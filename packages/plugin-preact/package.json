@@ -1,8 +1,8 @@
 {
   "name": "@hyperspan/plugin-preact",
   "version": "0.0.1",
-  "description": "Hyperspan Plugin for Preact",
-  "main": "dist/index.js",
+  "description": "Hyperspan Plugin for React",
+  "main": "src/index.ts",
   "types": "src/index.ts",
   "public": true,
   "publishConfig": {
@@ -10,7 +10,7 @@
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": ["template", "template literal", "html template", "streaming template"],
+  "keywords": [],
   "homepage": "https://www.hyperspan.dev/docs/html",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
@@ -35,6 +35,7 @@
     "@hyperspan/framework": "^0.0.17"
   },
   "dependencies": {
-    "preact": "^10.26.5"
+    "preact": "^10.26.5",
+    "preact-render-to-string": "^6.1.0"
   }
 }
