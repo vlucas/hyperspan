@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Hyperspan Web Framework",
   "main": "dist/server.js",
   "types": "src/server.ts",
@@ -52,30 +52,17 @@
     "test": "bun test",
     "prepack": "bun run clean && bun run build"
   },
-  "overrides": {
-    "preact": "10.26.6",
-    "preact-render-to-string": "6.5.13"
-  },
   "devDependencies": {
-    "@types/bun": "^1.2.13",
-    "@types/node": "^22.15.19",
-    "@types/react": "^19.1.4",
+    "@types/bun": "^1.2.14",
+    "@types/node": "^22.15.20",
+    "@types/react": "^19.1.5",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3"
   },
-  "peerDependencies": {
-    "preact": "^10.26.6"
-  },
-  "peerDependenciesMeta": {
-    "preact": {
-      "optional": true
-    }
-  },
   "dependencies": {
-    "@hyperspan/html": "^0.1.6",
+    "@hyperspan/html": "^0.1.7",
     "hono": "^4.7.10",
     "isbot": "^5.1.28",
-    "preact-render-to-string": "^6.5.13",
-    "zod": "^3.25.7"
+    "zod": "^3.25.28"
   }
 }

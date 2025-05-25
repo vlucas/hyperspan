@@ -1,7 +1,7 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "0.0.1",
-  "description": "Hyperspan Plugin for React",
+  "version": "0.1.2",
+  "description": "Hyperspan Plugin for Preact",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "public": true,
@@ -11,15 +11,12 @@
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
   "keywords": [],
-  "homepage": "https://www.hyperspan.dev/docs/html",
+  "homepage": "https://www.hyperspan.dev/docs/islands-architecture",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "build": "bun ./build.ts",
-    "clean": "rm -rf dist",
-    "test": "bun test",
-    "prepack": "bun run clean && bun run build"
+    "test": "bun test"
   },
   "repository": {
     "type": "git",
@@ -31,8 +28,8 @@
     "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "@hyperspan/html": "^0.0.16",
-    "@hyperspan/framework": "^0.0.17"
+    "@hyperspan/html": "^0.1.7",
+    "@hyperspan/framework": "^0.1.8"
   },
   "dependencies": {
     "preact": "^10.26.5",

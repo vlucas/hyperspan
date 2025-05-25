@@ -102,15 +102,22 @@ export const ISLAND_DEFAULTS = () => ({
 });
 
 export function renderIsland(Component: any, props: any, options = ISLAND_DEFAULTS()) {
-  if (Component.__HS_PLUGIN?.ssr && options.ssr) {
-    return Component.__HS_PLUGIN.ssr(props);
+  // Render is an OPTIONAL override that allows you to render the island with your own logic
+  if (Component.__HS_ISLAND?.render) {
+    return Component.__HS_ISLAND.render(props, options);
   }
 
-  if (Component.__HS_PLUGIN?.render) {
-    return Component.__HS_PLUGIN.render(props);
+  // If ssr is true, render the island with the ssr function
+  if (Component.__HS_ISLAND?.ssr && options.ssr) {
+    return Component.__HS_ISLAND.ssr(props);
+  }
+
+  // If ssr is false, render the island with the clientOnly function
+  if (Component.__HS_ISLAND?.clientOnly) {
+    return Component.__HS_ISLAND.clientOnly(props);
   }
 
   throw new Error(
-    `Island ${Component.name} does not have a ssr or render function! Did you forget to install an island plugin and add it to the createServer() 'islandPlugins' config?`
+    `Module ${Component.name} was not loaded with an island plugin! Did you forget to install an island plugin and add it to the createServer() 'islandPlugins' config?`
   );
 }

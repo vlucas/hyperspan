@@ -111,13 +111,14 @@ import { render as __hs_renderToString } from 'preact-render-to-string';
 ${contents}
 
 // hyperspan:preact-plugin
-${componentName}.__HS_PLUGIN = {
+${componentName}.__HS_ISLAND = {
+  id: "${jsId}",
   ssr: (props) => {
     const ssrContent = __hs_renderToString(__hs_h(${componentName}, props));
     const postContent = \`__hs_hydrate(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
     return __hs_html.raw(\`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">${contents}\${postContent}</script>\`);
   },
-  render: (props) => {
+  clientOnly: (props) => {
     const postContent = \`__hs_render(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
     
     return __hs_html.raw(

@@ -1,11 +1,8 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
 import MarketingLayout from '@/app/layouts/marketing-layout';
-import { createPreactIsland } from '@hyperspan/framework/assets';
-
-const ClientCounter = await createPreactIsland(
-  import.meta.resolve('@/app/components/client-counter')
-);
+import { renderIsland } from '@hyperspan/framework/assets';
+import ClientCounter from '@/app/components/client-counter';
 
 export default createRoute(() => {
   const content = html`
@@ -25,8 +22,8 @@ export default createRoute(() => {
       </section>
 
       <section class="mt-10 p-8">
-        <!-- Call ClientCounter like a normal function and pass props! -->
-        ${ClientCounter({ count: 5 })}
+        <!-- Call ClientCounter with renderIsland() and pass props! -->
+        ${renderIsland(ClientCounter, { count: 5 })}
       </section>
     </main>
   `;
