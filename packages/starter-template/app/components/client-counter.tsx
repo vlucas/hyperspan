@@ -1,3 +1,4 @@
+import { h } from 'preact';
 import { useState } from 'preact/compat';
 
 export default function ClientCounter({ count: initialCount = 0 }: { count?: number }) {

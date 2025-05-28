@@ -23,6 +23,7 @@
   "dependencies": {
     "@hyperspan/framework": "^0.2.0",
     "@hyperspan/html": "^0.1.7",
-    "@hyperspan/plugin-preact": "^0.1.2"
+    "@hyperspan/plugin-preact": "^0.1.2",
+    "preact": "^10.26.7"
   }
 }
