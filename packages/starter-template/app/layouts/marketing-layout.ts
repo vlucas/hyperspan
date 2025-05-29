@@ -1,10 +1,9 @@
-import { html } from '@hyperspan/html';
-import { createLayout } from '@hyperspan/framework';
-import { hyperspanScriptTags, hyperspanStyleTags } from '@hyperspan/framework/assets';
+import {html} from '@hyperspan/html';
+import {hyperspanScriptTags, hyperspanStyleTags} from '@hyperspan/framework/assets';
 
-export default createLayout(({ title, content }: { title: string; content: any }) => {
+export default function MarketingLayout({title, content}: {title: string; content: any}) {
   return html`
-    <!DOCTYPE html>
+    <!doctype html>
     <html class="w-full h-full" lang="en">
       <head>
         <meta charset="UTF-8" />
@@ -31,4 +30,4 @@ export default createLayout(({ title, content }: { title: string; content: any }
       </body>
     </html>
   `;
-});
+}
