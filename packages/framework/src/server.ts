@@ -28,6 +28,16 @@ export type THSRoute = {
   middleware: (middleware: Array<MiddlewareHandler>) => THSRoute;
   _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
 };
+export type THSAPIRoute = {
+  _kind: 'hsAPIRoute';
+  get: (handler: THSAPIRouteHandler) => THSAPIRoute;
+  post: (handler: THSAPIRouteHandler) => THSAPIRoute;
+  put: (handler: THSAPIRouteHandler) => THSAPIRoute;
+  delete: (handler: THSAPIRouteHandler) => THSAPIRoute;
+  patch: (handler: THSAPIRouteHandler) => THSAPIRoute;
+  middleware: (middleware: Array<MiddlewareHandler>) => THSAPIRoute;
+  _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
+};
 
 export function createConfig(config: THSServerConfig): THSServerConfig {
   return config;
@@ -128,7 +138,7 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
  * Create new API Route
  * API Route handlers should return a JSON object or a Response
  */
-export function createAPIRoute(handler?: THSAPIRouteHandler): THSRoute {
+export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
   let _handlers: Record<string, THSAPIRouteHandler> = {};
   let _middleware: Array<MiddlewareHandler> = [];
 
@@ -136,7 +146,7 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSRoute {
     _handlers['GET'] = handler;
   }
 
-  const api: THSRoute = {
+  const api: THSAPIRoute = {
     _kind: 'hsRoute',
     get(handler: THSAPIRouteHandler) {
       _handlers['GET'] = handler;
