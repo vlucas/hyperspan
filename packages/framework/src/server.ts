@@ -6,6 +6,7 @@ import { buildClientJS, buildClientCSS } from './assets';
 import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
+import type { HandlerResponse, MiddlewareHandler } from 'hono/types';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
@@ -15,8 +16,7 @@ const CWD = process.cwd();
  */
 export type THSResponseTypes = HSHtml | Response | string | null;
 export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
-export type THSAPIResponseTypes = Response | Record<any, any> | void;
-export type THSAPIRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
+export type THSAPIRouteHandler = (context: Context) => Promise<any> | any;
 
 export type THSRoute = {
   _kind: 'hsRoute';
@@ -25,7 +25,8 @@ export type THSRoute = {
   put: (handler: THSRouteHandler) => THSRoute;
   delete: (handler: THSRouteHandler) => THSRoute;
   patch: (handler: THSRouteHandler) => THSRoute;
-  run: (method: string, context: Context) => Promise<Response>;
+  middleware: (middleware: Array<MiddlewareHandler>) => THSRoute;
+  _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
 };
 
 export function createConfig(config: THSServerConfig): THSServerConfig {
@@ -38,6 +39,7 @@ export function createConfig(config: THSServerConfig): THSServerConfig {
  */
 export function createRoute(handler?: THSRouteHandler): THSRoute {
   let _handlers: Record<string, THSRouteHandler> = {};
+  let _middleware: Array<MiddlewareHandler> = [];
 
   if (handler) {
     _handlers['GET'] = handler;
@@ -65,37 +67,57 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
       _handlers['PATCH'] = handler;
       return api;
     },
-    async run(method: string, context: Context): Promise<Response> {
-      const handler = _handlers[method];
-      if (!handler) {
-        throw new HTTPException(405, { message: 'Method not allowed' });
-      }
+    middleware(middleware: Array<MiddlewareHandler>) {
+      _middleware = middleware;
+      return api;
+    },
+    _getRouteHandlers() {
+      return [
+        ..._middleware,
+        async (context: Context) => {
+          const method = context.req.method.toUpperCase();
 
-      const routeContent = await handler(context);
+          try {
+            const handler = _handlers[method];
+            if (!handler) {
+              throw new HTTPException(405, { message: 'Method not allowed' });
+            }
 
-      // Return Response if returned from route handler
-      if (routeContent instanceof Response) {
-        return routeContent;
-      }
+            const routeContent = await handler(context);
 
-      // @TODO: Move this to config or something...
-      const userIsBot = isbot(context.req.header('User-Agent'));
-      const streamOpt = context.req.query('__nostream');
-      const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
-      const routeKind = typeof routeContent;
+            // Return Response if returned from route handler
+            if (routeContent instanceof Response) {
+              return routeContent;
+            }
 
-      // Render HSHtml if returned from route handler
-      if (isHSHtml(routeContent)) {
-        if (streamingEnabled) {
-          return new StreamResponse(renderStream(routeContent as HSHtml)) as Response;
-        } else {
-          const output = await renderAsync(routeContent as HSHtml);
-          return context.html(output);
-        }
-      }
+            // @TODO: Move this to config or something...
+            const userIsBot = isbot(context.req.header('User-Agent'));
+            const streamOpt = context.req.query('__nostream');
+            const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
 
-      // Return unknown content - not specifically handled above
-      return context.text(String(routeContent));
+            // Render HSHtml if returned from route handler
+            if (isHSHtml(routeContent)) {
+              if (streamingEnabled) {
+                return new StreamResponse(renderStream(routeContent as HSHtml)) as Response;
+              } else {
+                const output = await renderAsync(routeContent as HSHtml);
+                return context.html(output);
+              }
+            }
+
+            // Return custom Response if returned from route handler
+            if (routeContent instanceof Response) {
+              return routeContent;
+            }
+
+            // Return unknown content - not specifically handled above
+            return context.text(String(routeContent));
+          } catch (e) {
+            !IS_PROD && console.error(e);
+            return await showErrorReponse(context, e as Error);
+          }
+        },
+      ];
     },
   };
 
@@ -108,6 +130,7 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
  */
 export function createAPIRoute(handler?: THSAPIRouteHandler): THSRoute {
   let _handlers: Record<string, THSAPIRouteHandler> = {};
+  let _middleware: Array<MiddlewareHandler> = [];
 
   if (handler) {
     _handlers['GET'] = handler;
@@ -135,39 +158,59 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSRoute {
       _handlers['PATCH'] = handler;
       return api;
     },
-    async run(method: string, context: Context): Promise<Response> {
-      const handler = _handlers[method];
-      if (!handler) {
-        throw new Error('Method not allowed');
-      }
+    middleware(middleware: Array<MiddlewareHandler>) {
+      _middleware = middleware;
+      return api;
+    },
+    _getRouteHandlers() {
+      return [
+        ..._middleware,
+        async (context: Context) => {
+          const method = context.req.method.toUpperCase();
+          const handler = _handlers[method];
 
-      try {
-        const response = await handler(context);
+          if (!handler) {
+            return context.json(
+              {
+                meta: { success: false, dtResponse: new Date() },
+                data: {},
+                error: {
+                  message: 'Method not allowed',
+                },
+              },
+              { status: 405 }
+            );
+          }
 
-        if (response instanceof Response) {
-          return response;
-        }
+          try {
+            const response = await handler(context);
 
-        return context.json(
-          { meta: { success: true, dtResponse: new Date() }, data: response },
-          { status: 200 }
-        );
-      } catch (err) {
-        const e = err as Error;
-        console.error(e);
+            if (response instanceof Response) {
+              return response;
+            }
 
-        return context.json(
-          {
-            meta: { success: false, dtResponse: new Date() },
-            data: {},
-            error: {
-              message: e.message,
-              stack: IS_PROD ? undefined : e.stack?.split('\n'),
-            },
-          },
-          { status: 500 }
-        );
-      }
+            return context.json(
+              { meta: { success: true, dtResponse: new Date() }, data: response },
+              { status: 200 }
+            );
+          } catch (err) {
+            const e = err as Error;
+            !IS_PROD && console.error(e);
+
+            return context.json(
+              {
+                meta: { success: false, dtResponse: new Date() },
+                data: {},
+                error: {
+                  message: e.message,
+                  stack: IS_PROD ? undefined : e.stack?.split('\n'),
+                },
+              },
+              { status: 500 }
+            );
+          }
+        },
+      ];
     },
   };
 
@@ -199,21 +242,13 @@ export function getRunnableRoute(route: unknown): THSRoute {
 
   // No route -> error
   throw new Error(
-    'Route not runnable. Use "export default createRoute()" to create a Hyperspan route.'
+    `Route not runnable. Use "export default createRoute()" to create a Hyperspan route. Exported methods found were: ${Object.keys(route as {}).join(', ')}`
   );
 }
 
 export function isRunnableRoute(route: unknown): boolean {
   // @ts-ignore
-  return typeof route === 'object' && 'run' in route;
-}
-
-/**
- * Create a layout for a Hyperspan app. Passthrough for now.
- * Future intent is to be able to conditionally render a layout for full page content vs. partial content.
- */
-export function createLayout<T>(layout: (props: T) => HSHtml | Promise<HSHtml>) {
-  return layout;
+  return typeof route === 'object' && '_getRouteHandlers' in route;
 }
 
 /**
@@ -305,24 +340,11 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
 /**
  * Run route from file
  */
-export function createRouteFromModule(RouteModule: any): (context: Context) => Promise<Response> {
-  return async (context: Context) => {
-    const reqMethod = context.req.method.toUpperCase();
-
-    try {
-      const runnableRoute = getRunnableRoute(RouteModule);
-      const content = await runnableRoute.run(reqMethod, context);
-
-      if (content instanceof Response) {
-        return content;
-      }
-
-      return context.text(String(content));
-    } catch (e) {
-      console.error(e);
-      return await showErrorReponse(context, e as Error);
-    }
-  };
+export function createRouteFromModule(
+  RouteModule: any
+): Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)> {
+  const route = getRunnableRoute(RouteModule);
+  return route._getRouteHandlers();
 }
 
 /**
@@ -349,7 +371,8 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
     routeMap.push({ route: routePattern, file: route.file });
 
     // Import route
-    app.all(routePattern, createRouteFromModule(await import(fullRouteFile)));
+    const routeHandlers = createRouteFromModule(await import(fullRouteFile));
+    app.all(routePattern, ...routeHandlers);
   }
 
   // Help route if no routes found
@@ -386,6 +409,7 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
   );
 
   app.notFound((context) => {
+    // @TODO: Add a custom 404 route
     return context.text('Not... found?', { status: 404 });
   });
 

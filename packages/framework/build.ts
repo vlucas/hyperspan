@@ -1,7 +1,7 @@
 import { build } from 'bun';
 
 const entrypoints = ['./src/server.ts', './src/assets.ts'];
-const external = ['@hyperspan/html', 'preact', 'preact-render-to-string'];
+const external = ['@hyperspan/html'];
 const outdir = './dist';
 const target = 'node';
 const splitting = true;
