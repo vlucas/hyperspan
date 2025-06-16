@@ -18,14 +18,14 @@ async function copyPreactToPublicFolder() {
     target: 'browser',
   });
 
-  clientImportMap.set('preact', '' + PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/compat', '' + PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/hooks', '' + PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/jsx-runtime', '' + PREACT_PUBLIC_FILE_PATH);
+  clientImportMap.set('preact', PREACT_PUBLIC_FILE_PATH);
+  clientImportMap.set('preact/compat', PREACT_PUBLIC_FILE_PATH);
+  clientImportMap.set('preact/hooks', PREACT_PUBLIC_FILE_PATH);
+  clientImportMap.set('preact/jsx-runtime', PREACT_PUBLIC_FILE_PATH);
 
   if (!clientImportMap.has('react')) {
-    clientImportMap.set('react', '.' + PREACT_PUBLIC_FILE_PATH);
-    clientImportMap.set('react-dom', '.' + PREACT_PUBLIC_FILE_PATH);
+    clientImportMap.set('react', PREACT_PUBLIC_FILE_PATH);
+    clientImportMap.set('react-dom', PREACT_PUBLIC_FILE_PATH);
   }
 }
 
@@ -50,6 +50,11 @@ export async function preactPlugin() {
           };
         }
 
+        // Ensure Preact can be loaded on the client
+        if (!clientImportMap.has('preact')) {
+          await copyPreactToPublicFolder();
+        }
+
         if (contents) {
           // We need to build the file to ensure we can ship it to the client with dependencies
           // Ironic, right? Calling Bun.build() inside of a plugin that runs on Bun.build()?
@@ -57,18 +62,13 @@ export async function preactPlugin() {
             entrypoints: [args.path],
             //outdir: './public/' + ISLAND_PUBLIC_PATH,
             //naming: '[name]-[hash].js',
-            external: ['react', 'preact', 'preact/compat', 'preact/hooks', 'preact/jsx-runtime'],
+            external: Array.from(clientImportMap.keys()),
             minify: true,
             format: 'esm',
             target: 'browser',
           });
 
           contents = await result.outputs[0].text();
-        }
-
-        // Ensure Preact can be loaded on the client
-        if (!clientImportMap.has('preact')) {
-          await copyPreactToPublicFolder();
         }
 
         // Look for the default export
@@ -104,26 +104,31 @@ export async function preactPlugin() {
         // All imports needed for this work are prefixed with __hs_ to avoid clashing with other imports in the module, as some of them may be duplicates.
         // Finally, we need to export all of the functions that do this work in a special way so we don't change the default export or other functions in the module, so that only the Hyperspan renderIsland() function can use them.
         const moduleCode = `// hyperspan:processed
-import { html as __hs_html } from '@hyperspan/html';
 import { render as __hs_renderToString } from 'preact-render-to-string';
 
 // Original file contents
 ${contents}
 
 // hyperspan:preact-plugin
+function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
+  if (options.loading === 'lazy') {
+    return \`<div id="${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template><script type="module" data-source-id="${jsId}">${contents}\${jsContent}</script></template></div>\`;
+  }
+
+  return \`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">\${jsContent}</script>\`;
+}
 ${componentName}.__HS_ISLAND = {
   id: "${jsId}",
-  ssr: (props) => {
+  render: (props, options = {}) => {
+    if (options.ssr === false) {
+      const jsContent = \`__hs_render(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
+      return __hs_renderIsland(jsContent, '', options);
+    }
+
     const ssrContent = __hs_renderToString(__hs_h(${componentName}, props));
-    const postContent = \`__hs_hydrate(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
-    return __hs_html.raw(\`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">${contents}\${postContent}</script>\`);
-  },
-  clientOnly: (props) => {
-    const postContent = \`__hs_render(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
+    const jsContent = \`__hs_hydrate(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
+    return __hs_renderIsland(jsContent, ssrContent, options);
     
-    return __hs_html.raw(
-     \`<div id="${jsId}"></div><script type="module" data-source-id="${jsId}">${contents}\${postContent}</script>\`
-    );
   }
 }
 `;

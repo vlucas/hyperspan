@@ -3,6 +3,11 @@ import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+export type THSIslandOptions = {
+  ssr?: boolean;
+  loading?: 'lazy' | undefined;
+};
+
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
 
@@ -97,24 +102,15 @@ export function assetHash(content: string): string {
  * Island defaults
  */
 export const ISLAND_PUBLIC_PATH = '/_hs/js/islands';
-export const ISLAND_DEFAULTS = () => ({
+export const ISLAND_DEFAULTS: () => THSIslandOptions = () => ({
   ssr: true,
+  loading: undefined,
 });
 
 export function renderIsland(Component: any, props: any, options = ISLAND_DEFAULTS()) {
-  // Render is an OPTIONAL override that allows you to render the island with your own logic
+  // Render island with its own logic
   if (Component.__HS_ISLAND?.render) {
-    return Component.__HS_ISLAND.render(props, options);
-  }
-
-  // If ssr is true, render the island with the ssr function
-  if (Component.__HS_ISLAND?.ssr && options.ssr) {
-    return Component.__HS_ISLAND.ssr(props);
-  }
-
-  // If ssr is false, render the island with the clientOnly function
-  if (Component.__HS_ISLAND?.clientOnly) {
-    return Component.__HS_ISLAND.clientOnly(props);
+    return html.raw(Component.__HS_ISLAND.render(props, options));
   }
 
   throw new Error(

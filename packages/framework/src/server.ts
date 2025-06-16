@@ -7,6 +7,7 @@ import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
 import type { HandlerResponse, MiddlewareHandler } from 'hono/types';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
@@ -22,9 +23,6 @@ export type THSRoute = {
   _kind: 'hsRoute';
   get: (handler: THSRouteHandler) => THSRoute;
   post: (handler: THSRouteHandler) => THSRoute;
-  put: (handler: THSRouteHandler) => THSRoute;
-  delete: (handler: THSRouteHandler) => THSRoute;
-  patch: (handler: THSRouteHandler) => THSRoute;
   middleware: (middleware: Array<MiddlewareHandler>) => THSRoute;
   _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
 };
@@ -63,18 +61,6 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
     },
     post(handler: THSRouteHandler) {
       _handlers['POST'] = handler;
-      return api;
-    },
-    put(handler: THSRouteHandler) {
-      _handlers['PUT'] = handler;
-      return api;
-    },
-    delete(handler: THSRouteHandler) {
-      _handlers['DELETE'] = handler;
-      return api;
-    },
-    patch(handler: THSRouteHandler) {
-      _handlers['PATCH'] = handler;
       return api;
     },
     middleware(middleware: Array<MiddlewareHandler>) {
@@ -147,7 +133,7 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
   }
 
   const api: THSAPIRoute = {
-    _kind: 'hsRoute',
+    _kind: 'hsAPIRoute',
     get(handler: THSAPIRouteHandler) {
       _handlers['GET'] = handler;
       return api;
@@ -256,9 +242,18 @@ export function getRunnableRoute(route: unknown): THSRoute {
   );
 }
 
+/**
+ * Check if a route is runnable by Hyperspan
+ */
 export function isRunnableRoute(route: unknown): boolean {
-  // @ts-ignore
-  return typeof route === 'object' && '_getRouteHandlers' in route;
+  if (typeof route !== 'object') {
+    return false;
+  }
+
+  const obj = route as { _kind: string; _getRouteHandlers: any };
+  const runnableKind = ['hsRoute', 'hsAPIRoute', 'hsAction'].includes(obj?._kind);
+
+  return runnableKind && '_getRouteHandlers' in obj;
 }
 
 /**
@@ -266,17 +261,35 @@ export function isRunnableRoute(route: unknown): boolean {
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
 async function showErrorReponse(context: Context, err: Error) {
+  let status: ContentfulStatusCode = 500;
+  const message = err.message || 'Internal Server Error';
+
+  // Send correct status code if HTTPException
+  if (err instanceof HTTPException) {
+    status = err.status as ContentfulStatusCode;
+  }
+
+  const stack = !IS_PROD && err.stack ? err.stack.split('\n').slice(1).join('\n') : '';
+
   const output = render(html`
-    <main>
-      <h1>Error</h1>
-      <pre>${err.message}</pre>
-      <pre>${!IS_PROD && err.stack ? err.stack.split('\n').slice(1).join('\n') : ''}</pre>
-    </main>
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Application Error</title>
+      </head>
+      <body>
+        <main>
+          <h1>Application Error</h1>
+          <strong>${message}</strong>
+          ${stack ? html`<pre>${stack}</pre>` : ''}
+        </main>
+      </body>
+    </html>
   `);
 
-  return context.html(output, {
-    status: 500,
-  });
+  return context.html(output, { status });
 }
 
 export type THSServerConfig = {
