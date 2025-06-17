@@ -1,5 +1,5 @@
 import { html } from '@hyperspan/html';
-import { Idiomorph } from './idiomorph.esm';
+import { Idiomorph } from './idiomorph';
 
 /**
  * Used for streaming content from the server to the client.

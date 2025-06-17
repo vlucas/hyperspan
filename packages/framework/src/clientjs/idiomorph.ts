@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @typedef {object} ConfigHead
  *
@@ -206,9 +207,8 @@ var Idiomorph = (function () {
    */
   function saveAndRestoreFocus(ctx, fn) {
     if (!ctx.config.restoreFocus) return fn();
-    let activeElement = /** @type {HTMLInputElement|HTMLTextAreaElement|null} */ (
-      document.activeElement
-    );
+    let activeElement =
+      /** @type {HTMLInputElement|HTMLTextAreaElement|null} */ document.activeElement;
 
     // don't bother if the active element is not an input or textarea
     if (
@@ -324,7 +324,7 @@ var Idiomorph = (function () {
       if (ctx.callbacks.beforeNodeAdded(newChild) === false) return null;
       if (ctx.idMap.has(newChild)) {
         // node has children with ids with possible state so create a dummy elt of same type and apply full morph algorithm
-        const newEmptyChild = document.createElement(/** @type {Element} */ (newChild).tagName);
+        const newEmptyChild = document.createElement(/** @type {Element} */ newChild.tagName);
         oldParent.insertBefore(newEmptyChild, insertionPoint);
         morphNode(newEmptyChild, newChild, ctx);
         ctx.callbacks.afterNodeAdded(newEmptyChild);
@@ -431,8 +431,8 @@ var Idiomorph = (function () {
        */
       function isSoftMatch(oldNode, newNode) {
         // ok to cast: if one is not element, `id` and `tagName` will be undefined and we'll just compare that.
-        const oldElt = /** @type {Element} */ (oldNode);
-        const newElt = /** @type {Element} */ (newNode);
+        const oldElt = /** @type {Element} */ oldNode;
+        const newElt = /** @type {Element} */ newNode;
 
         return (
           oldElt.nodeType === newElt.nodeType &&
@@ -483,7 +483,7 @@ var Idiomorph = (function () {
       let cursor = startInclusive;
       // remove nodes until the endExclusive node
       while (cursor && cursor !== endExclusive) {
-        let tempNode = /** @type {Node} */ (cursor);
+        let tempNode = /** @type {Node} */ cursor;
         cursor = cursor.nextSibling;
         removeNode(ctx, tempNode);
       }
@@ -503,11 +503,9 @@ var Idiomorph = (function () {
     function moveBeforeById(parentNode, id, after, ctx) {
       const target =
         /** @type {Element} - will always be found */
-        (
-          (ctx.target.id === id && ctx.target) ||
-            ctx.target.querySelector(`[id="${id}"]`) ||
-            ctx.pantry.querySelector(`[id="${id}"]`)
-        );
+        (ctx.target.id === id && ctx.target) ||
+        ctx.target.querySelector(`[id="${id}"]`) ||
+        ctx.pantry.querySelector(`[id="${id}"]`);
       removeElementFromAncestorsIdMaps(target, ctx);
       moveBefore(parentNode, target, after);
       return target;
@@ -587,7 +585,7 @@ var Idiomorph = (function () {
         // ignore the head element
       } else if (oldNode instanceof HTMLHeadElement && ctx.head.style !== 'morph') {
         // ok to cast: if newContent wasn't also a <head>, it would've got caught in the `!isSoftMatch` branch above
-        handleHeadElement(oldNode, /** @type {HTMLHeadElement} */ (newContent), ctx);
+        handleHeadElement(oldNode, /** @type {HTMLHeadElement} */ newContent, ctx);
       } else {
         morphAttributes(oldNode, newContent, ctx);
         if (!ignoreValueOfActiveElement(oldNode, ctx)) {
@@ -613,8 +611,8 @@ var Idiomorph = (function () {
       // if is an element type, sync the attributes from the
       // new node into the new node
       if (type === 1 /* element type */) {
-        const oldElt = /** @type {Element} */ (oldNode);
-        const newElt = /** @type {Element} */ (newNode);
+        const oldElt = /** @type {Element} */ oldNode;
+        const newElt = /** @type {Element} */ newNode;
 
         const oldAttributes = oldElt.attributes;
         const newAttributes = newElt.attributes;
@@ -868,9 +866,9 @@ var Idiomorph = (function () {
     let promises = [];
     for (const newNode of nodesToAppend) {
       // TODO: This could theoretically be null, based on type
-      let newElt = /** @type {ChildNode} */ (
-        document.createRange().createContextualFragment(newNode.outerHTML).firstChild
-      );
+      let newElt = /** @type {ChildNode} */ document
+        .createRange()
+        .createContextualFragment(newNode.outerHTML).firstChild;
       if (ctx.callbacks.beforeNodeAdded(newElt) !== false) {
         if (('href' in newElt && newElt.href) || ('src' in newElt && newElt.src)) {
           /** @type {(result?: any) => void} */ let resolve;
@@ -1116,16 +1114,16 @@ var Idiomorph = (function () {
         return document.createElement('div'); // dummy parent element
       } else if (typeof newContent === 'string') {
         return normalizeParent(parseContent(newContent));
-      } else if (generatedByIdiomorph.has(/** @type {Element} */ (newContent))) {
+      } else if (generatedByIdiomorph.has(/** @type {Element} */ newContent)) {
         // the template tag created by idiomorph parsing can serve as a dummy parent
-        return /** @type {Element} */ (newContent);
+        return /** @type {Element} */ newContent;
       } else if (newContent instanceof Node) {
         if (newContent.parentNode) {
           // we can't use the parent directly because newContent may have siblings
           // that we don't want in the morph, and reparenting might be expensive (TODO is it?),
           // so instead we create a fake parent node that only sees a slice of its children.
           /** @type {Element} */
-          return /** @type {any} */ (new SlicedParentNode(newContent));
+          return /** @type {any} */ new SlicedParentNode(newContent);
         } else {
           // a single node is added as a child to a dummy parent
           const dummyParent = document.createElement('div');
@@ -1154,7 +1152,7 @@ var Idiomorph = (function () {
       /** @param {Node} node */
       constructor(node) {
         this.originalNode = node;
-        this.realParentNode = /** @type {Element} */ (node.parentNode);
+        this.realParentNode = /** @type {Element} */ node.parentNode;
         this.previousSibling = node.previousSibling;
         this.nextSibling = node.nextSibling;
       }
@@ -1178,16 +1176,19 @@ var Idiomorph = (function () {
        * @returns {Element[]}
        */
       querySelectorAll(selector) {
-        return this.childNodes.reduce((results, node) => {
-          if (node instanceof Element) {
-            if (node.matches(selector)) results.push(node);
-            const nodeList = node.querySelectorAll(selector);
-            for (let i = 0; i < nodeList.length; i++) {
-              results.push(nodeList[i]);
+        return this.childNodes.reduce(
+          (results, node) => {
+            if (node instanceof Element) {
+              if (node.matches(selector)) results.push(node);
+              const nodeList = node.querySelectorAll(selector);
+              for (let i = 0; i < nodeList.length; i++) {
+                results.push(nodeList[i]);
+              }
             }
-          }
-          return results;
-        }, /** @type {Element[]} */ ([]));
+            return results;
+          },
+          /** @type {Element[]} */ []
+        );
       }
 
       /**
@@ -1255,9 +1256,8 @@ var Idiomorph = (function () {
           '<body><template>' + newContent + '</template></body>',
           'text/html'
         );
-        let content = /** @type {HTMLTemplateElement} */ (
-          responseDoc.body.querySelector('template')
-        ).content;
+        let content =
+          /** @type {HTMLTemplateElement} */ responseDoc.body.querySelector('template').content;
         generatedByIdiomorph.add(content);
         return content;
       }
