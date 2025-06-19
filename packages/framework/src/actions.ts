@@ -32,7 +32,7 @@ export interface HSAction<T extends z.ZodTypeAny> {
   run(method: 'GET' | 'POST', c: Context): Promise<THSResponseTypes>;
 }
 
-export function createAction<T extends z.ZodTypeAny>(
+export function unstable__createAction<T extends z.ZodTypeAny>(
   schema: T | null = null,
   form: Parameters<HSAction<T>['form']>[0] | null = null
 ) {
@@ -87,7 +87,7 @@ export function createAction<T extends z.ZodTypeAny>(
       }
 
       const formData = await c.req.formData();
-      const jsonData = formDataToJSON(formData);
+      const jsonData = unstable__formDataToJSON(formData);
       const schemaData = schema ? schema.safeParse(jsonData) : null;
       const data = schemaData?.success ? (schemaData.data as z.infer<T>) : undefined;
       let error: z.ZodError | Error | null = null;
@@ -128,7 +128,7 @@ export type THSHandlerResponse = (context: Context) => THSResponseTypes | Promis
  *
  * @link https://stackoverflow.com/a/75406413
  */
-export function formDataToJSON(formData: FormData): Record<string, string | string[]> {
+export function unstable__formDataToJSON(formData: FormData): Record<string, string | string[]> {
   let object = {};
 
   /**

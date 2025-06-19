@@ -6,6 +6,7 @@ import { buildClientJS, buildClientCSS } from './assets';
 import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
+
 import type { HandlerResponse, MiddlewareHandler } from 'hono/types';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -55,14 +56,23 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
 
   const api: THSRoute = {
     _kind: 'hsRoute',
+    /**
+     * Add a GET route handler (primary page display)
+     */
     get(handler: THSRouteHandler) {
       _handlers['GET'] = handler;
       return api;
     },
+    /**
+     * Add a POST route handler (typically to process form data)
+     */
     post(handler: THSRouteHandler) {
       _handlers['POST'] = handler;
       return api;
     },
+    /**
+     * Add middleware specific to this route
+     */
     middleware(middleware: Array<MiddlewareHandler>) {
       _middleware = middleware;
       return api;
@@ -93,7 +103,8 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
 
             // Render HSHtml if returned from route handler
             if (isHSHtml(routeContent)) {
-              if (streamingEnabled) {
+              // Stream only if enabled and there is async content to stream
+              if (streamingEnabled && (routeContent as HSHtml).asyncContent?.length > 0) {
                 return new StreamResponse(renderStream(routeContent as HSHtml)) as Response;
               } else {
                 const output = await renderAsync(routeContent as HSHtml);

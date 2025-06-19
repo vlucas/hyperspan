@@ -1,5 +1,5 @@
-import z from 'zod/v4';
-import { createAction } from './actions';
+import { z } from 'zod';
+import { unstable__createAction } from './actions';
 import { describe, it, expect } from 'bun:test';
 import { html, render, type HSHtml } from '@hyperspan/html';
 import type { Context } from 'hono';
@@ -22,7 +22,7 @@ describe('createAction', () => {
       const schema = z.object({
         name: z.string(),
       });
-      const action = createAction(schema, formWithNameOnly);
+      const action = unstable__createAction(schema, formWithNameOnly);
 
       const formResponse = render(action.render({ data: { name: 'John' } }) as HSHtml);
       expect(formResponse).toContain('value="John"');
@@ -34,7 +34,7 @@ describe('createAction', () => {
       const schema = z.object({
         name: z.string().nonempty(),
       });
-      const action = createAction(schema, formWithNameOnly)
+      const action = unstable__createAction(schema, formWithNameOnly)
         .post((c, { data }) => {
           return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;
         })
@@ -65,7 +65,7 @@ describe('createAction', () => {
       const schema = z.object({
         name: z.string().nonempty(),
       });
-      const action = createAction(schema)
+      const action = unstable__createAction(schema)
         .form(formWithNameOnly)
         .post((c, { data }) => {
           return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;

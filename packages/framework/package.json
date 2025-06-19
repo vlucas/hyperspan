@@ -17,13 +17,17 @@
       "types": "./src/server.ts",
       "default": "./dist/server.js"
     },
-    "./actions": {
-      "types": "./src/actions.ts",
-      "default": "./src/actions.ts"
-    },
     "./assets": {
       "types": "./src/assets.ts",
       "default": "./dist/assets.js"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "default": "./dist/middleware.js"
+    },
+    "./unstable/actions": {
+      "types": "./src/actions.ts",
+      "default": "./src/actions.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
@@ -56,6 +60,7 @@
     "@types/bun": "^1.2.14",
     "@types/node": "^22.15.20",
     "@types/react": "^19.1.5",
+    "@types/timestring": "^7.0.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3"
   },
@@ -63,6 +68,7 @@
     "@hyperspan/html": "^0.1.7",
     "hono": "^4.7.10",
     "isbot": "^5.1.28",
-    "zod": "^3.25.42"
+    "timestring": "^7.0.0",
+    "zod": "^3.25.67"
   }
 }
