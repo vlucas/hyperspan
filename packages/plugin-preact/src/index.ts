@@ -115,7 +115,7 @@ function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
     return \`<div id="${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template><script type="module" data-source-id="${jsId}">${contents}\${jsContent}</script></template></div>\`;
   }
 
-  return \`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">\${jsContent}</script>\`;
+  return \`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">${contents}\${jsContent}</script>\`;
 }
 ${componentName}.__HS_ISLAND = {
   id: "${jsId}",
