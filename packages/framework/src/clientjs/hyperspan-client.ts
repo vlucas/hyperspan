@@ -72,15 +72,22 @@ class HSAction extends HTMLElement {
     super();
   }
 
-  // Element is mounted in the DOM
   connectedCallback() {
-    const form = this.querySelector('form');
+    // Have to run this code AFTER it is added to the DOM...
+    setTimeout(() => {
+      const form = this.querySelector('form');
 
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        formSubmitToRoute(e, form as HTMLFormElement);
-      });
-    }
+      if (form) {
+        form.setAttribute('action', this.getAttribute('url') || '');
+        const submitHandler = (e: Event) => {
+          formSubmitToRoute(e, form as HTMLFormElement, {
+            afterResponse: () => this.connectedCallback(),
+          });
+          form.removeEventListener('submit', submitHandler);
+        };
+        form.addEventListener('submit', submitHandler);
+      }
+    });
   }
 }
 window.customElements.define('hs-action', HSAction);
@@ -88,24 +95,32 @@ window.customElements.define('hs-action', HSAction);
 /**
  * Submit form data to route and replace contents with response
  */
-function formSubmitToRoute(e: Event, form: HTMLFormElement) {
+type TFormSubmitOptons = { afterResponse: () => any };
+function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOptons) {
   e.preventDefault();
 
   const formUrl = form.getAttribute('action') || '';
   const formData = new FormData(form);
   const method = form.getAttribute('method')?.toUpperCase() || 'POST';
+  const headers = {
+    Accept: 'text/html',
+    'X-Request-Type': 'partial',
+  };
 
   let response: Response;
 
-  fetch(formUrl, { body: formData, method })
-    .then((res: Response) => {
-      // @TODO: Handle redirects with some custom server thing?
-      // This... actually won't work, because fetch automatically follows all redirects (a 3xx response will never be returned to the client)
-      const isRedirect = [301, 302].includes(res.status);
+  const hsActionTag = form.closest('hs-action');
+  const submitBtn = form.querySelector('button[type=submit],input[type=submit]');
+  if (submitBtn) {
+    submitBtn.setAttribute('disabled', 'disabled');
+  }
 
-      // Is response a redirect? If so, let's follow it in the client!
-      if (isRedirect) {
-        const newUrl = res.headers.get('Location');
+  fetch(formUrl, { body: formData, method, headers })
+    .then((res: Response) => {
+      // Look for special header that indicates a redirect.
+      // fetch() automatically follows 3xx redirects, so we need to handle this manually to redirect the user to the full page
+      if (res.headers.has('X-Redirect-Location')) {
+        const newUrl = res.headers.get('X-Redirect-Location');
         if (newUrl) {
           window.location.assign(newUrl);
         }
@@ -121,7 +136,10 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement) {
         return;
       }
 
-      Idiomorph.morph(form, content);
+      const target = content.includes('<html') ? window.document.body : hsActionTag || form;
+
+      Idiomorph.morph(target, content);
+      opts.afterResponse && opts.afterResponse();
     });
 }
 

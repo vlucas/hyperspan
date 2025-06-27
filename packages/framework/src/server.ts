@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { isbot } from 'isbot';
-import { buildClientJS, buildClientCSS } from './assets';
+import { buildClientJS, buildClientCSS, assetHash } from './assets';
 import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
@@ -83,46 +83,14 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
         async (context: Context) => {
           const method = context.req.method.toUpperCase();
 
-          try {
+          return returnHTMLResponse(context, () => {
             const handler = _handlers[method];
             if (!handler) {
               throw new HTTPException(405, { message: 'Method not allowed' });
             }
 
-            const routeContent = await handler(context);
-
-            // Return Response if returned from route handler
-            if (routeContent instanceof Response) {
-              return routeContent;
-            }
-
-            // @TODO: Move this to config or something...
-            const userIsBot = isbot(context.req.header('User-Agent'));
-            const streamOpt = context.req.query('__nostream');
-            const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
-
-            // Render HSHtml if returned from route handler
-            if (isHSHtml(routeContent)) {
-              // Stream only if enabled and there is async content to stream
-              if (streamingEnabled && (routeContent as HSHtml).asyncContent?.length > 0) {
-                return new StreamResponse(renderStream(routeContent as HSHtml)) as Response;
-              } else {
-                const output = await renderAsync(routeContent as HSHtml);
-                return context.html(output);
-              }
-            }
-
-            // Return custom Response if returned from route handler
-            if (routeContent instanceof Response) {
-              return routeContent;
-            }
-
-            // Return unknown content - not specifically handled above
-            return context.text(String(routeContent));
-          } catch (e) {
-            !IS_PROD && console.error(e);
-            return await showErrorReponse(context, e as Error);
-          }
+            return handler(context);
+          });
         },
       ];
     },
@@ -225,6 +193,49 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
 }
 
 /**
+ * Return HTML response from userland route handler
+ */
+export async function returnHTMLResponse(
+  context: Context,
+  handlerFn: () => unknown,
+  responseOptions?: { status?: ContentfulStatusCode; headers?: Headers | Record<string, string> }
+): Promise<Response> {
+  try {
+    const routeContent = await handlerFn();
+
+    // Return Response if returned from route handler
+    if (routeContent instanceof Response) {
+      return routeContent;
+    }
+
+    // @TODO: Move this to config or something...
+    const userIsBot = isbot(context.req.header('User-Agent'));
+    const streamOpt = context.req.query('__nostream');
+    const streamingEnabled = !userIsBot && (streamOpt !== undefined ? streamOpt : true);
+
+    // Render HSHtml if returned from route handler
+    if (isHSHtml(routeContent)) {
+      // Stream only if enabled and there is async content to stream
+      if (streamingEnabled && (routeContent as HSHtml).asyncContent?.length > 0) {
+        return new StreamResponse(
+          renderStream(routeContent as HSHtml),
+          responseOptions
+        ) as Response;
+      } else {
+        const output = await renderAsync(routeContent as HSHtml);
+        return context.html(output, responseOptions);
+      }
+    }
+
+    // Return unknown content as string - not specifically handled above
+    return context.html(String(routeContent), responseOptions);
+  } catch (e) {
+    !IS_PROD && console.error(e);
+    return await showErrorReponse(context, e as Error, responseOptions);
+  }
+}
+
+/**
  * Get a Hyperspan runnable route from a module import
  * @throws Error if no runnable route found
  */
@@ -271,7 +282,11 @@ export function isRunnableRoute(route: unknown): boolean {
  * Basic error handling
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
-async function showErrorReponse(context: Context, err: Error) {
+async function showErrorReponse(
+  context: Context,
+  err: Error,
+  responseOptions?: { status?: ContentfulStatusCode; headers?: Headers | Record<string, string> }
+) {
   let status: ContentfulStatusCode = 500;
   const message = err.message || 'Internal Server Error';
 
@@ -281,6 +296,18 @@ async function showErrorReponse(context: Context, err: Error) {
   }
 
   const stack = !IS_PROD && err.stack ? err.stack.split('\n').slice(1).join('\n') : '';
+
+  // Partial request (no layout - usually from actions)
+  if (context.req.header('X-Request-Type') === 'partial') {
+    const output = render(html`
+      <section style="padding: 20px;">
+        <p style="margin-bottom: 10px;"><strong>Error</strong></p>
+        <strong>${message}</strong>
+        ${stack ? html`<pre>${stack}</pre>` : ''}
+      </section>
+    `);
+    return context.html(output, Object.assign({ status }, responseOptions));
+  }
 
   const output = render(html`
     <!DOCTYPE html>
@@ -300,7 +327,7 @@ async function showErrorReponse(context: Context, err: Error) {
     </html>
   `);
 
-  return context.html(output, { status });
+  return context.html(output, Object.assign({ status }, responseOptions));
 }
 
 export type THSServerConfig = {
@@ -317,6 +344,7 @@ export type THSRouteMap = {
   file: string;
   route: string;
   params: string[];
+  module?: any;
 };
 
 /**
@@ -363,12 +391,54 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
 
     routes.push({
       file: join('./', routesDir, file),
-      route: route || '/',
+      route: normalizePath(route || '/'),
       params,
     });
   }
 
-  return routes;
+  // Import all routes at once
+  return await Promise.all(
+    routes.map(async (route) => {
+      route.module = (await import(join(CWD, route.file))).default;
+
+      return route;
+    })
+  );
+}
+
+/**
+ * Build Hyperspan Actions
+ */
+export async function buildActions(config: THSServerConfig): Promise<THSRouteMap[]> {
+  // Walk all pages and add them as routes
+  const routesDir = join(config.appDir, 'actions');
+  const files = await readdir(routesDir, { recursive: true });
+  const routes: THSRouteMap[] = [];
+
+  for (const file of files) {
+    // No directories
+    if (!file.includes('.') || basename(file).startsWith('.')) {
+      continue;
+    }
+
+    let route = assetHash('/' + file.replace(extname(file), ''));
+
+    routes.push({
+      file: join('./', routesDir, file),
+      route: `/__actions/${route}`,
+      params: [],
+    });
+  }
+
+  // Import all routes at once
+  return await Promise.all(
+    routes.map(async (route) => {
+      route.module = (await import(join(CWD, route.file))).default;
+      route.route = route.module._route;
+
+      return route;
+    })
+  );
 }
 
 /**
@@ -393,20 +463,24 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
   // [Customization] Before routes added...
   config.beforeRoutesAdded && config.beforeRoutesAdded(app);
 
+  const [routes, actions] = await Promise.all([buildRoutes(config), buildActions(config)]);
+
   // Scan routes folder and add all file routes to the router
-  const fileRoutes = await buildRoutes(config);
+  const fileRoutes = routes.concat(actions);
   const routeMap = [];
 
   for (let i = 0; i < fileRoutes.length; i++) {
     let route = fileRoutes[i];
-    const fullRouteFile = join(CWD, route.file);
-    const routePattern = normalizePath(route.route);
 
-    routeMap.push({ route: routePattern, file: route.file });
+    routeMap.push({ route: route.route, file: route.file });
 
-    // Import route
-    const routeHandlers = createRouteFromModule(await import(fullRouteFile));
-    app.all(routePattern, ...routeHandlers);
+    // Ensure route module was imported and exists (it should...)
+    if (!route.module) {
+      throw new Error(`Route module not loaded! File: ${route.file}`);
+    }
+
+    const routeHandlers = createRouteFromModule(route.module);
+    app.all(route.route, ...routeHandlers);
   }
 
   // Help route if no routes found

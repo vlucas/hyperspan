@@ -45,6 +45,7 @@ describe('createAction', () => {
       // Mock context to run action
       const mockContext = {
         req: {
+          method: 'POST',
           formData: async () => {
             const formData = new FormData();
             formData.append('name', 'John');
@@ -53,7 +54,7 @@ describe('createAction', () => {
         },
       } as Context;
 
-      const response = await action.run('POST', mockContext);
+      const response = await action.run(mockContext);
 
       const formResponse = render(response as HSHtml);
       expect(formResponse).toContain('Thanks for submitting the form, John!');
@@ -77,6 +78,7 @@ describe('createAction', () => {
       // Mock context to run action
       const mockContext = {
         req: {
+          method: 'POST',
           formData: async () => {
             const formData = new FormData();
             formData.append('name', ''); // No name = error
@@ -85,7 +87,7 @@ describe('createAction', () => {
         },
       } as Context;
 
-      const response = await action.run('POST', mockContext);
+      const response = await action.run(mockContext);
 
       const formResponse = render(response as HSHtml);
       expect(formResponse).toContain('There was an error!');

@@ -2,51 +2,80 @@ import { html, HSHtml } from '@hyperspan/html';
 import * as z from 'zod/v4';
 import { HTTPException } from 'hono/http-exception';
 
-import type { THSResponseTypes } from './server';
-import type { Context } from 'hono';
+import { IS_PROD, returnHTMLResponse, type THSResponseTypes } from './server';
+import type { Context, MiddlewareHandler } from 'hono';
+import type { HandlerResponse, Next, TypedResponse } from 'hono/types';
+import { assetHash } from './assets';
 
 /**
  * Actions = Form + route handler
  * Automatically handles and parses form data
  *
- * INITIAL IDEA OF HOW THIS WILL WORK:
+ * HOW THIS WORKS:
  * ---
- * 1. Renders component as initial form markup for GET request
- * 2. Bind form onSubmit function to custom client JS handling
- * 3. Submits form with JavaScript fetch()
- * 4. Replaces form content with content from server
- * 5. All validation and save logic is on the server
- * 6. Handles any Exception thrown on server as error displayed in client
+ * 1. Renders in any template as initial form markup with action.render()
+ * 2. Binds form onSubmit function to custom client JS handling via <hs-action> web component
+ * 3. Submits form with JavaScript fetch() + FormData as normal POST form submission
+ * 4. All validation and save logic is run on the server
+ * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
+ * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
+type TActionResponse = THSResponseTypes | HandlerResponse<any> | TypedResponse<any, any, any>;
 export interface HSAction<T extends z.ZodTypeAny> {
   _kind: string;
-  form(renderForm: ({ data }: { data?: z.infer<T> }) => HSHtml): HSAction<T>;
-  post(handler: (c: Context, { data }: { data?: z.infer<T> }) => THSResponseTypes): HSAction<T>;
+  _route: string;
+  _form: Parameters<HSAction<T>['form']>[0];
+  form(
+    renderForm: ({ data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }) => HSHtml
+  ): HSAction<T>;
+  post(
+    handler: (
+      c: Context<any, any, {}>,
+      { data }: { data?: z.infer<T> }
+    ) => TActionResponse | Promise<TActionResponse>
+  ): HSAction<T>;
   error(
     handler: (
-      c: Context,
+      c: Context<any, any, {}>,
       { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
-    ) => THSResponseTypes
+    ) => TActionResponse
   ): HSAction<T>;
-  render(props?: { data?: z.infer<T>; error?: z.ZodError | Error }): THSResponseTypes;
-  run(method: 'GET' | 'POST', c: Context): Promise<THSResponseTypes>;
+  render(props?: { data?: z.infer<T>; error?: z.ZodError | Error }): TActionResponse;
+  run(c: Context<any, any, {}>): TActionResponse | Promise<TActionResponse>;
+  middleware: (
+    middleware: Array<
+      | MiddlewareHandler
+      | ((context: Context<any, string, {}>) => TActionResponse | Promise<TActionResponse>)
+    >
+  ) => HSAction<T>;
+  _getRouteHandlers: () => Array<
+    | MiddlewareHandler
+    | ((context: Context, next: Next) => TActionResponse | Promise<TActionResponse>)
+    | ((context: Context) => TActionResponse | Promise<TActionResponse>)
+  >;
 }
 
 export function unstable__createAction<T extends z.ZodTypeAny>(
   schema: T | null = null,
-  form: Parameters<HSAction<T>['form']>[0] | null = null
+  form: Parameters<HSAction<T>['form']>[0]
 ) {
   let _handler: Parameters<HSAction<T>['post']>[0] | null = null,
-    _form: Parameters<HSAction<T>['form']>[0] | null = form,
-    _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null;
+    _form: Parameters<HSAction<T>['form']>[0] = form,
+    _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null,
+    _middleware: Array<
+      | MiddlewareHandler
+      | ((context: Context, next: Next) => TActionResponse | Promise<TActionResponse>)
+      | ((context: Context) => TActionResponse | Promise<TActionResponse>)
+    > = [];
 
   const api: HSAction<T> = {
     _kind: 'hsAction',
+    _route: `/__actions/${assetHash(_form.toString())}`,
+    _form,
     form(renderForm) {
       _form = renderForm;
       return api;
     },
-
     /**
      * Process form data
      *
@@ -57,18 +86,44 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
       _handler = handler;
       return api;
     },
-
+    /**
+     * Cusotm error handler if you want to display something other than the default
+     */
     error(handler) {
       _errorHandler = handler;
       return api;
     },
-
+    /**
+     * Add middleware specific to this route
+     */
+    middleware(middleware) {
+      _middleware = middleware;
+      return api;
+    },
     /**
      * Get form renderer method
      */
     render(formState?: { data?: z.infer<T>; error?: z.ZodError | Error }) {
       const form = _form ? _form(formState || {}) : null;
-      return form ? html`<hs-action>${form}</hs-action>` : null;
+      return form ? html`<hs-action url="${this._route}">${form}</hs-action>` : null;
+    },
+
+    _getRouteHandlers() {
+      return [
+        ..._middleware,
+        async (c: Context) => {
+          const response = await returnHTMLResponse(c, () => api.run(c));
+
+          // Replace redirects with special header because fetch() automatically follows redirects
+          // and we want to redirect the user to the actual full page instead
+          if ([301, 302, 307, 308].includes(response.status)) {
+            response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
+            response.headers.delete('Location');
+          }
+
+          return response;
+        },
+      ];
     },
 
     /**
@@ -77,9 +132,11 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
      * Returns result from form processing if successful
      * Re-renders form with data and error information otherwise
      */
-    async run(method: 'GET' | 'POST', c: Context) {
+    async run(c) {
+      const method = c.req.method;
+
       if (method === 'GET') {
-        return api.render();
+        return await api.render();
       }
 
       if (method !== 'POST') {
@@ -89,7 +146,7 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
       const formData = await c.req.formData();
       const jsonData = unstable__formDataToJSON(formData);
       const schemaData = schema ? schema.safeParse(jsonData) : null;
-      const data = schemaData?.success ? (schemaData.data as z.infer<T>) : undefined;
+      const data = schemaData?.success ? (schemaData.data as z.infer<T>) : jsonData;
       let error: z.ZodError | Error | null = null;
 
       try {
@@ -101,16 +158,20 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
           throw new Error('Action POST handler not set! Every action must have a POST handler.');
         }
 
-        return _handler(c, { data });
+        return await _handler(c, { data });
       } catch (e) {
         error = e as Error | z.ZodError;
+        !IS_PROD && console.error(error);
       }
 
       if (error && _errorHandler) {
-        return _errorHandler(c, { data, error });
+        // @ts-ignore
+        return await returnHTMLResponse(c, () => _errorHandler(c, { data, error }), {
+          status: 400,
+        });
       }
 
-      return api.render({ data, error });
+      return await returnHTMLResponse(c, () => api.render({ data, error }), { status: 400 });
     },
   };
 
