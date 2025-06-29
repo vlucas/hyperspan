@@ -73,24 +73,33 @@ class HSAction extends HTMLElement {
   }
 
   connectedCallback() {
-    // Have to run this code AFTER it is added to the DOM...
-    setTimeout(() => {
-      const form = this.querySelector('form');
-
-      if (form) {
-        form.setAttribute('action', this.getAttribute('url') || '');
-        const submitHandler = (e: Event) => {
-          formSubmitToRoute(e, form as HTMLFormElement, {
-            afterResponse: () => this.connectedCallback(),
-          });
-          form.removeEventListener('submit', submitHandler);
-        };
-        form.addEventListener('submit', submitHandler);
-      }
-    });
+    actionFormObserver.observe(this, { childList: true, subtree: true });
   }
 }
 window.customElements.define('hs-action', HSAction);
+const actionFormObserver = new MutationObserver((list) => {
+  list.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (node instanceof HTMLFormElement) {
+        bindHSActionForm(node.closest('hs-action') as HSAction, node);
+      }
+    });
+  });
+});
+
+/**
+ * Bind the form inside an hs-action element to the action URL and submit handler
+ */
+function bindHSActionForm(hsActionElement: HSAction, form: HTMLFormElement) {
+  form.setAttribute('action', hsActionElement.getAttribute('url') || '');
+  const submitHandler = (e: Event) => {
+    formSubmitToRoute(e, form as HTMLFormElement, {
+      afterResponse: () => bindHSActionForm(hsActionElement, form),
+    });
+    form.removeEventListener('submit', submitHandler);
+  };
+  form.addEventListener('submit', submitHandler);
+}
 
 /**
  * Submit form data to route and replace contents with response
