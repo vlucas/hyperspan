@@ -1,0 +1,40 @@
+{
+  "name": "hyperspan",
+  "version": "0.0.2",
+  "description": "Hyperspan CLI - for @hyperspan/framework",
+  "type": "module",
+  "public": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/server.ts",
+      "default": "./dist/server.js"
+    },
+  "bin": {
+    "hyperspan": "dist/index.js"
+  },
+  "author": "Vance Lucas <vance@vancelucas.com>",
+  "license": "BSD-3-Clause",
+  "homepage": "https://www.hyperspan.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vlucas/hyperspan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vlucas/hyperspan/issues"
+  },
+  "scripts": {
+    "test": "bun test",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@types/degit": "^2.8.6",
+    "commander": "^14.0.0",
+    "degit": "^2.8.4"
+  }
+}
