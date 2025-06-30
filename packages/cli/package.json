@@ -11,9 +11,10 @@
   "types": "src/index.ts",
   "exports": {
     ".": {
-      "types": "./src/server.ts",
-      "default": "./dist/server.js"
-    },
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "bin": {
     "hyperspan": "dist/index.js"
   },
