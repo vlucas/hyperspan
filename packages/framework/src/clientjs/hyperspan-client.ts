@@ -73,7 +73,10 @@ class HSAction extends HTMLElement {
   }
 
   connectedCallback() {
-    actionFormObserver.observe(this, { childList: true, subtree: true });
+    setTimeout(() => {
+      bindHSActionForm(this, this.querySelector('form') as HTMLFormElement);
+      actionFormObserver.observe(this, { childList: true, subtree: true });
+    }, 10);
   }
 }
 window.customElements.define('hs-action', HSAction);
@@ -91,6 +94,10 @@ const actionFormObserver = new MutationObserver((list) => {
  * Bind the form inside an hs-action element to the action URL and submit handler
  */
 function bindHSActionForm(hsActionElement: HSAction, form: HTMLFormElement) {
+  if (!form) {
+    return;
+  }
+
   form.setAttribute('action', hsActionElement.getAttribute('url') || '');
   const submitHandler = (e: Event) => {
     formSubmitToRoute(e, form as HTMLFormElement, {
@@ -116,8 +123,6 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     'X-Request-Type': 'partial',
   };
 
-  let response: Response;
-
   const hsActionTag = form.closest('hs-action');
   const submitBtn = form.querySelector('button[type=submit],input[type=submit]');
   if (submitBtn) {
@@ -136,7 +141,6 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
         return '';
       }
 
-      response = res;
       return res.text();
     })
     .then((content: string) => {

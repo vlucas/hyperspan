@@ -83,8 +83,32 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
         async (context: Context) => {
           const method = context.req.method.toUpperCase();
 
+          // Handle CORS preflight requests
+          if (method === 'OPTIONS') {
+            return context.html(
+              render(html`
+                <!DOCTYPE html>
+                <html lang="en"></html>
+              `),
+              {
+                status: 200,
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': [
+                    'HEAD',
+                    'OPTIONS',
+                    ...Object.keys(_handlers),
+                  ].join(', '),
+                  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                },
+              }
+            );
+          }
+
+          // Handle other requests, HEAD is GET with no body
           return returnHTMLResponse(context, () => {
-            const handler = _handlers[method];
+            const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
+
             if (!handler) {
               throw new HTTPException(405, { message: 'Method not allowed' });
             }
@@ -142,7 +166,31 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
         ..._middleware,
         async (context: Context) => {
           const method = context.req.method.toUpperCase();
-          const handler = _handlers[method];
+
+          // Handle CORS preflight requests
+          if (method === 'OPTIONS') {
+            return context.json(
+              {
+                meta: { success: true, dtResponse: new Date() },
+                data: {},
+              },
+              {
+                status: 200,
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': [
+                    'HEAD',
+                    'OPTIONS',
+                    ...Object.keys(_handlers),
+                  ].join(', '),
+                  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                },
+              }
+            );
+          }
+
+          // Handle other requests, HEAD is GET with no body
+          const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
 
           if (!handler) {
             return context.json(
