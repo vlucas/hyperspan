@@ -11,6 +11,8 @@ export type THSIslandOptions = {
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PWD = import.meta.dir;
 
+export const CLIENTJS_PUBLIC_PATH = '/_hs/js';
+export const ISLAND_PUBLIC_PATH = '/_hs/js/islands';
 export const clientImportMap = new Map<string, string>();
 
 /**
@@ -21,14 +23,66 @@ export async function buildClientJS() {
   const sourceFile = resolve(PWD, '../', './src/clientjs/hyperspan-client.ts');
   const output = await Bun.build({
     entrypoints: [sourceFile],
-    outdir: `./public/_hs/js`,
+    outdir: `./public/${CLIENTJS_PUBLIC_PATH}`,
     naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
     minify: IS_PROD,
   });
 
   const jsFile = output.outputs[0].path.split('/').reverse()[0];
 
-  clientJSFiles.set('_hs', { src: '/_hs/js/' + jsFile });
+  clientJSFiles.set('_hs', { src: `${CLIENTJS_PUBLIC_PATH}/${jsFile}` });
+}
+
+/**
+ * Render a client JS module as a script tag
+ */
+export function renderClientJS<T>(module: T, onLoad?: (module: T) => void) {
+  // @ts-ignore
+  if (!module.__CLIENT_JS) {
+    throw new Error(
+      `[Hyperspan] Client JS was not loaded by Hyperspan! Ensure the filename ends with .client.ts to use this render method.`
+    );
+  }
+
+  return html.raw(
+    // @ts-ignore
+    module.__CLIENT_JS.renderScriptTag({
+      onLoad: onLoad ? functionToString(onLoad) : undefined,
+    })
+  );
+}
+
+/**
+ * Convert a function to a string (results in loss of context!)
+ * Handles named, async, and arrow functions
+ */
+export function functionToString(fn: any) {
+  let str = fn.toString().trim();
+
+  // Ensure consistent output & handle async
+  if (!str.includes('function ')) {
+    if (str.includes('async ')) {
+      str = 'async function ' + str.replace('async ', '');
+    } else {
+      str = 'function ' + str;
+    }
+  }
+
+  const lines = str.split('\n');
+  const firstLine = lines[0];
+  const lastLine = lines[lines.length - 1];
+
+  // Arrow function conversion
+  if (!lastLine?.includes('}')) {
+    return str.replace('=> ', '{ return ') + '; }';
+  }
+
+  // Cleanup arrow function
+  if (firstLine.includes('=>')) {
+    return str.replace('=> ', '');
+  }
+
+  return str;
 }
 
 /**
@@ -101,7 +155,6 @@ export function assetHash(content: string): string {
 /**
  * Island defaults
  */
-export const ISLAND_PUBLIC_PATH = '/_hs/js/islands';
 export const ISLAND_DEFAULTS: () => THSIslandOptions = () => ({
   ssr: true,
   loading: undefined,

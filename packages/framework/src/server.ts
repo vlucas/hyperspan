@@ -1,8 +1,9 @@
+import { buildClientJS, buildClientCSS, assetHash } from './assets';
+import { clientJSPlugin } from './plugins';
+import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { readdir } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { isbot } from 'isbot';
-import { buildClientJS, buildClientCSS, assetHash } from './assets';
 import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
@@ -504,7 +505,7 @@ export function createRouteFromModule(
  */
 export async function createServer(config: THSServerConfig): Promise<Hono> {
   // Build client JS and CSS bundles so they are available for templates when streaming starts
-  await Promise.all([buildClientJS(), buildClientCSS()]);
+  await Promise.all([buildClientJS(), buildClientCSS(), clientJSPlugin(config)]);
 
   const app = new Hono();
 
