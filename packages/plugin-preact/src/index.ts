@@ -66,6 +66,7 @@ export async function preactPlugin() {
             minify: true,
             format: 'esm',
             target: 'browser',
+            env: 'APP_PUBLIC_*',
           });
 
           contents = await result.outputs[0].text();
