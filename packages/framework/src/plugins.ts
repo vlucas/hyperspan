@@ -34,6 +34,7 @@ export async function clientJSPlugin(config: THSServerConfig) {
           minify: true,
           format: 'esm',
           target: 'browser',
+          env: 'APP_PUBLIC_*',
         });
 
         // Add output file to import map

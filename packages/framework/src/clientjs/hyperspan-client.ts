@@ -12,7 +12,7 @@ function htmlAsyncContentObserver() {
       const asyncContent = list
         .map((mutation) =>
           Array.from(mutation.addedNodes).find((node: any) => {
-            if (!node) {
+            if (!node || !node?.id) {
               return false;
             }
             return node.id?.startsWith('async_loading_') && node.id?.endsWith('_content');
