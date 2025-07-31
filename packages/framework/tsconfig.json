@@ -19,7 +19,11 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "allowJs": true
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@hyperspan/html": ["../html/src/html.ts"]
+    }
   },
   "exclude": ["node_modules", "__tests__", "*.test.ts"]
 }
