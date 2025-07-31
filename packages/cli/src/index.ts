@@ -1,59 +1,66 @@
-import { Command } from 'commander';
-import degit from 'degit';
-import fs from 'node:fs';
-import { execSync } from 'node:child_process';
+import { Command, Prompt } from '@effect/cli';
+import { Command as ExecCommand } from '@effect/platform';
+import { BunContext, BunRuntime } from '@effect/platform-bun';
+import { Effect } from 'effect';
 import packageJson from '../package.json';
 
-const program = new Command();
+const hyperspan = Command.make('hyperspan');
 
-program.name('hyperspan').description('CLI for @hyperspan/framework').version(packageJson.version);
-
-/**
- * Create a new hyperspan project
- */
-program
-  .command('create')
-  .description('Create a new hyperspan project')
-  .argument('<string>', 'project name')
-  .action(async (name) => {
-    console.log(`Creating project ${name}`);
-
-    const emitter = degit('vlucas/hyperspan/packages/starter-template', {
-      cache: true,
-      force: true,
-      verbose: false,
-    });
-
-    await emitter.clone(`${name}`);
-    console.log(`Hyperspan project created in ${name}`);
-    console.log(`Installing dependencies...`);
-    execSync(`cd ${name} && bun install`, { stdio: 'inherit' });
-    console.log(`Dependencies installed`);
-    console.log(`Running dev server...`);
-    execSync(`cd ${name} && bun dev`, { stdio: 'inherit' });
-  });
-
-/**
- * Build the project for SSG
- */
-program
-  .command('build:ssg')
-  .option('--dir <path>', 'directory of your hyperspan project', './')
-  .description('Build the project for SSG')
-  .action(async (options) => {
-    // Ensure we are in a hyperspan project
-    const serverFile = `${options.dir}/app/server.ts`;
-
-    if (!fs.existsSync(serverFile)) {
-      console.error(
-        'Error: Could not find app/server.ts - Are you in a Hyperspan project directory?'
-      );
-      process.exit(1);
+const projectNamePrompt = Prompt.text({
+  message: 'Project name: (e.g., "My app" will write to `./my-app`)',
+  validate: (name) => {
+    if (name.length === 0) {
+      return Effect.fail("Project name can't be empty");
     }
 
-    const server = await import(serverFile);
+    // If the user provides a string with spaces, slugify it.
+    if (name.includes(' ')) {
+      return Effect.succeed(
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+      );
+    }
 
-    console.log(server);
-  });
+    return Effect.succeed(name);
+  },
+});
 
-program.parse();
+const createProjectCommand = Command.prompt('create', projectNamePrompt, (name) =>
+  ExecCommand.make('bunx', 'degit', 'vlucas/hyperspan/packages/starter-template', name).pipe(
+    ExecCommand.string
+  )
+);
+
+// const dirOption = Options.text('directory of your hyperspan project').pipe(
+//   Options.withAlias('dir'),
+//   Options.withDefault('./')
+// );
+//
+// const buildSSGCommand = Command.make('build:ssg', { dir: dirOption }, ({ dir }) =>
+//   Effect.gen(function* () {
+//     const serverFile = `${dir}/app/server.ts`;
+//     const fs = yield* FileSystem.FileSystem;
+//     if (yield* fs.exists(serverFile)) {
+//       return yield* Effect.die(
+//         new Error('Error: Could not find app/server.ts - Are you in a Hyperspan project directory?')
+//       );
+//     }
+//
+//     const server = yield* Effect.promise(() => import(serverFile));
+//     yield* Effect.log({ server });
+//   })
+// );
+
+const cli = Command.run(
+  hyperspan.pipe(
+    Command.withSubcommands([
+      createProjectCommand,
+      // buildSSGCommand
+    ])
+  ),
+  { name: packageJson.name, version: packageJson.version }
+);
+
+Effect.suspend(() => cli(process.argv)).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain);
