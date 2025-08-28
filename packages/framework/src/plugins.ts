@@ -17,7 +17,7 @@ export async function clientJSPlugin(config: THSServerConfig) {
         const jsId = assetHash(args.path);
 
         // Cache: Avoid re-processing the same file
-        if (CLIENT_JS_CACHE.has(jsId)) {
+        if (IS_PROD && CLIENT_JS_CACHE.has(jsId)) {
           return {
             contents: CLIENT_JS_CACHE.get(jsId) || '',
             loader: 'js',
@@ -72,8 +72,8 @@ export const __CLIENT_JS = {
   sourceFile: "${args.path}",
   outputFile: "${result.outputs[0].path}",
   renderScriptTag: ({ onLoad }) => {
-    const fn = onLoad ? functionToString(onLoad) : undefined;
-    return \`<script type="module" data-source-id="${jsId}">import ${exports} from "${esmName}";\n\${fn ? \`const fn = \${fn};\nfn(${fnArgs});\` : ''}</script>\`;
+    const fn = onLoad ? (typeof onLoad === 'string' ? onLoad : \`const fn = \${functionToString(onLoad)}; fn(${fnArgs});\`) : '';
+    return \`<script type="module" data-source-id="${jsId}">import ${exports} from "${esmName}";\n\${fn}</script>\`;
   },
 }
 `;

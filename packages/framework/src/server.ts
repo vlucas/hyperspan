@@ -7,6 +7,7 @@ import { isbot } from 'isbot';
 import { Hono, type Context } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HTTPException } from 'hono/http-exception';
+import { csrf } from 'hono/csrf';
 
 import type { HandlerResponse, MiddlewareHandler } from 'hono/types';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -508,6 +509,8 @@ export async function createServer(config: THSServerConfig): Promise<Hono> {
   await Promise.all([buildClientJS(), buildClientCSS(), clientJSPlugin(config)]);
 
   const app = new Hono();
+
+  app.use(csrf());
 
   // [Customization] Before routes added...
   config.beforeRoutesAdded && config.beforeRoutesAdded(app);
