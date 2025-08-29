@@ -18,16 +18,19 @@ const CWD = process.cwd();
 /**
  * Types
  */
+export type THSContext = Context<any, any, {}>;
 export type THSResponseTypes = HSHtml | Response | string | null;
-export type THSRouteHandler = (context: Context) => THSResponseTypes | Promise<THSResponseTypes>;
-export type THSAPIRouteHandler = (context: Context) => Promise<any> | any;
+export type THSRouteHandler = (context: THSContext) => THSResponseTypes | Promise<THSResponseTypes>;
+export type THSAPIRouteHandler = (context: THSContext) => Promise<any> | any;
 
 export type THSRoute = {
   _kind: 'hsRoute';
   get: (handler: THSRouteHandler) => THSRoute;
   post: (handler: THSRouteHandler) => THSRoute;
   middleware: (middleware: Array<MiddlewareHandler>) => THSRoute;
-  _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
+  _getRouteHandlers: () => Array<
+    MiddlewareHandler | ((context: THSContext) => HandlerResponse<any>)
+  >;
 };
 export type THSAPIRoute = {
   _kind: 'hsAPIRoute';
@@ -37,7 +40,9 @@ export type THSAPIRoute = {
   delete: (handler: THSAPIRouteHandler) => THSAPIRoute;
   patch: (handler: THSAPIRouteHandler) => THSAPIRoute;
   middleware: (middleware: Array<MiddlewareHandler>) => THSAPIRoute;
-  _getRouteHandlers: () => Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)>;
+  _getRouteHandlers: () => Array<
+    MiddlewareHandler | ((context: THSContext) => HandlerResponse<any>)
+  >;
 };
 
 export function createConfig(config: THSServerConfig): THSServerConfig {
@@ -82,7 +87,7 @@ export function createRoute(handler?: THSRouteHandler): THSRoute {
     _getRouteHandlers() {
       return [
         ..._middleware,
-        async (context: Context) => {
+        async (context: THSContext) => {
           const method = context.req.method.toUpperCase();
 
           // Handle CORS preflight requests
@@ -166,7 +171,7 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
     _getRouteHandlers() {
       return [
         ..._middleware,
-        async (context: Context) => {
+        async (context: THSContext) => {
           const method = context.req.method.toUpperCase();
 
           // Handle CORS preflight requests
@@ -246,7 +251,7 @@ export function createAPIRoute(handler?: THSAPIRouteHandler): THSAPIRoute {
  * Return HTML response from userland route handler
  */
 export async function returnHTMLResponse(
-  context: Context,
+  context: THSContext,
   handlerFn: () => unknown,
   responseOptions?: { status?: ContentfulStatusCode; headers?: Headers | Record<string, string> }
 ): Promise<Response> {
@@ -333,7 +338,7 @@ export function isRunnableRoute(route: unknown): boolean {
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
 async function showErrorReponse(
-  context: Context,
+  context: THSContext,
   err: Error,
   responseOptions?: { status?: ContentfulStatusCode; headers?: Headers | Record<string, string> }
 ) {
@@ -408,8 +413,13 @@ export async function buildRoutes(config: THSServerConfig): Promise<THSRouteMap[
   const routes: THSRouteMap[] = [];
 
   for (const file of files) {
-    // No directories
-    if (!file.includes('.') || basename(file).startsWith('.')) {
+    // No directories or test files
+    if (
+      !file.includes('.') ||
+      basename(file).startsWith('.') ||
+      file.includes('.test.') ||
+      file.includes('.spec.')
+    ) {
       continue;
     }
 
@@ -466,8 +476,13 @@ export async function buildActions(config: THSServerConfig): Promise<THSRouteMap
   const routes: THSRouteMap[] = [];
 
   for (const file of files) {
-    // No directories
-    if (!file.includes('.') || basename(file).startsWith('.')) {
+    // No directories or test files
+    if (
+      !file.includes('.') ||
+      basename(file).startsWith('.') ||
+      file.includes('.test.') ||
+      file.includes('.spec.')
+    ) {
       continue;
     }
 
@@ -496,7 +511,7 @@ export async function buildActions(config: THSServerConfig): Promise<THSRouteMap
  */
 export function createRouteFromModule(
   RouteModule: any
-): Array<MiddlewareHandler | ((context: Context) => HandlerResponse<any>)> {
+): Array<MiddlewareHandler | ((context: THSContext) => HandlerResponse<any>)> {
   const route = getRunnableRoute(RouteModule);
   return route._getRouteHandlers();
 }

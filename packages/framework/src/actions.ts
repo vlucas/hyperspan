@@ -2,8 +2,8 @@ import { html, HSHtml } from '@hyperspan/html';
 import * as z from 'zod/v4';
 import { HTTPException } from 'hono/http-exception';
 import { assetHash } from './assets';
-import { IS_PROD, returnHTMLResponse, type THSResponseTypes } from './server';
-import type { Context, MiddlewareHandler } from 'hono';
+import { IS_PROD, returnHTMLResponse, type THSContext, type THSResponseTypes } from './server';
+import type { MiddlewareHandler } from 'hono';
 import type { HandlerResponse, Next, TypedResponse } from 'hono/types';
 
 /**
@@ -29,39 +29,34 @@ export interface HSAction<T extends z.ZodTypeAny> {
   _form: Parameters<HSAction<T>['form']>[0];
   form(
     renderForm: (
-      c: Context<any, any, {}>,
+      c: THSContext,
       { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
     ) => HSHtml | void | null | Promise<HSHtml | void | null>
   ): HSAction<T>;
   post(
     handler: (
-      c: Context<any, any, {}>,
+      c: THSContext,
       { data }: { data?: z.infer<T> }
     ) => TActionResponse | Promise<TActionResponse>
   ): HSAction<T>;
   error(
     handler: (
-      c: Context<any, any, {}>,
+      c: THSContext,
       { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
     ) => TActionResponse
   ): HSAction<T>;
-  render(
-    c: Context<any, any, {}>,
-    props?: { data?: z.infer<T>; error?: z.ZodError | Error }
-  ): TActionResponse;
-  run(c: Context<any, any, {}>): TActionResponse | Promise<TActionResponse>;
+  render(c: THSContext, props?: { data?: z.infer<T>; error?: z.ZodError | Error }): TActionResponse;
+  run(c: THSContext): TActionResponse | Promise<TActionResponse>;
   middleware: (
     middleware: Array<
       | MiddlewareHandler
-      | ((
-          context: Context<any, string, {}>
-        ) => TActionResponse | Promise<TActionResponse> | void | Promise<void>)
+      | ((context: THSContext) => TActionResponse | Promise<TActionResponse> | void | Promise<void>)
     >
   ) => HSAction<T>;
   _getRouteHandlers: () => Array<
     | MiddlewareHandler
-    | ((context: Context, next: Next) => TActionResponse | Promise<TActionResponse>)
-    | ((context: Context) => TActionResponse | Promise<TActionResponse>)
+    | ((context: THSContext, next: Next) => TActionResponse | Promise<TActionResponse>)
+    | ((context: THSContext) => TActionResponse | Promise<TActionResponse>)
   >;
 }
 
@@ -74,8 +69,8 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
     _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null,
     _middleware: Array<
       | MiddlewareHandler
-      | ((context: Context, next: Next) => TActionResponse | Promise<TActionResponse>)
-      | ((context: Context) => TActionResponse | Promise<TActionResponse>)
+      | ((context: THSContext, next: Next) => TActionResponse | Promise<TActionResponse>)
+      | ((context: THSContext) => TActionResponse | Promise<TActionResponse>)
     > = [];
 
   const api: HSAction<T> = {
@@ -113,10 +108,7 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
     /**
      * Get form renderer method
      */
-    render(
-      c: Context<any, any, {}>,
-      formState?: { data?: z.infer<T>; error?: z.ZodError | Error }
-    ) {
+    render(c: THSContext, formState?: { data?: z.infer<T>; error?: z.ZodError | Error }) {
       const form = _form ? _form(c, formState || {}) : null;
       return form ? html`<hs-action url="${this._route}">${form}</hs-action>` : null;
     },
@@ -124,7 +116,7 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
     _getRouteHandlers() {
       return [
         ..._middleware,
-        async (c: Context) => {
+        async (c: THSContext) => {
           const response = await returnHTMLResponse(c, () => api.run(c));
 
           // Replace redirects with special header because fetch() automatically follows redirects

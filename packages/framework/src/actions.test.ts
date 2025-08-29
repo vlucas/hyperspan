@@ -1,11 +1,11 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { unstable__createAction } from './actions';
 import { describe, it, expect } from 'bun:test';
 import { html, render, type HSHtml } from '@hyperspan/html';
-import type { Context } from 'hono';
+import type { THSContext } from './server';
 
 describe('createAction', () => {
-  const formWithNameOnly = ({ data }: { data?: { name: string } }) => {
+  const formWithNameOnly = (c: THSContext, { data }: { data?: { name: string } }) => {
     return html`
       <form>
         <p>
@@ -23,8 +23,18 @@ describe('createAction', () => {
         name: z.string(),
       });
       const action = unstable__createAction(schema, formWithNameOnly);
+      const mockContext = {
+        req: {
+          method: 'POST',
+          formData: async () => {
+            const formData = new FormData();
+            formData.append('name', 'John');
+            return formData;
+          },
+        },
+      } as THSContext;
 
-      const formResponse = render(action.render({ data: { name: 'John' } }) as HSHtml);
+      const formResponse = render(action.render(mockContext, { data: { name: 'John' } }) as HSHtml);
       expect(formResponse).toContain('value="John"');
     });
   });
@@ -52,7 +62,7 @@ describe('createAction', () => {
             return formData;
           },
         },
-      } as Context;
+      } as THSContext;
 
       const response = await action.run(mockContext);
 
@@ -85,7 +95,7 @@ describe('createAction', () => {
             return formData;
           },
         },
-      } as Context;
+      } as THSContext;
 
       const response = await action.run(mockContext);
 
