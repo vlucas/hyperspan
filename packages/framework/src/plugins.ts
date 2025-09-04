@@ -71,8 +71,8 @@ export const __CLIENT_JS = {
   esmName: "${esmName}",
   sourceFile: "${args.path}",
   outputFile: "${result.outputs[0].path}",
-  renderScriptTag: ({ onLoad }) => {
-    const fn = onLoad ? (typeof onLoad === 'string' ? onLoad : \`const fn = \${functionToString(onLoad)}; fn(${fnArgs});\`) : '';
+  renderScriptTag: ({ loadScript }) => {
+    const fn = loadScript ? (typeof loadScript === 'string' ? loadScript : \`const fn = \${functionToString(loadScript)}; fn(${fnArgs});\`) : '';
     return \`<script type="module" data-source-id="${jsId}">import ${exports} from "${esmName}";\n\${fn}</script>\`;
   },
 }

@@ -36,7 +36,7 @@ export async function buildClientJS() {
 /**
  * Render a client JS module as a script tag
  */
-export function renderClientJS<T>(module: T, onLoad?: (module: T) => void | string) {
+export function renderClientJS<T>(module: T, loadScript?: ((module: T) => void) | string) {
   // @ts-ignore
   if (!module.__CLIENT_JS) {
     throw new Error(
@@ -47,7 +47,11 @@ export function renderClientJS<T>(module: T, onLoad?: (module: T) => void | stri
   return html.raw(
     // @ts-ignore
     module.__CLIENT_JS.renderScriptTag({
-      onLoad: onLoad ? (typeof onLoad === 'string' ? onLoad : functionToString(onLoad)) : undefined,
+      loadScript: loadScript
+        ? typeof loadScript === 'string'
+          ? loadScript
+          : functionToString(loadScript)
+        : undefined,
     })
   );
 }
