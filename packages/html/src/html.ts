@@ -66,7 +66,7 @@ export function placeholder(content: HSHtml | HSHtml[], promise: Promise<unknown
 // MAY also push new items into 'asyncContent' option to resolve in the future
 function _renderValue(
   value: unknown,
-  opts: { kind?: string; id?: string; asyncContent: any[] } = {
+  opts: { kind?: string; id?: string; asyncContent: HSHtml['asyncContent'] } = {
     asyncContent: [],
   }
 ): string {
@@ -160,8 +160,8 @@ export async function renderAsync(tmpl: HSHtml): Promise<string> {
   let { content, asyncContent } = tmpl;
 
   while (asyncContent.length !== 0) {
-    // @TODO: Use Promise.allSettled() instead with error handling
-    const resolvedHtml = await Promise.all(asyncContent.map((p) => p.promise));
+    const resolvedHtml = await Promise.all(_asyncContentWithErrorHandling(asyncContent));
+
     asyncContent = [];
     resolvedHtml.map((obj) => {
       const r = new RegExp(
@@ -189,7 +189,7 @@ export async function* renderStream(tmpl: HSHtml): AsyncGenerator<string> {
 
   while (asyncContent.length > 0) {
     // Resolve the next async content as soon as it is ready
-    const nextContent = await Promise.race(asyncContent.map((p) => p.promise));
+    const nextContent = await Promise.race(_asyncContentWithErrorHandling(asyncContent));
 
     // Remove current promise from list (resolved now)
     asyncContent = asyncContent.filter((p) => p.id !== nextContent.id);
@@ -202,6 +202,39 @@ export async function* renderStream(tmpl: HSHtml): AsyncGenerator<string> {
 
     yield render(script);
   }
+}
+
+function _asyncContentWithErrorHandling(asyncContent: HSHtml['asyncContent']) {
+  return asyncContent.map((p) =>
+    p.promise.catch((e) => {
+      return {
+        id: p.id,
+        value: _renderError(e),
+      };
+    })
+  );
+}
+
+export function _renderError(e: Error) {
+  console.error(e);
+  return html`
+    <div
+      style="
+      background: #ffeaea;
+      color: #b71c1c;
+      border: 1px solid #f44336;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-family: system-ui, sans-serif;
+      font-size: 1rem;
+      box-shadow: 0 2px 8px rgba(244,67,54,0.08);
+    "
+    >
+      <strong style="display:block; margin-bottom:2px;">[Hyperspan] Render Error</strong>
+      <span>${e.message}</span>
+    </div>
+  `;
 }
 
 /**
