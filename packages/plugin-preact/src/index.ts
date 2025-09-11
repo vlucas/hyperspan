@@ -128,12 +128,12 @@ ${componentName}.__HS_ISLAND = {
   id: "${jsId}",
   render: (props, options = {}) => {
     if (options.ssr === false) {
-      const jsContent = \`__hs_render(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
+      const jsContent = \`import { h as __hs_h, render as __hs_render } from 'preact';__hs_render(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
       return __hs_renderIsland(jsContent, '', options);
     }
 
     const ssrContent = __hs_renderToString(__hs_h(${componentName}, props));
-    const jsContent = \`__hs_hydrate(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
+    const jsContent = \`import { h as __hs_h, hydrate as __hs_hydrate } from 'preact';__hs_hydrate(__hs_h(${componentName}, \${JSON.stringify(props)}), document.getElementById("${jsId}"));\`;
     return __hs_renderIsland(jsContent, ssrContent, options);
     
   }
