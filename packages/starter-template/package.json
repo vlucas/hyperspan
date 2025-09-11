@@ -21,8 +21,8 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@hyperspan/framework": "^0.5.3",
-    "@hyperspan/html": "^0.1.7",
+    "@hyperspan/framework": "^0.5.4",
+    "@hyperspan/html": "^0.2.0",
     "@hyperspan/plugin-preact": "^0.2.0",
     "preact": "^10.26.7"
   }
