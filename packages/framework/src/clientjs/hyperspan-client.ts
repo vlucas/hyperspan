@@ -110,8 +110,13 @@ window.customElements.define('hs-action', HSAction);
 const actionFormObserver = new MutationObserver((list) => {
   list.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
-      if (node instanceof HTMLFormElement) {
-        bindHSActionForm(node.closest('hs-action') as HSAction, node);
+      if (node && ('closest' in node || node instanceof HTMLFormElement)) {
+        bindHSActionForm(
+          (node as HTMLElement).closest('hs-action') as HSAction,
+          node instanceof HTMLFormElement
+            ? node
+            : ((node as HTMLElement | HTMLFormElement).querySelector('form') as HTMLFormElement)
+        );
       }
     });
   });
@@ -127,6 +132,7 @@ function bindHSActionForm(hsActionElement: HSAction, form: HTMLFormElement) {
 
   form.setAttribute('action', hsActionElement.getAttribute('url') || '');
   const submitHandler = (e: Event) => {
+    e.preventDefault();
     formSubmitToRoute(e, form as HTMLFormElement, {
       afterResponse: () => bindHSActionForm(hsActionElement, form),
     });
@@ -140,10 +146,8 @@ function bindHSActionForm(hsActionElement: HSAction, form: HTMLFormElement) {
  */
 type TFormSubmitOptons = { afterResponse: () => any };
 function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOptons) {
-  e.preventDefault();
-
-  const formUrl = form.getAttribute('action') || '';
   const formData = new FormData(form);
+  const formUrl = form.getAttribute('action') || '';
   const method = form.getAttribute('method')?.toUpperCase() || 'POST';
   const headers = {
     Accept: 'text/html',
