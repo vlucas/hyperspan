@@ -1,4 +1,4 @@
-import { assetHash, CLIENTJS_PUBLIC_PATH, clientImportMap, clientJSFiles } from './assets';
+import { assetHash, CLIENTJS_PUBLIC_PATH, clientImportMap } from './assets';
 import { IS_PROD, type THSServerConfig } from './server';
 
 const CLIENT_JS_CACHE = new Map<string, string>();

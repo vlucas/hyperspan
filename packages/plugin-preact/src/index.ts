@@ -1,8 +1,8 @@
 import { clientImportMap, assetHash, ISLAND_PUBLIC_PATH } from '@hyperspan/framework/assets';
+import { IS_PROD } from '@hyperspan/framework/server';
 import { resolve } from 'node:path';
 
 // External ESM = https://esm.sh/preact@10.26.4/compat
-const PREACT_PUBLIC_FILE_PATH = ISLAND_PUBLIC_PATH + '/preact-client.js';
 const PREACT_ISLAND_CACHE = new Map<string, string>();
 
 /**
@@ -10,22 +10,26 @@ const PREACT_ISLAND_CACHE = new Map<string, string>();
  */
 async function copyPreactToPublicFolder() {
   const sourceFile = resolve(__dirname, './preact-client.ts');
-  await Bun.build({
+  const result = await Bun.build({
     entrypoints: [sourceFile],
-    outdir: './public/' + ISLAND_PUBLIC_PATH,
+    outdir: `./public/${ISLAND_PUBLIC_PATH}`,
+    naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
     minify: true,
     format: 'esm',
     target: 'browser',
   });
 
-  clientImportMap.set('preact', PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/compat', PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/hooks', PREACT_PUBLIC_FILE_PATH);
-  clientImportMap.set('preact/jsx-runtime', PREACT_PUBLIC_FILE_PATH);
+  const builtFileName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
+  const builtFilePath = `${ISLAND_PUBLIC_PATH}/${builtFileName}.js`;
+
+  clientImportMap.set('preact', builtFilePath);
+  clientImportMap.set('preact/compat', builtFilePath);
+  clientImportMap.set('preact/hooks', builtFilePath);
+  clientImportMap.set('preact/jsx-runtime', builtFilePath);
 
   if (!clientImportMap.has('react')) {
-    clientImportMap.set('react', PREACT_PUBLIC_FILE_PATH);
-    clientImportMap.set('react-dom', PREACT_PUBLIC_FILE_PATH);
+    clientImportMap.set('react', builtFilePath);
+    clientImportMap.set('react-dom', builtFilePath);
   }
 }
 
@@ -33,6 +37,11 @@ async function copyPreactToPublicFolder() {
  * Hyperspan Preact Plugin
  */
 export async function preactPlugin() {
+  // Ensure Preact can be loaded on the client
+  if (!clientImportMap.has('preact')) {
+    await copyPreactToPublicFolder();
+  }
+
   // Define a Bun plugin to handle .tsx files
   await Bun.plugin({
     name: 'Hyperspan Preact Loader',
@@ -40,7 +49,6 @@ export async function preactPlugin() {
       // when a .tsx file is imported...
       build.onLoad({ filter: /\.tsx$/ }, async (args) => {
         const jsId = assetHash(args.path);
-        let contents = await Bun.file(args.path).text();
 
         // Cache: Avoid re-processing the same file
         if (PREACT_ISLAND_CACHE.has(jsId)) {
@@ -50,33 +58,30 @@ export async function preactPlugin() {
           };
         }
 
-        // Ensure Preact can be loaded on the client
-        if (!clientImportMap.has('preact')) {
-          await copyPreactToPublicFolder();
-        }
+        // We need to build the file to ensure we can ship it to the client with dependencies
+        // Ironic, right? Calling Bun.build() inside of a plugin that runs on Bun.build()?
+        const result = await Bun.build({
+          entrypoints: [args.path],
+          outdir: `./public/${ISLAND_PUBLIC_PATH}`,
+          naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+          external: Array.from(clientImportMap.keys()),
+          minify: true,
+          format: 'esm',
+          target: 'browser',
+          env: 'APP_PUBLIC_*',
+        });
 
-        if (contents) {
-          // We need to build the file to ensure we can ship it to the client with dependencies
-          // Ironic, right? Calling Bun.build() inside of a plugin that runs on Bun.build()?
-          const result = await Bun.build({
-            entrypoints: [args.path],
-            //outdir: './public/' + ISLAND_PUBLIC_PATH,
-            //naming: '[name]-[hash].js',
-            external: Array.from(clientImportMap.keys()),
-            minify: true,
-            format: 'esm',
-            target: 'browser',
-            env: 'APP_PUBLIC_*',
-          });
+        // Add output file to import map
+        const esmName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
+        clientImportMap.set(esmName, `${ISLAND_PUBLIC_PATH}/${esmName}.js`);
 
-          contents = await result.outputs[0].text();
-        }
+        let contents = await result.outputs[0].text();
 
         // Look for the default export
-        const RE_EXPORT_DEFAULT = /export\{(\w+) as default\}/;
-        const RE_EXPORT_DEFAULT_FN = /export default function\s+(\w+)/;
-        const RE_EXPORT_DEFAULT_CONST = /export default const\s+(\w+)/;
-        const RE_EXPORT_DEFAULT_ANY = /export default\s+(\w+)/;
+        const RE_EXPORT_DEFAULT = /export\{([^\s]+) as default\}/;
+        const RE_EXPORT_DEFAULT_FN = /export default function\s+([^\s]+)/;
+        const RE_EXPORT_DEFAULT_CONST = /export default const\s+([^\s]+)/;
+        const RE_EXPORT_DEFAULT_ANY = /export default\s+([^\s]+)/;
 
         const exportedDefault = contents.match(RE_EXPORT_DEFAULT);
         const exportedDefaultFn = contents.match(RE_EXPORT_DEFAULT_FN);
@@ -96,7 +101,7 @@ export async function preactPlugin() {
         }
 
         // Add to contents so this is in the client JS as well
-        contents = `import { h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';${contents}`;
+        contents = `import { h, h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';${contents}`;
 
         // Some _interesting_ work at play here...
         // We have to modify the original file contents to add an __HS_PLUGIN export that the renderIsland() function can use to render the component.
@@ -112,11 +117,12 @@ ${contents}
 
 // hyperspan:preact-plugin
 function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
+  const scriptTag = \`<script type="module" id="${jsId}_script" data-source-id="${jsId}">import ${componentName} from "${esmName}";\${jsContent}</script>\`;
   if (options.loading === 'lazy') {
-    return \`<div id="${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template><script type="module" data-source-id="${jsId}">${contents}\${jsContent}</script></template></div>\`;
+    return \`<div id="${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n\${scriptTag}</template></div>\`;
   }
 
-  return \`<div id="${jsId}">\${ssrContent}</div><script type="module" data-source-id="${jsId}">${contents}\${jsContent}</script>\`;
+  return \`<div id="${jsId}">\${ssrContent}</div>\n\${scriptTag}\`;
 }
 ${componentName}.__HS_ISLAND = {
   id: "${jsId}",

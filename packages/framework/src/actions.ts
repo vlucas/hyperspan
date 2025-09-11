@@ -30,22 +30,25 @@ export interface HSAction<T extends z.ZodTypeAny> {
   form(
     renderForm: (
       c: THSContext,
-      { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
+      { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
     ) => HSHtml | void | null | Promise<HSHtml | void | null>
   ): HSAction<T>;
   post(
     handler: (
       c: THSContext,
-      { data }: { data?: z.infer<T> }
+      { data }: { data?: Partial<z.infer<T>> }
     ) => TActionResponse | Promise<TActionResponse>
   ): HSAction<T>;
   error(
     handler: (
       c: THSContext,
-      { data, error }: { data?: z.infer<T>; error?: z.ZodError | Error }
+      { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
     ) => TActionResponse
   ): HSAction<T>;
-  render(c: THSContext, props?: { data?: z.infer<T>; error?: z.ZodError | Error }): TActionResponse;
+  render(
+    c: THSContext,
+    props?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
+  ): TActionResponse;
   run(c: THSContext): TActionResponse | Promise<TActionResponse>;
   middleware: (
     middleware: Array<
@@ -108,7 +111,7 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
     /**
      * Get form renderer method
      */
-    render(c: THSContext, formState?: { data?: z.infer<T>; error?: z.ZodError | Error }) {
+    render(c: THSContext, formState?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }) {
       const form = _form ? _form(c, formState || {}) : null;
       return form ? html`<hs-action url="${this._route}">${form}</hs-action>` : null;
     },
@@ -149,9 +152,9 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
       }
 
       const formData = await c.req.formData();
-      const jsonData = unstable__formDataToJSON(formData);
+      const jsonData = unstable__formDataToJSON(formData) as Partial<z.infer<T>>;
       const schemaData = schema ? schema.safeParse(jsonData) : null;
-      const data = schemaData?.success ? (schemaData.data as z.infer<T>) : jsonData;
+      const data = schemaData?.success ? (schemaData.data as Partial<z.infer<T>>) : jsonData;
       let error: z.ZodError | Error | null = null;
 
       try {
