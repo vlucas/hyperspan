@@ -1,6 +1,7 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { executeMiddleware } from './middleware';
 import type { Hyperspan as HS } from './types';
+export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 const CWD = process.cwd();
@@ -11,14 +12,32 @@ export class HTTPException extends Error {
   }
 }
 
-export function createContext(req: Request): HS.Context {
+/**
+ * Ensures a valid config object is returned, even with an empty object or undefined
+ */
+export function createConfig(config: HS.Config = {} as HS.Config): HS.Config {
+  return {
+    appDir: config.appDir ?? './app',
+    staticFileRoot: config.staticFileRoot ?? './public',
+  };
+}
+
+/**
+ * Creates a context object for a request
+ */
+export function createContext(req: Request, route?: HS.Route): HS.Context {
   const url = new URL(req.url);
   const query = new URLSearchParams(url.search);
   const method = req.method.toUpperCase();
   const headers = new Headers(req.headers);
-  const params = new Map<string, string>();
+  // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
+  const params: Record<string, string> = req?.params || {};
 
   return {
+    route: {
+      path: route?._path() || '',
+      params: params,
+    },
     req: {
       raw: req,
       url,
@@ -45,7 +64,7 @@ export function createContext(req: Request): HS.Context {
  * Define a route that can handle a direct HTTP request.
  * Route handlers should return a HSHtml or Response object
  */
-export function createRoute(config: { name?: string; path?: string } = {}): HS.Route {
+export function createRoute(config: HS.RouteConfig = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
   let _middleware: Array<HS.MiddlewareHandler> = [];
   const { name, path } = config;
@@ -53,8 +72,15 @@ export function createRoute(config: { name?: string; path?: string } = {}): HS.R
   const api: HS.Route = {
     _kind: 'hsRoute',
     _name: name,
-    _path: path,
+    _config: config,
     _methods: () => Object.keys(_handlers),
+    _path() {
+      if (this._config.path) {
+        return normalizePath(this._config.path);
+      }
+
+      return '/';
+    },
     /**
      * Add a GET route handler (primary page display)
      */
@@ -132,16 +158,25 @@ export function createRoute(config: { name?: string; path?: string } = {}): HS.R
             );
           }
 
-          // Handle other requests, HEAD is GET with no body
-          return returnHTMLResponse(context, () => {
-            const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
+          const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
 
-            if (!handler) {
-              return context.res.error(new Error('Method not allowed'), { status: 405 });
-            }
+          if (!handler) {
+            return context.res.error(new Error('Method not allowed'), { status: 405 });
+          }
 
-            return handler(context);
-          });
+          // @TODO: Handle errors from route handler
+          const routeContent = await handler(context);
+
+          // Return Response if returned from route handler
+          if (routeContent instanceof Response) {
+            return routeContent;
+          }
+
+          if (isHTMLContent(routeContent)) {
+            return returnHTMLResponse(context, () => routeContent);
+          }
+
+          return routeContent;
         },
       ];
     },
@@ -150,7 +185,7 @@ export function createRoute(config: { name?: string; path?: string } = {}): HS.R
      * Fetch - handle a direct HTTP request
      */
     async fetch(request: Request) {
-      const context = createContext(request);
+      const context = createContext(request, api);
 
       return executeMiddleware(context, api._getRouteHandlers());
     },
@@ -159,11 +194,15 @@ export function createRoute(config: { name?: string; path?: string } = {}): HS.R
   return api;
 }
 
-export function createServer(config: HS.Config = {} as HS.Config) {
+/**
+ * Creates a server object that can compose routes and middleware
+ */
+export function createServer(config: HS.Config = {} as HS.Config): HS.Server {
   const _middleware: HS.MiddlewareHandler[] = [];
   const _routes: HS.Route[] = [];
 
-  const api = {
+  const api: HS.Server = {
+    _config: config,
     _routes: _routes,
     _middleware: _middleware,
     use(middleware: HS.MiddlewareHandler) {
@@ -172,37 +211,48 @@ export function createServer(config: HS.Config = {} as HS.Config) {
     },
     get(path: string, handler: HS.RouteHandler) {
       const route = createRoute().get(handler);
-      route._path = path;
+      route._config.path = path;
       _routes.push(route);
       return route;
     },
     post(path: string, handler: HS.RouteHandler) {
       const route = createRoute().post(handler);
-      route._path = path;
+      route._config.path = path;
       _routes.push(route);
       return route;
     },
     put(path: string, handler: HS.RouteHandler) {
       const route = createRoute().put(handler);
-      route._path = path;
+      route._config.path = path;
       _routes.push(route);
       return route;
     },
     delete(path: string, handler: HS.RouteHandler) {
       const route = createRoute().delete(handler);
-      route._path = path;
+      route._config.path = path;
       _routes.push(route);
       return route;
     },
     patch(path: string, handler: HS.RouteHandler) {
       const route = createRoute().patch(handler);
-      route._path = path;
+      route._config.path = path;
       _routes.push(route);
       return route;
     }
   };
 
   return api;
+}
+
+/**
+ * Checks if a response is HTML content
+ */
+function isHTMLContent(response: unknown): response is Response {
+  const hasHTMLContentType = response instanceof Response && response.headers.get('Content-Type') === 'text/html';
+  const isHTMLTemplate = isHSHtml(response);
+  const isHTMLString = typeof response === 'string' && response.trim().startsWith('<');
+
+  return hasHTMLContentType || isHTMLTemplate || isHTMLString;
 }
 
 /**
@@ -251,7 +301,7 @@ export async function returnHTMLResponse(
  * Get a Hyperspan runnable route from a module import
  * @throws Error if no runnable route found
  */
-export function getRunnableRoute(route: unknown): HS.Route {
+export function getRunnableRoute(route: unknown, routeConfig?: HS.RouteConfig): HS.Route {
   // Runnable already? Just return it
   if (isRunnableRoute(route)) {
     return route as HS.Route;
@@ -261,13 +311,13 @@ export function getRunnableRoute(route: unknown): HS.Route {
 
   // Plain function - wrap in createRoute()
   if (kind === 'function') {
-    return createRoute(route as HS.RouteHandler);
+    return createRoute(routeConfig).get(route as HS.RouteHandler);
   }
 
   // Module - get default and use it
   // @ts-ignore
   if (kind === 'object' && 'default' in route) {
-    return getRunnableRoute(route.default);
+    return getRunnableRoute(route.default, routeConfig);
   }
 
   // No route -> error
@@ -390,9 +440,43 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
  * Normalize URL path
  * Removes trailing slash and lowercases path
  */
+const ROUTE_SEGMENT_REGEX = /(\[[a-zA-Z_\.]+\])/g;
 export function normalizePath(urlPath: string): string {
+  urlPath = urlPath.replace('index', '').replace('.ts', '').replace('.js', '');
+
+  if (urlPath.startsWith('/')) {
+    urlPath = urlPath.substring(1);
+  }
+
+  if (urlPath.endsWith('/')) {
+    urlPath = urlPath.substring(0, urlPath.length - 1);
+  }
+
+  if (!urlPath) {
+    return '/';
+  }
+
+  // Dynamic params
+  if (ROUTE_SEGMENT_REGEX.test(urlPath)) {
+    urlPath = urlPath.replace(ROUTE_SEGMENT_REGEX, (match: string) => {
+      const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
+
+      if (match.includes('...')) {
+        return '*';
+      } else {
+        return ':' + paramName;
+      }
+    });
+  }
+
+  // Only lowercase non-param segments (do not lowercase after ':')
   return (
-    (urlPath.endsWith('/') ? urlPath.substring(0, urlPath.length - 1) : urlPath).toLowerCase() ||
-    '/'
+    '/' +
+    urlPath
+      .split('/')
+      .map((segment) =>
+        segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
+      )
+      .join('/')
   );
 }

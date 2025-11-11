@@ -2,7 +2,7 @@
   "name": "@hyperspan/framework",
   "version": "0.6.0",
   "description": "Hyperspan Web Framework",
-  "main": "dist/server.ts",
+  "main": "src/server.ts",
   "types": "src/server.ts",
   "public": true,
   "publishConfig": {
@@ -11,23 +11,11 @@
   "exports": {
     ".": {
       "types": "./src/server.ts",
-      "default": "./dist/server.js"
+      "default": "./src/server.ts"
     },
     "./server": {
       "types": "./src/server.ts",
-      "default": "./dist/server.js"
-    },
-    "./assets": {
-      "types": "./src/assets.ts",
-      "default": "./dist/assets.js"
-    },
-    "./middleware": {
-      "types": "./src/middleware.ts",
-      "default": "./dist/middleware.js"
-    },
-    "./unstable/actions": {
-      "types": "./src/actions.ts",
-      "default": "./src/actions.ts"
+      "default": "./src/server.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",

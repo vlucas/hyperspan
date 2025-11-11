@@ -3,6 +3,9 @@ import degit from 'degit';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import packageJson from '../package.json';
+import { startServer } from './server';
+import type { Hyperspan as HS } from '@hyperspan/framework';
+import { createContext } from '@hyperspan/framework';
 
 const program = new Command();
 
@@ -34,8 +37,45 @@ program
   });
 
 /**
- * Build the project for SSG
+ * Start the server
  */
+program
+  .command('start')
+  .option('--dir <path>', 'directory of your hyperspan project', './')
+  .description('Start the server')
+  .action(async (options) => {
+    // Ensure we are in a hyperspan project
+    const serverFile = `${options.dir}/app/routes`;
+
+    if (!fs.existsSync(serverFile)) {
+      console.error(
+        'Error: Could not find app/routes - Are you in a Hyperspan project directory?'
+      );
+      process.exit(1);
+    }
+
+    const server = await startServer();
+
+    const routes: Record<string, (request: Request) => Promise<Response>> = {};
+    for (const route of server._routes) {
+      routes[route._path()] = (request: Request) => route.fetch(request);
+    }
+
+    const httpServer = Bun.serve({
+      routes,
+      fetch: (request: Request) => {
+        return createContext(request).res.notFound();
+      },
+    });
+
+    console.log('\n========================================');
+    console.log('[Hyperspan] Adding routes...\n');
+
+    console.log(`[Hyperspan] Server started on http://localhost:${httpServer.port}`);
+    console.log('[Hyperspan] Press Ctrl+C to stop the server');
+    console.log('========================================\n');
+  });
+
 program
   .command('build:ssg')
   .option('--dir <path>', 'directory of your hyperspan project', './')

@@ -2,26 +2,39 @@
  * Hyperspan Types
  */
 export namespace Hyperspan {
-  export type App = {};
+  export interface Server {
+    _config: Hyperspan.Config;
+    _routes: Array<Hyperspan.Route>;
+    _middleware: Array<Hyperspan.MiddlewareHandler>;
+    use: (middleware: Hyperspan.MiddlewareHandler) => Hyperspan.Server;
+    get: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    post: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    put: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    delete: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    patch: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+  };
 
   export type Config = {
     appDir: string;
     staticFileRoot: string;
-    rewrites?: Array<{ source: string; destination: string }>;
     islandPlugins?: Array<any>; // Loaders for client islands
     // For customizing the routes and adding your own...
-    beforeRoutesAdded?: (app: Hyperspan.App) => void;
-    afterRoutesAdded?: (app: Hyperspan.App) => void;
+    beforeRoutesAdded?: (server: Hyperspan.Server) => void;
+    afterRoutesAdded?: (server: Hyperspan.Server) => void;
   };
 
-  export type Context = {
+  export interface Context {
+    route: {
+      path: string;
+      params: Record<string, string>;
+    }
     req: {
       url: URL;
       raw: Request;
       method: string; // Always uppercase
       headers: Headers; // Case-insensitive
       query: URLSearchParams;
-      params: Map<string, string>;
+      params: Record<string, string>;
       body: any;
     };
     res: {
@@ -35,6 +48,10 @@ export namespace Hyperspan {
     };
   };
 
+  export type RouteConfig = {
+    name?: string;
+    path?: string;
+  };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
 
   /**
@@ -51,11 +68,12 @@ export namespace Hyperspan {
     next: Hyperspan.NextFunction
   ) => Promise<Response> | Response;
 
-  export type Route = {
+  export interface Route {
     _kind: 'hsRoute';
     _name: string | undefined;
-    _path: string | undefined;
-    _methods: () => string[];
+    _config: Hyperspan.RouteConfig;
+    _path(): string;
+    _methods(): string[];
     get: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
     post: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
     put: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
