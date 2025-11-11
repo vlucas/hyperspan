@@ -66,7 +66,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
  */
 export function createRoute(config: HS.RouteConfig = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
-  let _middleware: Array<HS.MiddlewareHandler> = [];
+  let _middleware: Record<string, Array<HS.MiddlewareHandler>> = { '*': [] };
   const { name, path } = config;
 
   const api: HS.Route = {
@@ -127,58 +127,8 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
      * Add middleware specific to this route
      */
     middleware(middleware: Array<HS.MiddlewareHandler>) {
-      _middleware = middleware;
+      _middleware['*'] = middleware;
       return api;
-    },
-    _getRouteHandlers() {
-      return [
-        ..._middleware,
-        async (context: HS.Context) => {
-          const method = context.req.method.toUpperCase();
-
-          // Handle CORS preflight requests (if no OPTIONS handler is defined)
-          if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
-            return context.res.html(
-              render(html`
-                <!DOCTYPE html>
-                <html lang="en"></html>
-              `),
-              {
-                status: 200,
-                headers: {
-                  'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Methods': [
-                    'HEAD',
-                    'OPTIONS',
-                    ...Object.keys(_handlers),
-                  ].join(', '),
-                  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                },
-              }
-            );
-          }
-
-          const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
-
-          if (!handler) {
-            return context.res.error(new Error('Method not allowed'), { status: 405 });
-          }
-
-          // @TODO: Handle errors from route handler
-          const routeContent = await handler(context);
-
-          // Return Response if returned from route handler
-          if (routeContent instanceof Response) {
-            return routeContent;
-          }
-
-          if (isHTMLContent(routeContent)) {
-            return returnHTMLResponse(context, () => routeContent);
-          }
-
-          return routeContent;
-        },
-      ];
     },
 
     /**
@@ -186,8 +136,56 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
      */
     async fetch(request: Request) {
       const context = createContext(request, api);
+      const globalMiddleware = _middleware['*'] || [];
+      const methodMiddleware = _middleware[context.req.method.toUpperCase()] || [];
 
-      return executeMiddleware(context, api._getRouteHandlers());
+      const methodHandler = async (context: HS.Context) => {
+        const method = context.req.method.toUpperCase();
+
+        // Handle CORS preflight requests (if no OPTIONS handler is defined)
+        if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
+          return context.res.html(
+            render(html`
+                <!DOCTYPE html>
+                <html lang="en"></html>
+              `),
+            {
+              status: 200,
+              headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': [
+                  'HEAD',
+                  'OPTIONS',
+                  ...Object.keys(_handlers),
+                ].join(', '),
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+              },
+            }
+          );
+        }
+
+        const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
+
+        if (!handler) {
+          return context.res.error(new Error('Method not allowed'), { status: 405 });
+        }
+
+        // @TODO: Handle errors from route handler
+        const routeContent = await handler(context);
+
+        // Return Response if returned from route handler
+        if (routeContent instanceof Response) {
+          return routeContent;
+        }
+
+        if (isHTMLContent(routeContent)) {
+          return returnHTMLResponse(context, () => routeContent);
+        }
+
+        return routeContent;
+      };
+
+      return executeMiddleware(context, [...globalMiddleware, ...methodMiddleware, methodHandler]);
     },
   };
 
@@ -209,36 +207,42 @@ export function createServer(config: HS.Config = {} as HS.Config): HS.Server {
       _middleware.push(middleware);
       return this;
     },
-    get(path: string, handler: HS.RouteHandler) {
-      const route = createRoute().get(handler);
+    get(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().get(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;
     },
-    post(path: string, handler: HS.RouteHandler) {
-      const route = createRoute().post(handler);
+    post(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().post(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;
     },
-    put(path: string, handler: HS.RouteHandler) {
-      const route = createRoute().put(handler);
+    put(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().put(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;
     },
-    delete(path: string, handler: HS.RouteHandler) {
-      const route = createRoute().delete(handler);
+    delete(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().delete(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;
     },
-    patch(path: string, handler: HS.RouteHandler) {
-      const route = createRoute().patch(handler);
+    patch(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().patch(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;
-    }
+    },
+    options(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().options(handler, handlerOptions);
+      route._config.path = path;
+      _routes.push(route);
+      return route;
+    },
   };
 
   return api;
@@ -334,10 +338,8 @@ export function isRunnableRoute(route: unknown): boolean {
     return false;
   }
 
-  const obj = route as { _kind: string; _getRouteHandlers: any };
-  const runnableKind = ['hsRoute', 'hsAPIRoute', 'hsAction'].includes(obj?._kind);
-
-  return runnableKind && '_getRouteHandlers' in obj;
+  const obj = route as { _kind: string; fetch: (request: Request) => Promise<Response> };
+  return 'hsRoute' === obj?._kind && 'fetch' in obj;
 }
 
 /**

@@ -3,6 +3,9 @@ import { createServer, getRunnableRoute, createConfig, normalizePath } from '@hy
 import { join } from "node:path";
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
+type startConfig = {
+  development?: boolean;
+}
 
 const CWD = process.cwd();
 
@@ -12,23 +15,32 @@ export async function loadConfig(): Promise<HS.Config> {
   return createConfig(configModule);
 }
 
-export async function startServer(): Promise<HS.Server> {
+export async function startServer(startConfig: startConfig = {}): Promise<HS.Server> {
   const config = await loadConfig();
   const server = createServer(config);
-  await addRoutes(server);
+  await addRoutes(server, startConfig);
   return server;
 }
 
-export async function addRoutes(server: HS.Server) {
+export async function addRoutes(server: HS.Server, startConfig: startConfig) {
   const routesGlob = new Glob("**/*.ts");
   const routeFiles: string[] = [];
   const appDir = server._config.appDir || "./app";
   const routesDir = join(CWD, appDir, "routes");
 
   for await (const file of routesGlob.scan(routesDir)) {
-    routeFiles.push(join(routesDir, file));
+    const filePath = join(routesDir, file);
+
+    // Hidden directories and files start with a double underscore.
+    // These do not get added to the routes. Nothing nested under them gets added to the routes either.
+    if (filePath.includes('/__')) {
+      continue;
+    }
+
+    routeFiles.push(filePath);
   }
 
+  const routeMap: { route: string, file: string }[] = [];
   const routes = await Promise.all(routeFiles.map(async (filePath) => {
     const routeModule = await import(filePath);
     const route = getRunnableRoute(routeModule);
@@ -38,10 +50,16 @@ export async function addRoutes(server: HS.Server) {
       const relativePath = filePath.split('app/routes/').pop();
       const path = normalizePath(relativePath ?? '/');
       route._config.path = path;
+      routeMap.push({ route: path, file: filePath.replace(CWD, '') });
     }
 
     return route;
   }));
+
+  if (startConfig.development) {
+    console.log('[Hyperspan] Loaded routes:');
+    console.table(routeMap);
+  }
 
   server._routes.push(...routes);
 }

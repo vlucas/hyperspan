@@ -1,3 +1,5 @@
+import type { ZodObject, ZodAny } from 'zod/v4'
+
 /**
  * Hyperspan Types
  */
@@ -7,11 +9,12 @@ export namespace Hyperspan {
     _routes: Array<Hyperspan.Route>;
     _middleware: Array<Hyperspan.MiddlewareHandler>;
     use: (middleware: Hyperspan.MiddlewareHandler) => Hyperspan.Server;
-    get: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    post: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    put: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    delete: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    patch: (path: string, handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    get: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    post: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    put: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    patch: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    delete: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    options: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
   };
 
   export type Config = {
@@ -53,6 +56,11 @@ export namespace Hyperspan {
     path?: string;
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
+  export type RouteHandlerOptions = {
+    middleware?: Hyperspan.MiddlewareHandler[];
+    validateQuery?: ZodObject;
+    validateBody?: ZodObject | ZodAny;
+  }
 
   /**
    * Next function type for middleware
@@ -74,14 +82,13 @@ export namespace Hyperspan {
     _config: Hyperspan.RouteConfig;
     _path(): string;
     _methods(): string[];
-    get: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    post: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    put: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    delete: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    patch: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
-    options: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    get: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    post: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    put: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    patch: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    delete: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     middleware: (middleware: Array<Hyperspan.MiddlewareHandler>) => Hyperspan.Route;
-    _getRouteHandlers: () => Array<Hyperspan.MiddlewareHandler | Hyperspan.RouteHandler>;
     fetch: (request: Request) => Promise<Response>;
   };
 

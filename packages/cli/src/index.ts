@@ -54,7 +54,10 @@ program
       process.exit(1);
     }
 
-    const server = await startServer();
+    console.log('\n========================================');
+    console.log('[Hyperspan] Adding routes...');
+
+    const server = await startServer({ development: process.env.NODE_ENV !== 'production' });
 
     const routes: Record<string, (request: Request) => Promise<Response>> = {};
     for (const route of server._routes) {
@@ -67,9 +70,6 @@ program
         return createContext(request).res.notFound();
       },
     });
-
-    console.log('\n========================================');
-    console.log('[Hyperspan] Adding routes...\n');
 
     console.log(`[Hyperspan] Server started on http://localhost:${httpServer.port}`);
     console.log('[Hyperspan] Press Ctrl+C to stop the server');
