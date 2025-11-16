@@ -1,5 +1,5 @@
 import { Glob } from "bun";
-import { createServer, getRunnableRoute, createConfig, normalizePath } from '@hyperspan/framework';
+import { createServer, getRunnableRoute, createConfig, parsePath } from '@hyperspan/framework';
 import { join } from "node:path";
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
@@ -10,14 +10,28 @@ type startConfig = {
 const CWD = process.cwd();
 
 export async function loadConfig(): Promise<HS.Config> {
-  const configFile = "./hyperspan.config.ts";
-  const configModule = await import(configFile).then((module) => module.default).catch(() => ({}) as HS.Config);
-  return createConfig(configModule);
+  const configFile = join(CWD, "hyperspan.config.ts");
+  const configModule = await import(configFile).then((module) => module.default).catch((error) => {
+    console.error(`[Hyperspan] Unable to load config file: ${error}`);
+    console.error(`[Hyperspan] Please create a hyperspan.config.ts file in the root of your project.`);
+    console.log(`[Hyperspan] Example:
+import { createConfig } from '@hyperspan/framework';
+
+export default createConfig({
+  appDir: './app',
+  publicDir: './public',
+});
+`);
+    process.exit(1);
+  });
+  return configModule;
 }
 
 export async function startServer(startConfig: startConfig = {}): Promise<HS.Server> {
+  console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
-  const server = createServer(config);
+  const server = await createServer(config);
+  console.log('[Hyperspan] Adding routes...');
   await addRoutes(server, startConfig);
   return server;
 }
@@ -48,7 +62,7 @@ export async function addRoutes(server: HS.Server, startConfig: startConfig) {
     // If route is in app/routes, use the file path as the route path (file system routes)
     if (filePath && filePath.includes('app/routes')) {
       const relativePath = filePath.split('app/routes/').pop();
-      const path = normalizePath(relativePath ?? '/');
+      const { path } = parsePath(relativePath ?? '/');
       route._config.path = path;
       routeMap.push({ route: path, file: filePath.replace(CWD, '') });
     }

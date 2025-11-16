@@ -16,6 +16,22 @@
     "./server": {
       "types": "./src/server.ts",
       "default": "./src/server.ts"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "default": "./src/middleware.ts"
+    },
+    "./middleware/zod": {
+      "types": "./src/middleware/zod.ts",
+      "default": "./src/middleware/zod.ts"
+    },
+    "./clientjs": {
+      "types": "./src/clientjs.ts",
+      "default": "./src/clientjs.ts"
+    },
+    "./layout": {
+      "types": "./src/layout.ts",
+      "default": "./src/layout.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",

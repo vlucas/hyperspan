@@ -1,6 +1,8 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { executeMiddleware } from './middleware';
+import { callsites } from './callsites';
 import type { Hyperspan as HS } from './types';
+import { clientJSPlugin } from './clientjs';
 export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
@@ -13,12 +15,14 @@ export class HTTPException extends Error {
 }
 
 /**
- * Ensures a valid config object is returned, even with an empty object or undefined
+ * Ensures a valid config object is returned, even with an empty object or partial object passed in
  */
-export function createConfig(config: HS.Config = {} as HS.Config): HS.Config {
+export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
   return {
+    ...config,
     appDir: config.appDir ?? './app',
-    staticFileRoot: config.staticFileRoot ?? './public',
+    publicDir: config.publicDir ?? './public',
+    plugins: [clientJSPlugin(), ...(config.plugins ?? [])],
   };
 }
 
@@ -30,12 +34,13 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const query = new URLSearchParams(url.search);
   const method = req.method.toUpperCase();
   const headers = new Headers(req.headers);
+  const path = route?._path() || '/';
   // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
-  const params: Record<string, string> = req?.params || {};
+  const params: HS.RouteParamsParser<path> = req?.params || {};
 
   return {
     route: {
-      path: route?._path() || '',
+      path,
       params: params,
     },
     req: {
@@ -44,7 +49,6 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       method,
       headers,
       query,
-      params,
       body: req.body,
     },
     res: {
@@ -66,17 +70,17 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
  */
 export function createRoute(config: HS.RouteConfig = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
-  let _middleware: Record<string, Array<HS.MiddlewareHandler>> = { '*': [] };
-  const { name, path } = config;
+  let _middleware: Record<string, Array<HS.MiddlewareFunction>> = { '*': [] };
 
   const api: HS.Route = {
     _kind: 'hsRoute',
-    _name: name,
+    _name: config.name,
     _config: config,
     _methods: () => Object.keys(_handlers),
     _path() {
       if (this._config.path) {
-        return normalizePath(this._config.path);
+        const { path } = parsePath(this._config.path);
+        return path;
       }
 
       return '/';
@@ -84,49 +88,55 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
     /**
      * Add a GET route handler (primary page display)
      */
-    get(handler: HS.RouteHandler) {
+    get(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['GET'] = handler;
+      _middleware['GET'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add a POST route handler (typically to process form data)
      */
-    post(handler: HS.RouteHandler) {
+    post(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['POST'] = handler;
+      _middleware['POST'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add a PUT route handler (typically to update existing data)
      */
-    put(handler: HS.RouteHandler) {
+    put(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['PUT'] = handler;
+      _middleware['PUT'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add a DELETE route handler (typically to delete existing data)
      */
-    delete(handler: HS.RouteHandler) {
+    delete(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['DELETE'] = handler;
+      _middleware['DELETE'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add a PATCH route handler (typically to update existing data)
      */
-    patch(handler: HS.RouteHandler) {
+    patch(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['PATCH'] = handler;
+      _middleware['PATCH'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add a OPTIONS route handler (typically to handle CORS preflight requests)
      */
-    options(handler: HS.RouteHandler) {
+    options(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['OPTIONS'] = handler;
+      _middleware['OPTIONS'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
      * Add middleware specific to this route
      */
-    middleware(middleware: Array<HS.MiddlewareHandler>) {
+    middleware(middleware: Array<HS.MiddlewareFunction>) {
       _middleware['*'] = middleware;
       return api;
     },
@@ -137,10 +147,10 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
     async fetch(request: Request) {
       const context = createContext(request, api);
       const globalMiddleware = _middleware['*'] || [];
-      const methodMiddleware = _middleware[context.req.method.toUpperCase()] || [];
+      const methodMiddleware = _middleware[context.req.method] || [];
 
       const methodHandler = async (context: HS.Context) => {
-        const method = context.req.method.toUpperCase();
+        const method = context.req.method;
 
         // Handle CORS preflight requests (if no OPTIONS handler is defined)
         if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
@@ -195,15 +205,20 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
 /**
  * Creates a server object that can compose routes and middleware
  */
-export function createServer(config: HS.Config = {} as HS.Config): HS.Server {
-  const _middleware: HS.MiddlewareHandler[] = [];
+export async function createServer(config: HS.Config = {} as HS.Config): Promise<HS.Server> {
+  const _middleware: HS.MiddlewareFunction[] = [];
   const _routes: HS.Route[] = [];
+
+  // Load plugins, if any
+  if (config.plugins && config.plugins.length > 0) {
+    await Promise.all(config.plugins.map(plugin => plugin(config)));
+  }
 
   const api: HS.Server = {
     _config: config,
     _routes: _routes,
     _middleware: _middleware,
-    use(middleware: HS.MiddlewareHandler) {
+    use(middleware: HS.MiddlewareFunction) {
       _middleware.push(middleware);
       return this;
     },
@@ -443,7 +458,8 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
  * Removes trailing slash and lowercases path
  */
 const ROUTE_SEGMENT_REGEX = /(\[[a-zA-Z_\.]+\])/g;
-export function normalizePath(urlPath: string): string {
+export function parsePath(urlPath: string): { path: string, params: string[] } {
+  const params: string[] = [];
   urlPath = urlPath.replace('index', '').replace('.ts', '').replace('.js', '');
 
   if (urlPath.startsWith('/')) {
@@ -455,13 +471,14 @@ export function normalizePath(urlPath: string): string {
   }
 
   if (!urlPath) {
-    return '/';
+    return { path: '/', params: [] };
   }
 
   // Dynamic params
   if (ROUTE_SEGMENT_REGEX.test(urlPath)) {
     urlPath = urlPath.replace(ROUTE_SEGMENT_REGEX, (match: string) => {
       const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
+      params.push(paramName);
 
       if (match.includes('...')) {
         return '*';
@@ -472,13 +489,16 @@ export function normalizePath(urlPath: string): string {
   }
 
   // Only lowercase non-param segments (do not lowercase after ':')
-  return (
-    '/' +
-    urlPath
-      .split('/')
-      .map((segment) =>
-        segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
-      )
-      .join('/')
-  );
+  return {
+    path: (
+      '/' +
+      urlPath
+        .split('/')
+        .map((segment) =>
+          segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
+        )
+        .join('/')
+    ),
+    params,
+  };
 }

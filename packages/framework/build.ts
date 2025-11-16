@@ -1,6 +1,6 @@
 import { build } from 'bun';
 
-const entrypoints = ['./src/server.ts', './src/assets.ts', './src/middleware.ts'];
+const entrypoints = ['./src/server.ts', './src/clientjs.ts', './src/middleware.ts'];
 const external = ['@hyperspan/html'];
 const outdir = './dist';
 const target = 'node';

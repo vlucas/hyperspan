@@ -1,5 +1,3 @@
-import type { ZodObject, ZodAny } from 'zod/v4'
-
 /**
  * Hyperspan Types
  */
@@ -7,8 +5,8 @@ export namespace Hyperspan {
   export interface Server {
     _config: Hyperspan.Config;
     _routes: Array<Hyperspan.Route>;
-    _middleware: Array<Hyperspan.MiddlewareHandler>;
-    use: (middleware: Hyperspan.MiddlewareHandler) => Hyperspan.Server;
+    _middleware: Array<Hyperspan.MiddlewareFunction>;
+    use: (middleware: Hyperspan.MiddlewareFunction) => Hyperspan.Server;
     get: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     post: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     put: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
@@ -17,16 +15,19 @@ export namespace Hyperspan {
     options: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
   };
 
+  export type Plugin = (config: Hyperspan.Config) => Promise<void> | void;
+
   export type Config = {
     appDir: string;
-    staticFileRoot: string;
-    islandPlugins?: Array<any>; // Loaders for client islands
+    publicDir: string;
+    plugins: Array<Hyperspan.Plugin>; // Loaders for client islands
     // For customizing the routes and adding your own...
     beforeRoutesAdded?: (server: Hyperspan.Server) => void;
     afterRoutesAdded?: (server: Hyperspan.Server) => void;
   };
 
   export interface Context {
+    vars: Record<string, any>;
     route: {
       path: string;
       params: Record<string, string>;
@@ -37,10 +38,10 @@ export namespace Hyperspan {
       method: string; // Always uppercase
       headers: Headers; // Case-insensitive
       query: URLSearchParams;
-      params: Record<string, string>;
       body: any;
     };
     res: {
+      headers: Headers; // Headers to merge with final outgoing response
       html: (html: string, options?: { status?: number; headers?: Record<string, string> }) => Response
       json: (json: any, options?: { status?: number; headers?: Record<string, string> }) => Response;
       text: (text: string, options?: { status?: number; headers?: Record<string, string> }) => Response;
@@ -51,16 +52,29 @@ export namespace Hyperspan {
     };
   };
 
+  export type ClientIslandOptions = {
+    ssr?: boolean;
+    loading?: 'lazy' | undefined;
+  };
+
   export type RouteConfig = {
     name?: string;
     path?: string;
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
   export type RouteHandlerOptions = {
-    middleware?: Hyperspan.MiddlewareHandler[];
-    validateQuery?: ZodObject;
-    validateBody?: ZodObject | ZodAny;
+    middleware?: Hyperspan.MiddlewareFunction[];
   }
+
+  // TypeScript inference for typed   route params
+  // Source - https://stackoverflow.com/a/78170543
+  // Posted by jcalz
+  // Retrieved 2025-11-12, License - CC BY-SA 4.0
+  export type RouteParamsParser<T extends string, A = unknown> =
+    T extends `${string}:${infer F}/${infer R}` ? RouteParamsParser<R, A & Record<F, string>> :
+    (A & (T extends `${string}:${infer F}` ? Record<F, string> : unknown)) extends
+    infer U ? { [K in keyof U]: U[K] } : never
+
 
   /**
    * Next function type for middleware
@@ -88,9 +102,7 @@ export namespace Hyperspan {
     patch: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     delete: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
-    middleware: (middleware: Array<Hyperspan.MiddlewareHandler>) => Hyperspan.Route;
+    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Hyperspan.Route;
     fetch: (request: Request) => Promise<Response>;
   };
-
-  export type MiddlewareHandler = (context: Hyperspan.Context) => Hyperspan.RouteHandler;
 }

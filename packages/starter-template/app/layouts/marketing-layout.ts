@@ -1,7 +1,7 @@
-import {html} from '@hyperspan/html';
-import {hyperspanScriptTags, hyperspanStyleTags} from '@hyperspan/framework/assets';
+import { html } from '@hyperspan/html';
+import { hyperspanScriptTags, hyperspanStyleTags } from '@hyperspan/framework/layout';
 
-export default function MarketingLayout({title, content}: {title: string; content: any}) {
+export default function MarketingLayout({ title, content }: { title: string; content: any }) {
   return html`
     <!doctype html>
     <html class="w-full h-full" lang="en">

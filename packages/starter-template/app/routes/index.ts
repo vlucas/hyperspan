@@ -1,10 +1,10 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
-import MarketingLayout from '@/app/layouts/marketing-layout';
-import { renderIsland } from '@hyperspan/framework/assets';
-import ClientCounter from '@/app/components/client-counter';
+import { renderIsland } from '@hyperspan/framework/clientjs';
+import MarketingLayout from '~/app/layouts/marketing-layout';
+import ClientCounter from '~/app/components/client-counter';
 
-export default createRoute(() => {
+export default createRoute().get(() => {
   const content = html`
     <main class="w-full mt-10">
       <section class=" py-12 text-center bg-gray-200">

@@ -1,5 +1,5 @@
-import { createConfig } from '@hyperspan/framework';
 import { preactPlugin } from '@hyperspan/plugin-preact';
+import { createConfig } from '@hyperspan/framework';
 
 /**
  * Hyperspan config
@@ -7,6 +7,6 @@ import { preactPlugin } from '@hyperspan/plugin-preact';
  */
 export default createConfig({
   appDir: './app',
-  staticFileRoot: './public',
-  islandPlugins: [preactPlugin()],
+  publicDir: './public',
+  plugins: [preactPlugin()],
 });

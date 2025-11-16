@@ -1,7 +1,7 @@
 import { createRoute } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
 
-export default createRoute().get(async (c) => {
+export default createRoute().get(() => {
   return html`
     <html>
       <body>
