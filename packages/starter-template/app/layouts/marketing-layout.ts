@@ -1,7 +1,8 @@
 import { html } from '@hyperspan/html';
 import { hyperspanScriptTags, hyperspanStyleTags } from '@hyperspan/framework/layout';
+import type { Hyperspan as HS } from '@hyperspan/framework';
 
-export default function MarketingLayout({ title, content }: { title: string; content: any }) {
+export default function MarketingLayout(context: HS.Context, { title, content }: { title: string; content: any }) {
   return html`
     <!doctype html>
     <html class="w-full h-full" lang="en">
@@ -14,7 +15,7 @@ export default function MarketingLayout({ title, content }: { title: string; con
         />
 
         <title>${title}</title>
-        ${hyperspanStyleTags()}
+        ${hyperspanStyleTags(context)}
       </head>
       <body>
         ${hyperspanScriptTags()}

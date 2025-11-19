@@ -25,13 +25,25 @@
       "types": "./src/middleware/zod.ts",
       "default": "./src/middleware/zod.ts"
     },
-    "./clientjs": {
-      "types": "./src/clientjs.ts",
-      "default": "./src/clientjs.ts"
+    "./utils": {
+      "types": "./src/utils.ts",
+      "default": "./src/utils.ts"
     },
     "./layout": {
       "types": "./src/layout.ts",
       "default": "./src/layout.ts"
+    },
+    "./client/css": {
+      "types": "./src/client/css.ts",
+      "default": "./src/client/css.ts"
+    },
+    "./client/js": {
+      "types": "./src/client/js.ts",
+      "default": "./src/client/js.ts"
+    },
+    "./plugins": {
+      "types": "./src/plugins.ts",
+      "default": "./src/plugins.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",

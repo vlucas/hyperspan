@@ -1,12 +1,13 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
-import { renderIsland } from '@hyperspan/framework/clientjs';
+import { renderIsland } from '@hyperspan/framework/client/js';
 import MarketingLayout from '~/app/layouts/marketing-layout';
 import ClientCounter from '~/app/components/client-counter';
+import '~/app/styles/index.css';
 
-export default createRoute().get(() => {
+export default createRoute().get((context) => {
   const content = html`
-    <main class="w-full mt-10">
+    <main class="main w-full mt-10">
       <section class=" py-12 text-center bg-gray-200">
         <h1 class="my-6 text-5xl/14">Your Big Headline Here</h1>
         <h2 class="my-10 text-2xl">Sub-Headline Goes Here</h2>
@@ -28,7 +29,7 @@ export default createRoute().get(() => {
     </main>
   `;
 
-  return MarketingLayout({
+  return MarketingLayout(context, {
     title: 'Homepage',
     content,
   });

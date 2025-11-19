@@ -1,4 +1,5 @@
-import { clientImportMap, assetHash, ISLAND_PUBLIC_PATH } from '@hyperspan/framework/clientjs';
+import { JS_IMPORT_MAP, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
+import { assetHash } from '@hyperspan/framework/utils';
 import { IS_PROD } from '@hyperspan/framework/server';
 import { join, resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
@@ -13,7 +14,7 @@ async function copyPreactToPublicFolder(config: HS.Config) {
   const sourceFile = resolve(__dirname, './preact-client.ts');
   const result = await Bun.build({
     entrypoints: [sourceFile],
-    outdir: join('./', config.publicDir, ISLAND_PUBLIC_PATH),
+    outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
     naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
     minify: true,
     format: 'esm',
@@ -21,16 +22,16 @@ async function copyPreactToPublicFolder(config: HS.Config) {
   });
 
   const builtFileName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
-  const builtFilePath = `${ISLAND_PUBLIC_PATH}/${builtFileName}.js`;
+  const builtFilePath = `${JS_ISLAND_PUBLIC_PATH}/${builtFileName}.js`;
 
-  clientImportMap.set('preact', builtFilePath);
-  clientImportMap.set('preact/compat', builtFilePath);
-  clientImportMap.set('preact/hooks', builtFilePath);
-  clientImportMap.set('preact/jsx-runtime', builtFilePath);
+  JS_IMPORT_MAP.set('preact', builtFilePath);
+  JS_IMPORT_MAP.set('preact/compat', builtFilePath);
+  JS_IMPORT_MAP.set('preact/hooks', builtFilePath);
+  JS_IMPORT_MAP.set('preact/jsx-runtime', builtFilePath);
 
-  if (!clientImportMap.has('react')) {
-    clientImportMap.set('react', builtFilePath);
-    clientImportMap.set('react-dom', builtFilePath);
+  if (!JS_IMPORT_MAP.has('react')) {
+    JS_IMPORT_MAP.set('react', builtFilePath);
+    JS_IMPORT_MAP.set('react-dom', builtFilePath);
   }
 }
 
@@ -40,7 +41,7 @@ async function copyPreactToPublicFolder(config: HS.Config) {
 export function preactPlugin(): HS.Plugin {
   return async (config: HS.Config) => {
     // Ensure Preact can be loaded on the client
-    if (!clientImportMap.has('preact')) {
+    if (!JS_IMPORT_MAP.has('preact')) {
       await copyPreactToPublicFolder(config);
     }
 
@@ -64,9 +65,9 @@ export function preactPlugin(): HS.Plugin {
           // Ironic, right? Calling Bun.build() inside of a plugin that runs on Bun.build()?
           const result = await Bun.build({
             entrypoints: [args.path],
-            outdir: join('./', config.publicDir, ISLAND_PUBLIC_PATH),
+            outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
             naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
-            external: Array.from(clientImportMap.keys()),
+            external: Array.from(JS_IMPORT_MAP.keys()),
             minify: true,
             format: 'esm',
             target: 'browser',
@@ -75,7 +76,7 @@ export function preactPlugin(): HS.Plugin {
 
           // Add output file to import map
           const esmName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
-          clientImportMap.set(esmName, `${ISLAND_PUBLIC_PATH}/${esmName}.js`);
+          JS_IMPORT_MAP.set(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
 
           let contents = await result.outputs[0].text();
 

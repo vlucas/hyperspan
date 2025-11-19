@@ -31,6 +31,7 @@ export namespace Hyperspan {
     route: {
       path: string;
       params: Record<string, string>;
+      cssImports?: string[];
     }
     req: {
       url: URL;
@@ -60,6 +61,7 @@ export namespace Hyperspan {
   export type RouteConfig = {
     name?: string;
     path?: string;
+    cssImports?: string[];
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
   export type RouteHandlerOptions = {

@@ -1,8 +1,7 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { executeMiddleware } from './middleware';
-import { callsites } from './callsites';
 import type { Hyperspan as HS } from './types';
-import { clientJSPlugin } from './clientjs';
+import { clientJSPlugin } from './plugins';
 export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';

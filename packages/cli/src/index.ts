@@ -6,9 +6,7 @@ import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import packageJson from '../package.json';
 import { startServer } from './server';
-import type { Hyperspan as HS } from '@hyperspan/framework';
 import { createContext } from '@hyperspan/framework';
-import { clientImportMap } from '@hyperspan/framework/clientjs';
 import { join } from 'node:path';
 
 const program = new Command();
