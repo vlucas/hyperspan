@@ -1,5 +1,6 @@
 {
-  "name": "middleware-zod",
+  "name": "@hyperspan/middleware-zod",
+  "version": "1.0.0-alpha.0",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
@@ -7,6 +8,7 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
+    "@hyperspan/framework": "^1.0.0-alpha",
     "typescript": "^5"
   },
   "dependencies": {
