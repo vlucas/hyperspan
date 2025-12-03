@@ -32,7 +32,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hyperspan/framework": "^0.5.5",
+    "@hyperspan/framework": "^1.0.0-alpha",
     "commander": "^14.0.2",
     "degit": "^2.8.4"
   },

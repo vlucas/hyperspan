@@ -3,7 +3,10 @@
   "version": "1.0.0-alpha.0",
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
+  "public": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
