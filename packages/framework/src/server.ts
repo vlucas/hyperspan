@@ -357,6 +357,16 @@ export function isRunnableRoute(route: unknown): boolean {
 }
 
 /**
+ * Is valid route path to add to server?
+ */
+export function isValidRoutePath(path: string): boolean {
+  const isHiddenRoute = path.includes('/__');
+  const isTestFile = path.includes('.test') || path.includes('.spec');
+
+  return !isHiddenRoute && !isTestFile;
+}
+
+/**
  * Basic error handling
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
