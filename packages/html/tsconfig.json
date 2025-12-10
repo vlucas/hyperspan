@@ -10,7 +10,6 @@
     "moduleDetection": "force",
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true,
     "composite": true,
     "strict": true,
     "declaration": true,

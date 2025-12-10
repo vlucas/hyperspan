@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.2",
   "description": "Hyperspan Web Framework",
   "main": "src/server.ts",
   "types": "src/server.ts",
@@ -44,6 +44,10 @@
     "./plugins": {
       "types": "./src/plugins.ts",
       "default": "./src/plugins.ts"
+    },
+    "./actions": {
+      "types": "./src/actions.ts",
+      "default": "./src/actions.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",

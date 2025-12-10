@@ -3,7 +3,7 @@ import { createRoute, createServer } from './server';
 import type { Hyperspan as HS } from './types';
 
 test('route fetch() returns a Response', async () => {
-  const route = createRoute().get((context) => {
+  const route = createRoute().get((context: HS.Context) => {
     return context.res.html('<h1>Hello World</h1>');
   });
 
@@ -16,24 +16,25 @@ test('route fetch() returns a Response', async () => {
 });
 
 test('server with two routes can return Response from one', async () => {
-  const server = createServer({
+  const server = await createServer({
     appDir: './app',
-    staticFileRoot: './public',
+    publicDir: './public',
+    plugins: [],
   });
 
   // Add two routes to the server
-  server.get('/users', (context) => {
+  server.get('/users', (context: HS.Context) => {
     return context.res.html('<h1>Users Page</h1>');
   });
 
-  server.get('/posts', (context) => {
+  server.get('/posts', (context: HS.Context) => {
     return context.res.html('<h1>Posts Page</h1>');
   });
 
 
   // Test that we can get a Response from one of the routes
   const request = new Request('http://localhost:3000/users');
-  const testRoute = server._routes.find((route) => route._path === '/users');
+  const testRoute = server._routes.find((route: HS.Route) => route._path() === '/users');
   const response = await testRoute!.fetch(request);
 
   expect(response).toBeInstanceOf(Response);
@@ -42,22 +43,23 @@ test('server with two routes can return Response from one', async () => {
 });
 
 test('server returns a route with a POST request', async () => {
-  const server = createServer({
+  const server = await createServer({
     appDir: './app',
-    staticFileRoot: './public',
+    publicDir: './public',
+    plugins: [],
   });
 
   // Add two routes to the server
-  server.get('/users', (context) => {
+  server.get('/users', (context: HS.Context) => {
     return context.res.html('<h1>GET /users</h1>');
   });
 
-  server.post('/users', (context) => {
+  server.post('/users', (context: HS.Context) => {
     return context.res.html('<h1>POST /users</h1>');
   });
 
-  const route = server._routes.find((route) => route._path === '/users' && route._methods().includes('POST')) as HS.Route;
-  const request = new Request('http://localhost:3000/', { method: 'POST' });
+  const route = server._routes.find((route: HS.Route) => route._path() === '/users' && route._methods().includes('POST')) as HS.Route;
+  const request = new Request('http://localhost:3000/users', { method: 'POST' });
   const response = await route.fetch(request);
 
   expect(response).toBeInstanceOf(Response);
@@ -66,18 +68,19 @@ test('server returns a route with a POST request', async () => {
 });
 
 test('returns 405 when route path matches but HTTP method does not', async () => {
-  const server = createServer({
+  const server = await createServer({
     appDir: './app',
-    staticFileRoot: './public',
+    publicDir: './public',
+    plugins: [],
   });
 
   // Route registered for GET only
-  server.get('/users', (context) => {
+  server.get('/users', (context: HS.Context) => {
     return context.res.html('<h1>Users Page</h1>');
   });
 
   // Attempt to POST to /users, which should return 405
-  const route = server._routes.find((route) => route._path === '/users')!;
+  const route = server._routes.find((route: HS.Route) => route._path() === '/users')!;
   const request = new Request('http://localhost:3000/users', { method: 'POST' });
   const response = await route.fetch(request);
 

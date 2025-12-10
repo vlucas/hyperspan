@@ -1,7 +1,6 @@
 {
   "compileOnSave": true,
   "compilerOptions": {
-    "rootDir": "src",
     "outDir": "dist",
     "target": "es2019",
     "lib": ["ESNext", "dom", "dom.iterable"],
@@ -25,5 +24,6 @@
       "@hyperspan/html": ["../html/src/html.ts"]
     }
   },
+  "references": [{ "path": "../html" }],
   "exclude": ["node_modules", "__tests__", "*.test.ts"]
 }
