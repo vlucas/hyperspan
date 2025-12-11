@@ -2,10 +2,10 @@ import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hype
 import { executeMiddleware } from './middleware';
 import type { Hyperspan as HS } from './types';
 import { clientJSPlugin } from './plugins';
+import { CSS_ROUTE_MAP } from './client/css';
 export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
-const CWD = process.cwd();
 
 export class HTTPException extends Error {
   constructor(public status: number, message?: string) {
@@ -38,9 +38,11 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const params: HS.RouteParamsParser<path> = req?.params || {};
 
   return {
+    vars: {},
     route: {
       path,
       params: params,
+      cssImports: route ? route._config.cssImports ?? [] : [],
     },
     req: {
       raw: req,
@@ -51,6 +53,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       body: req.body,
     },
     res: {
+      headers: new Headers(),
       raw: new Response(),
       html: (html: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } }),
       json: (json: any, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } }),
@@ -145,12 +148,11 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
      */
     async fetch(request: Request) {
       const context = createContext(request, api);
+      const method = context.req.method;
       const globalMiddleware = _middleware['*'] || [];
-      const methodMiddleware = _middleware[context.req.method] || [];
+      const methodMiddleware = _middleware[method] || [];
 
       const methodHandler = async (context: HS.Context) => {
-        const method = context.req.method;
-
         // Handle CORS preflight requests (if no OPTIONS handler is defined)
         if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
           return context.res.html(

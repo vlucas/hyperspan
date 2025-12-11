@@ -2,6 +2,7 @@ import { Glob } from 'bun';
 import { createServer, getRunnableRoute, IS_PROD, isValidRoutePath, parsePath } from '@hyperspan/framework';
 import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from '@hyperspan/framework/client/css';
 import { join } from 'node:path';
+import tailwind from "bun-plugin-tailwind"
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
 type startConfig = {
@@ -62,7 +63,7 @@ export async function addRoutes(server: HS.Server, startConfig: startConfig) {
   }
 
   const routeMap: { route: string; file: string }[] = [];
-  const routes: HS.Route[] = await Promise.all(
+  const routes: HS.Route[] = (await Promise.all(
     routeFiles
       .map(async (filePath) => {
         const relativePath = filePath.split('app/routes/').pop();
@@ -74,16 +75,17 @@ export async function addRoutes(server: HS.Server, startConfig: startConfig) {
 
         let cssFiles: string[] = [];
 
-        // Build the route just for the CSS files
-        // Wasteful perhaps to compile the JS also and then just discard it, but it's an easy way to do CSS compilation by route
+        // Build the route just for the CSS files (expensive, but easiest way to do CSS compilation by route)
+        // @TODO: Optimize this at some later date... This is O(n) for each route and doesn't scale well for large projects.
+        // @TODO: This will also currently re-compile the same CSS file(s) that are included in multiple routes, which is dumb.
         const buildResult = await Bun.build({
+          plugins: [tailwind],
           entrypoints: [filePath],
           outdir: buildDir,
           naming: `app/routes/${path.endsWith('/') ? path + 'index' : path}-[hash].[ext]`,
           minify: IS_PROD,
           format: 'esm',
           target: 'node',
-          env: 'APP_PUBLIC_*',
         });
 
         // Move CSS files to the public directory
@@ -110,8 +112,7 @@ export async function addRoutes(server: HS.Server, startConfig: startConfig) {
 
         return route;
       })
-      .filter((route) => route !== null)
-  );
+  )).filter((route) => route !== null);
 
   if (startConfig.development) {
     console.log('[Hyperspan] Loaded routes:');

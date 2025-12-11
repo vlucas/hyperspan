@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,
@@ -39,6 +39,7 @@
   "devDependencies": {
     "@types/bun": "^1.3.2",
     "@types/degit": "^2.8.6",
-    "@types/node": "^24.10.0"
+    "@types/node": "^24.10.0",
+    "bun-plugin-tailwind": "^0.1.2"
   }
 }

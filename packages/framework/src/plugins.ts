@@ -65,7 +65,7 @@ export function clientJSPlugin(): HS.Plugin {
 
           // Export a special object that can be used to render the client JS as a script tag
           const moduleCode = `// hyperspan:processed
-import { functionToString } from '@hyperspan/framework/assets';
+import { functionToString } from '@hyperspan/framework/client/js';
 
 // Original file contents
 ${contents}

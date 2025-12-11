@@ -1,8 +1,8 @@
 import { html, HSHtml } from '@hyperspan/html';
-import { createRoute, IS_PROD, returnHTMLResponse } from './server';
+import { createRoute, parsePath, returnHTMLResponse } from './server';
 import * as z from 'zod/v4';
-import { assetHash } from './utils';
 import type { Hyperspan as HS } from './types';
+import { assetHash } from './utils';
 
 /**
  * Actions = Form + route handler
@@ -18,13 +18,16 @@ import type { Hyperspan as HS } from './types';
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */;
 type HSActionResponse = HSHtml | void | null | Promise<HSHtml | void | null> | Response | Promise<Response>;
+export type HSFormHandler<T extends z.ZodTypeAny> = (
+  c: HS.Context,
+  { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
+) => HSActionResponse;
 export interface HSAction<T extends z.ZodTypeAny> {
-  _kind: string;
-  _route: string;
-  _form: (
-    c: HS.Context,
-    { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-  ) => HSActionResponse;
+  _kind: 'hsAction';
+  _name: string;
+  _path(): string;
+  _form: null | HSFormHandler<T>;
+  form(form: HSFormHandler<T>): HSAction<T>;
   post(
     handler: (
       c: HS.Context,
@@ -45,11 +48,8 @@ export interface HSAction<T extends z.ZodTypeAny> {
   fetch(request: Request): Response | Promise<Response>;
 }
 
-export function createAction<T extends z.ZodTypeAny>(params: {
-  schema?: T;
-  form: HSAction<T>['_form'];
-}) {
-  const { schema, form } = params;
+export function createAction<T extends z.ZodTypeAny>(params: { name: string; schema?: T }) {
+  const { name, schema } = params;
 
   let _handler: Parameters<HSAction<T>['post']>[0] | null = null;
   let _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null;
@@ -101,8 +101,19 @@ export function createAction<T extends z.ZodTypeAny>(params: {
 
   const api: HSAction<T> = {
     _kind: 'hsAction',
-    _route: `/__actions/${assetHash(form.toString())}`,
-    _form: form,
+    _name: name,
+    _path() {
+      return `/__actions/${assetHash(name)}`;
+    },
+    _form: null,
+    /**
+     * Form to render
+     * This will be wrapped in a <hs-action> web component and submitted via fetch()
+     */
+    form(form: HSFormHandler<T>) {
+      api._form = form;
+      return api;
+    },
     /**
      * Process form data
      *
@@ -131,8 +142,8 @@ export function createAction<T extends z.ZodTypeAny>(params: {
      * Get form renderer method
      */
     render(c: HS.Context, props?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }) {
-      const formContent = form ? form(c, props || {}) : null;
-      return formContent ? html`<hs-action url="${this._route}">${formContent}</hs-action>` : null;
+      const formContent = api._form ? api._form(c, props || {}) : null;
+      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>` : null;
     },
     /**
      * Run action route handler

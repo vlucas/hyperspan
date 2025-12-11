@@ -1,7 +1,6 @@
 import { html } from '@hyperspan/html';
 import type { Hyperspan as HS } from '../types';
 
-
 export const JS_PUBLIC_PATH = '/_hs/js';
 export const JS_ISLAND_PUBLIC_PATH = '/_hs/js/islands';
 export const JS_IMPORT_MAP = new Map<string, string>();
