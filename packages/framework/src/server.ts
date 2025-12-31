@@ -2,7 +2,6 @@ import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hype
 import { executeMiddleware } from './middleware';
 import type { Hyperspan as HS } from './types';
 import { clientJSPlugin } from './plugins';
-import { CSS_ROUTE_MAP } from './client/css';
 export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
@@ -135,6 +134,10 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
       _middleware['OPTIONS'] = handlerOptions?.middleware || [];
       return api;
     },
+    errorHandler(handler: HS.RouteHandler) {
+      _handlers['_ERROR'] = handler;
+      return api;
+    },
     /**
      * Add middleware specific to this route
      */
@@ -196,7 +199,16 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
         return routeContent;
       };
 
-      return executeMiddleware(context, [...globalMiddleware, ...methodMiddleware, methodHandler]);
+      // Run the route handler and any middleware
+      // If an error occurs, run the error handler if it exists
+      try {
+        return await executeMiddleware(context, [...globalMiddleware, ...methodMiddleware, methodHandler]);
+      } catch (e) {
+        if (_handlers['_ERROR']) {
+          return await (_handlers['_ERROR'](context) as Promise<Response>);
+        }
+        throw e;
+      }
     },
   };
 
@@ -329,11 +341,6 @@ export function getRunnableRoute(route: unknown, routeConfig?: HS.RouteConfig): 
 
   const kind = typeof route;
 
-  // Plain function - wrap in createRoute()
-  if (kind === 'function') {
-    return createRoute(routeConfig).get(route as HS.RouteHandler);
-  }
-
   // Module - get default and use it
   // @ts-ignore
   if (kind === 'object' && 'default' in route) {
@@ -355,7 +362,7 @@ export function isRunnableRoute(route: unknown): boolean {
   }
 
   const obj = route as { _kind: string; fetch: (request: Request) => Promise<Response> };
-  return 'hsRoute' === obj?._kind && 'fetch' in obj;
+  return typeof obj?._kind === 'string' && 'fetch' in obj;
 }
 
 /**
@@ -365,7 +372,7 @@ export function isValidRoutePath(path: string): boolean {
   const isHiddenRoute = path.includes('/__');
   const isTestFile = path.includes('.test') || path.includes('.spec');
 
-  return !isHiddenRoute && !isTestFile;
+  return !isHiddenRoute && !isTestFile && Boolean(path);
 }
 
 /**

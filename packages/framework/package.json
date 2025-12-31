@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.4",
   "description": "Hyperspan Web Framework",
   "main": "src/server.ts",
   "types": "src/server.ts",
@@ -10,8 +10,8 @@
   },
   "exports": {
     ".": {
-      "types": "./src/server.ts",
-      "default": "./src/server.ts"
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./server": {
       "types": "./src/server.ts",

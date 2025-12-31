@@ -1,8 +1,10 @@
 import { html, HSHtml } from '@hyperspan/html';
-import { createRoute, parsePath, returnHTMLResponse } from './server';
+import { createRoute, returnHTMLResponse } from './server';
 import * as z from 'zod/v4';
 import type { Hyperspan as HS } from './types';
 import { assetHash } from './utils';
+import * as actionsClient from './client/_hs/hyperspan-actions.client';
+import { renderClientJS } from './client/js';
 
 /**
  * Actions = Form + route handler
@@ -16,45 +18,15 @@ import { assetHash } from './utils';
  * 4. All validation and save logic is run on the server
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
- */;
-type HSActionResponse = HSHtml | void | null | Promise<HSHtml | void | null> | Response | Promise<Response>;
-export type HSFormHandler<T extends z.ZodTypeAny> = (
-  c: HS.Context,
-  { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-) => HSActionResponse;
-export interface HSAction<T extends z.ZodTypeAny> {
-  _kind: 'hsAction';
-  _name: string;
-  _path(): string;
-  _form: null | HSFormHandler<T>;
-  form(form: HSFormHandler<T>): HSAction<T>;
-  post(
-    handler: (
-      c: HS.Context,
-      { data }: { data?: Partial<z.infer<T>> }
-    ) => HSActionResponse
-  ): HSAction<T>;
-  error(
-    handler: (
-      c: HS.Context,
-      { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-    ) => HSActionResponse
-  ): HSAction<T>;
-  render(
-    c: HS.Context,
-    props?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-  ): HSActionResponse;
-  middleware: (middleware: Array<HS.MiddlewareFunction>) => HSAction<T>;
-  fetch(request: Request): Response | Promise<Response>;
-}
-
-export function createAction<T extends z.ZodTypeAny>(params: { name: string; schema?: T }) {
+ */
+export function createAction<T extends z.ZodTypeAny>(params: { name: string; schema?: T }): HS.Action<T> {
   const { name, schema } = params;
+  const path = `/__actions/${assetHash(name)}`;
 
-  let _handler: Parameters<HSAction<T>['post']>[0] | null = null;
-  let _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null;
+  let _handler: Parameters<HS.Action<T>['post']>[0] | null = null;
+  let _errorHandler: Parameters<HS.Action<T>['errorHandler']>[0] | null = null;
 
-  const route = createRoute()
+  const route = createRoute({ path, name })
     .get((c: HS.Context) => api.render(c))
     .post(async (c: HS.Context) => {
       // Parse form data
@@ -99,18 +71,18 @@ export function createAction<T extends z.ZodTypeAny>(params: { name: string; sch
       return await returnHTMLResponse(c, () => api.render(c, { data, error }), { status: 400 });
     });
 
-  const api: HSAction<T> = {
+  const api: HS.Action<T> = {
     _kind: 'hsAction',
-    _name: name,
+    _config: route._config,
     _path() {
-      return `/__actions/${assetHash(name)}`;
+      return path;
     },
     _form: null,
     /**
      * Form to render
      * This will be wrapped in a <hs-action> web component and submitted via fetch()
      */
-    form(form: HSFormHandler<T>) {
+    form(form: HS.ActionFormHandler<T>) {
       api._form = form;
       return api;
     },
@@ -125,32 +97,21 @@ export function createAction<T extends z.ZodTypeAny>(params: { name: string; sch
       return api;
     },
     /**
-     * Cusotm error handler if you want to display something other than the default
+     * Get form renderer method
      */
-    error(handler) {
+    render(c: HS.Context, props?: HS.ActionProps<T>) {
+      const formContent = api._form ? api._form(c, props || {}) : null;
+      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${renderClientJS(actionsClient)}` : null;
+    },
+    errorHandler(handler) {
       _errorHandler = handler;
       return api;
     },
-    /**
-     * Add middleware specific to this route
-     */
-    middleware(middleware) {
+    middleware(middleware: Array<HS.MiddlewareFunction>) {
       route.middleware(middleware);
       return api;
     },
-    /**
-     * Get form renderer method
-     */
-    render(c: HS.Context, props?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }) {
-      const formContent = api._form ? api._form(c, props || {}) : null;
-      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>` : null;
-    },
-    /**
-     * Run action route handler
-     */
-    fetch(request: Request) {
-      return route.fetch(request);
-    },
+    fetch: route.fetch,
   };
 
   return api;

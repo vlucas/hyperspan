@@ -46,6 +46,7 @@ export function clientJSPlugin(): HS.Plugin {
           const esmName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
           JS_IMPORT_MAP.set(esmName, `${JS_PUBLIC_PATH}/${esmName}.js`);
 
+          // Get the contents of the file to extract the exports
           const contents = await result.outputs[0].text();
           const exportLine = EXPORT_REGEX.exec(contents);
 
@@ -66,9 +67,6 @@ export function clientJSPlugin(): HS.Plugin {
           // Export a special object that can be used to render the client JS as a script tag
           const moduleCode = `// hyperspan:processed
 import { functionToString } from '@hyperspan/framework/client/js';
-
-// Original file contents
-${contents}
 
 // hyperspan:client-js-plugin
 export const __CLIENT_JS = {

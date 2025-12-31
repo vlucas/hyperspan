@@ -1,3 +1,6 @@
+import { HSHtml } from '@hyperspan/html';
+import * as z from 'zod/v4';
+
 /**
  * Hyperspan Types
  */
@@ -94,7 +97,6 @@ export namespace Hyperspan {
 
   export interface Route {
     _kind: 'hsRoute';
-    _name: string | undefined;
     _config: Hyperspan.RouteConfig;
     _path(): string;
     _methods(): string[];
@@ -104,7 +106,29 @@ export namespace Hyperspan {
     patch: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     delete: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    errorHandler: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Hyperspan.Route;
     fetch: (request: Request) => Promise<Response>;
   };
+
+  /**
+   * Action = Form + route handler
+   */
+  export type ActionResponse = HSHtml | void | null | Promise<HSHtml | void | null> | Response | Promise<Response>;
+  export type ActionProps<T extends z.ZodTypeAny> = { data?: Partial<z.infer<T>>; error?: z.ZodError | Error };
+  export type ActionFormHandler<T extends z.ZodTypeAny> = (
+    c: Context, props: ActionProps<T>
+  ) => ActionResponse;
+  export interface Action<T extends z.ZodTypeAny> {
+    _kind: 'hsAction';
+    _config: Hyperspan.RouteConfig;
+    _path(): string;
+    _form: null | ActionFormHandler<T>;
+    form(form: ActionFormHandler<T>): Action<T>;
+    render: (c: Context, props?: ActionProps<T>) => ActionResponse;
+    post: (handler: ActionFormHandler<T>) => Action<T>;
+    errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
+    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Action<T>;
+    fetch: (request: Request) => Promise<Response>;
+  }
 }
