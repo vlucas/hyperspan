@@ -1,5 +1,4 @@
 import { html } from '@hyperspan/html';
-import type { Hyperspan as HS } from '../types';
 
 export const JS_PUBLIC_PATH = '/_hs/js';
 export const JS_ISLAND_PUBLIC_PATH = '/_hs/js/islands';
@@ -59,23 +58,4 @@ export function functionToString(fn: any) {
   }
 
   return str;
-}
-
-/**
- * Island defaults
- */
-export const ISLAND_DEFAULTS: () => HS.ClientIslandOptions = () => ({
-  ssr: true,
-  loading: undefined,
-});
-
-export function renderIsland(Component: any, props: any, options = ISLAND_DEFAULTS()) {
-  // Render island with its own logic
-  if (Component.__HS_ISLAND?.render) {
-    return html.raw(Component.__HS_ISLAND.render(props, options));
-  }
-
-  throw new Error(
-    `Module ${Component.name} was not loaded with an island plugin! Did you forget to install an island plugin and add it to the 'islandPlugins' option in your hyperspan.config.ts file?`
-  );
 }

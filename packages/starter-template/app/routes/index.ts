@@ -1,6 +1,6 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
-import { renderIsland } from '@hyperspan/framework/client/js';
+import { renderPreactIsland } from '@hyperspan/plugin-preact';
 import MarketingLayout from '~/app/layouts/marketing-layout';
 import ClientCounter from '~/app/components/client-counter';
 import '~/app/styles/index.css';
@@ -24,7 +24,7 @@ export default createRoute().get((context) => {
 
       <section class="mt-10 p-8">
         <!-- Call ClientCounter with renderIsland() and pass props! -->
-        ${renderIsland(ClientCounter, { count: 5 })}
+        ${renderPreactIsland(ClientCounter, { count: 5 })}
       </section>
     </main>
   `;

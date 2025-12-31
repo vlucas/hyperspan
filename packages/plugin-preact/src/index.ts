@@ -3,6 +3,7 @@ import { assetHash } from '@hyperspan/framework/utils';
 import { IS_PROD } from '@hyperspan/framework/server';
 import { join, resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import { html } from '@hyperspan/html';
 
 // External ESM = https://esm.sh/preact@10.26.4/compat
 const PREACT_ISLAND_CACHE = new Map<string, string>();
@@ -153,4 +154,22 @@ ${componentName}.__HS_ISLAND = {
       },
     });
   };
+}
+
+
+/**
+ * Render a Preact island component
+ */
+export function renderPreactIsland(Component: any, props: any, options = {
+  ssr: true,
+  loading: undefined,
+}) {
+  // Render island with its own logic
+  if (Component.__HS_ISLAND?.render) {
+    return html.raw(Component.__HS_ISLAND.render(props, options));
+  }
+
+  throw new Error(
+    `Module ${Component.name} was not loaded with an island plugin! Did you forget to install an island plugin and add it to the 'islandPlugins' option in your hyperspan.config.ts file?`
+  );
 }
