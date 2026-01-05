@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "1.0.0-alpha.4",
+  "version": "1.0.0-alpha.5",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,

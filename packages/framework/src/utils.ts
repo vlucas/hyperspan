@@ -8,6 +8,67 @@ export function randomHash(): string {
   return createHash('md5').update(randomBytes(32).toString('hex')).digest('hex');
 }
 
+
+/**
+ * Normalize URL path
+ * Removes trailing slash and lowercases path
+ */
+const ROUTE_SEGMENT_REGEX = /(\[[a-zA-Z_\.]+\])/g;
+export function parsePath(urlPath: string): { path: string, params: string[] } {
+  const params: string[] = [];
+  urlPath = urlPath.replace('index', '').replace('.ts', '').replace('.js', '');
+
+  if (urlPath.startsWith('/')) {
+    urlPath = urlPath.substring(1);
+  }
+
+  if (urlPath.endsWith('/')) {
+    urlPath = urlPath.substring(0, urlPath.length - 1);
+  }
+
+  if (!urlPath) {
+    return { path: '/', params: [] };
+  }
+
+  // Dynamic params
+  if (ROUTE_SEGMENT_REGEX.test(urlPath)) {
+    urlPath = urlPath.replace(ROUTE_SEGMENT_REGEX, (match: string) => {
+      const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
+      params.push(paramName);
+
+      if (match.includes('...')) {
+        return '*';
+      } else {
+        return ':' + paramName;
+      }
+    });
+  }
+
+  // Only lowercase non-param segments (do not lowercase after ':')
+  return {
+    path: (
+      '/' +
+      urlPath
+        .split('/')
+        .map((segment) =>
+          segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
+        )
+        .join('/')
+    ),
+    params,
+  };
+}
+
+/**
+ * Is valid route path to add to server?
+ */
+export function isValidRoutePath(path: string): boolean {
+  const isHiddenRoute = path.includes('/__');
+  const isTestFile = path.includes('.test') || path.includes('.spec');
+
+  return !isHiddenRoute && !isTestFile && Boolean(path);
+}
+
 /**
  * Return JSON data structure for a given FormData or URLSearchParams object
  * Accounts for array fields (e.g. name="options[]" or <select multiple>)

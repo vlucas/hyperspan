@@ -2,6 +2,7 @@ import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hype
 import { executeMiddleware } from './middleware';
 import type { Hyperspan as HS } from './types';
 import { clientJSPlugin } from './plugins';
+import { parsePath } from './utils';
 export type { HS as Hyperspan };
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
@@ -369,16 +370,6 @@ export function isRunnableRoute(route: unknown): boolean {
 }
 
 /**
- * Is valid route path to add to server?
- */
-export function isValidRoutePath(path: string): boolean {
-  const isHiddenRoute = path.includes('/__');
-  const isTestFile = path.includes('.test') || path.includes('.spec');
-
-  return !isHiddenRoute && !isTestFile && Boolean(path);
-}
-
-/**
  * Basic error handling
  * @TODO: Should check for and load user-customizeable template with special name (app/__error.ts ?)
  */
@@ -472,54 +463,4 @@ export function createReadableStreamFromAsyncGenerator(output: AsyncGenerator) {
       }
     },
   });
-}
-
-/**
- * Normalize URL path
- * Removes trailing slash and lowercases path
- */
-const ROUTE_SEGMENT_REGEX = /(\[[a-zA-Z_\.]+\])/g;
-export function parsePath(urlPath: string): { path: string, params: string[] } {
-  const params: string[] = [];
-  urlPath = urlPath.replace('index', '').replace('.ts', '').replace('.js', '');
-
-  if (urlPath.startsWith('/')) {
-    urlPath = urlPath.substring(1);
-  }
-
-  if (urlPath.endsWith('/')) {
-    urlPath = urlPath.substring(0, urlPath.length - 1);
-  }
-
-  if (!urlPath) {
-    return { path: '/', params: [] };
-  }
-
-  // Dynamic params
-  if (ROUTE_SEGMENT_REGEX.test(urlPath)) {
-    urlPath = urlPath.replace(ROUTE_SEGMENT_REGEX, (match: string) => {
-      const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
-      params.push(paramName);
-
-      if (match.includes('...')) {
-        return '*';
-      } else {
-        return ':' + paramName;
-      }
-    });
-  }
-
-  // Only lowercase non-param segments (do not lowercase after ':')
-  return {
-    path: (
-      '/' +
-      urlPath
-        .split('/')
-        .map((segment) =>
-          segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
-        )
-        .join('/')
-    ),
-    params,
-  };
 }

@@ -1,6 +1,7 @@
 import { Glob } from 'bun';
-import { createServer, getRunnableRoute, IS_PROD, isValidRoutePath, parsePath } from '@hyperspan/framework';
+import { createServer, getRunnableRoute, IS_PROD } from '@hyperspan/framework';
 import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from '@hyperspan/framework/client/css';
+import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
 import { join } from 'node:path';
 import tailwind from "bun-plugin-tailwind"
 

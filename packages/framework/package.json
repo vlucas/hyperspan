@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0-alpha.6",
   "description": "Hyperspan Web Framework",
   "main": "src/server.ts",
   "types": "src/server.ts",
@@ -20,10 +20,6 @@
     "./middleware": {
       "types": "./src/middleware.ts",
       "default": "./src/middleware.ts"
-    },
-    "./middleware/zod": {
-      "types": "./src/middleware/zod.ts",
-      "default": "./src/middleware/zod.ts"
     },
     "./utils": {
       "types": "./src/utils.ts",

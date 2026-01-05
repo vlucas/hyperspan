@@ -1,7 +1,9 @@
 {
   "name": "@hyperspan/middleware-zod",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "module": "src/index.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "type": "module",
   "public": true,
   "publishConfig": {
