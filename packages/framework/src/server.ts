@@ -49,7 +49,10 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       method,
       headers,
       query,
-      body: req.body,
+      async text() { return req.text() },
+      async json<T = unknown>() { return await req.json() as T },
+      async formData<T = unknown>() { return await req.formData() as T },
+      async urlencoded() { return new URLSearchParams(await req.text()) },
     },
     res: {
       headers: new Headers(),

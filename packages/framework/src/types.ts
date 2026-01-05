@@ -42,7 +42,10 @@ export namespace Hyperspan {
       method: string; // Always uppercase
       headers: Headers; // Case-insensitive
       query: URLSearchParams;
-      body: any;
+      text: () => Promise<string>;
+      json<T = unknown>(): Promise<T>;
+      formData<T = unknown>(): Promise<T>;
+      urlencoded(): Promise<URLSearchParams>;
     };
     res: {
       headers: Headers; // Headers to merge with final outgoing response

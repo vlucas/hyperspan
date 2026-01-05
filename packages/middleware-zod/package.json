@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/middleware-zod",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "module": "src/index.ts",
   "type": "module",
   "public": true,
@@ -15,6 +15,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   }
 }
