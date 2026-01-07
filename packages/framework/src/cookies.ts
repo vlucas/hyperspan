@@ -42,7 +42,7 @@ export class Cookies implements HS.Cookies {
     if (this._encrypt) {
       value = this._encrypt(value);
     }
-    this._responseHeaders.set('Set-Cookie', serialize(name, value, options));
+    this._responseHeaders.append('Set-Cookie', serialize(name, value, options));
   }
 
   delete(name: string) {
