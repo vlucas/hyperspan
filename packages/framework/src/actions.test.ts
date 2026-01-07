@@ -1,92 +1,33 @@
 import { test, expect, describe } from 'bun:test';
-import { formDataToJSON, createAction } from './actions';
+import { createAction } from './actions';
 import { html, render, type HSHtml } from '@hyperspan/html';
 import { createContext } from './server';
 import type { Hyperspan as HS } from './types';
 import * as z from 'zod/v4';
 
-describe('formDataToJSON', () => {
-  test('formDataToJSON returns empty object for empty FormData', () => {
-    const formData = new FormData();
-    const result = formDataToJSON(formData);
-
-    expect(result).toEqual({});
-  });
-
-  test('formDataToJSON handles simple FormData object', () => {
-    const formData = new FormData();
-    formData.append('name', 'John Doe');
-    formData.append('email', 'john@example.com');
-    formData.append('age', '30');
-
-    const result = formDataToJSON(formData);
-
-    expect(result).toEqual({
-      name: 'John Doe',
-      email: 'john@example.com',
-      age: '30',
-    });
-  });
-
-  test('formDataToJSON handles complex FormData with nested fields', () => {
-    const formData = new FormData();
-    formData.append('user[firstName]', 'John');
-    formData.append('user[lastName]', 'Doe');
-    formData.append('user[email]', 'john@example.com');
-    formData.append('user[address][street]', '123 Main St');
-    formData.append('user[address][city]', 'New York');
-    formData.append('user[address][zip]', '10001');
-
-    const result = formDataToJSON(formData);
-
-    expect(result).toEqual({
-      user: {
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john@example.com',
-        address: {
-          street: '123 Main St',
-          city: 'New York',
-          zip: '10001',
-        },
-      },
-    } as any);
-  });
-
-  test('formDataToJSON handles FormData with array of values', () => {
-    const formData = new FormData();
-    formData.append('tags', 'javascript');
-    formData.append('tags', 'typescript');
-    formData.append('tags', 'nodejs');
-    formData.append('colors[]', 'red');
-    formData.append('colors[]', 'green');
-    formData.append('colors[]', 'blue');
-
-    const result = formDataToJSON(formData);
-
-    expect(result).toEqual({
-      tags: ['javascript', 'typescript', 'nodejs'],
-      colors: ['red', 'green', 'blue'],
-    });
-  });
-});
-
 describe('createAction', () => {
   test('creates an action with a simple form and no schema', async () => {
     const action = createAction({
-      form: (c: HS.Context) => {
-        return html`
+      name: 'test',
+      schema: z.object({
+        name: z.string().min(1, 'Name is required'),
+      }),
+    }).form((c) => {
+      return html`
           <form>
             <input type="text" name="name" />
             <button type="submit">Submit</button>
           </form>
         `;
-      },
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+          <p>Hello, ${data?.name}!</p>
+        `);
     });
 
     expect(action).toBeDefined();
     expect(action._kind).toBe('hsAction');
-    expect(action._route).toContain('/__actions/');
+    expect(action._path()).toContain('/__actions/');
 
     // Test render method
     const request = new Request('http://localhost:3000/');
@@ -106,17 +47,17 @@ describe('createAction', () => {
     });
 
     const action = createAction({
+      name: 'test',
       schema,
-      form: (c: HS.Context, { data }) => {
-        return html`
+    }).form((c, { data }) => {
+      return html`
           <form>
-            <input type="text" name="name" value="${data?.name || ''}" />
-            <input type="email" name="email" value="${data?.email || ''}" />
+            <input type="text" name="name" />
+            <input type="email" name="email" />
             <button type="submit">Submit</button>
           </form>
         `;
-      },
-    }).post(async (c: HS.Context, { data }) => {
+    }).post(async (c, { data }) => {
       return c.res.html(`
         <p>Hello, ${data?.name}!</p>
         <p>Your email is ${data?.email}.</p>
@@ -125,7 +66,7 @@ describe('createAction', () => {
 
     expect(action).toBeDefined();
     expect(action._kind).toBe('hsAction');
-    expect(action._route).toContain('/__actions/');
+    expect(action._path()).toContain('/__actions/');
 
     // Test render method
     const request = new Request('http://localhost:3000/');
@@ -142,7 +83,7 @@ describe('createAction', () => {
     formData.append('name', 'John Doe');
     formData.append('email', 'john@example.com');
 
-    const postRequest = new Request(`http://localhost:3000${action._route}`, {
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
       method: 'POST',
       body: formData,
     });
@@ -163,9 +104,10 @@ describe('createAction', () => {
     });
 
     const action = createAction({
+      name: 'test',
       schema,
-      form: (c: HS.Context, { data, error }) => {
-        return html`
+    }).form((c, { data, error }) => {
+      return html`
           <form>
             <input type="text" name="name" value="${data?.name || ''}" />
             ${error ? html`<div class="error">Validation failed</div>` : ''}
@@ -173,8 +115,7 @@ describe('createAction', () => {
             <button type="submit">Submit</button>
           </form>
         `;
-      },
-    }).post(async (c: HS.Context, { data }) => {
+    }).post(async (c, { data }) => {
       return c.res.html(`
         <p>Hello, ${data?.name}!</p>
         <p>Your email is ${data?.email}.</p>

@@ -1,9 +1,10 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
 import { executeMiddleware } from './middleware';
-import type { Hyperspan as HS } from './types';
 import { clientJSPlugin } from './plugins';
 import { parsePath } from './utils';
-export type { HS as Hyperspan };
+import { Cookies } from './cookies';
+
+import type { Hyperspan as HS } from './types';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -37,6 +38,19 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
   const params: HS.RouteParamsParser<path> = req?.params || {};
 
+  const merge = (response: Response) => {
+    // Convert headers to plain objects and merge (response headers override context headers)
+    const mergedHeaders = {
+      ...Object.fromEntries(headers.entries()),
+      ...Object.fromEntries(response.headers.entries()),
+    };
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: mergedHeaders,
+    });
+  };
+
   return {
     vars: {},
     route: {
@@ -50,20 +64,23 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       method,
       headers,
       query,
+      cookies: new Cookies(req),
       async text() { return req.text() },
       async json<T = unknown>() { return await req.json() as T },
       async formData<T = unknown>() { return await req.formData() as T },
       async urlencoded() { return new URLSearchParams(await req.text()) },
     },
     res: {
-      headers: new Headers(),
+      cookies: new Cookies(req, headers),
+      headers,
       raw: new Response(),
-      html: (html: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } }),
-      json: (json: any, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } }),
-      text: (text: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } }),
-      redirect: (url: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(null, { status: 302, headers: { Location: url, ...options?.headers } }),
-      error: (error: Error, options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response(error.message, { status: 500, ...options }),
-      notFound: (options?: { status?: number; headers?: Headers | Record<string, string> }) => new Response('Not Found', { status: 404, ...options }),
+      html: (html: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } })),
+      json: (json: any, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })),
+      text: (text: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } })),
+      redirect: (url: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(null, { status: 302, headers: { Location: url, ...options?.headers } })),
+      error: (error: Error, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(error.message, { status: 500, ...options })),
+      notFound: (options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response('Not Found', { status: 404, ...options })),
+      merge,
     },
   };
 }
@@ -79,7 +96,6 @@ export function createRoute(config: HS.RouteConfig = {}): HS.Route {
 
   const api: HS.Route = {
     _kind: 'hsRoute',
-    _name: config.name,
     _config: config,
     _methods: () => Object.keys(_handlers),
     _path() {

@@ -33,7 +33,7 @@ export function parsePath(urlPath: string): { path: string, params: string[] } {
   // Dynamic params
   if (ROUTE_SEGMENT_REGEX.test(urlPath)) {
     urlPath = urlPath.replace(ROUTE_SEGMENT_REGEX, (match: string) => {
-      const paramName = match.replace(/[^a-zA-Z_\.]+/g, '');
+      const paramName = match.replace(/[^a-zA-Z_\.]+/g, '').replace('...', '');
       params.push(paramName);
 
       if (match.includes('...')) {

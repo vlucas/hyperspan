@@ -29,6 +29,26 @@ export namespace Hyperspan {
     afterRoutesAdded?: (server: Hyperspan.Server) => void;
   };
 
+  export type CookieOptions = {
+    maxAge?: number;
+    domain?: string;
+    path?: string;
+    expires?: Date;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'lax' | 'strict' | true;
+  };
+  export type Cookies = {
+    _req: Request;
+    _responseHeaders: Headers | undefined;
+    _parsedCookies: Record<string, any>;
+    _encrypt: ((str: string) => string) | undefined;
+    _decrypt: ((str: string) => string) | undefined;
+    get: (name: string) => string | undefined;
+    set: (name: string, value: string, options?: CookieOptions) => void;
+    delete: (name: string) => void;
+  }
+
   export interface Context {
     vars: Record<string, any>;
     route: {
@@ -42,12 +62,14 @@ export namespace Hyperspan {
       method: string; // Always uppercase
       headers: Headers; // Case-insensitive
       query: URLSearchParams;
+      cookies: Hyperspan.Cookies;
       text: () => Promise<string>;
       json<T = unknown>(): Promise<T>;
-      formData<T = unknown>(): Promise<T>;
+      formData(): Promise<FormData>;
       urlencoded(): Promise<URLSearchParams>;
     };
     res: {
+      cookies: Hyperspan.Cookies;
       headers: Headers; // Headers to merge with final outgoing response
       html: (html: string, options?: { status?: number; headers?: Record<string, string> }) => Response
       json: (json: any, options?: { status?: number; headers?: Record<string, string> }) => Response;
@@ -55,6 +77,7 @@ export namespace Hyperspan {
       redirect: (url: string, options?: { status?: number; headers?: Record<string, string> }) => Response;
       error: (error: Error, options?: { status?: number; headers?: Record<string, string> }) => Response;
       notFound: (options?: { status?: number; headers?: Record<string, string> }) => Response;
+      merge: (response: Response) => Response;
       raw: Response;
     };
   };

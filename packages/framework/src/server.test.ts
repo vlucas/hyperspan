@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { createRoute, createServer } from './server';
+import { createRoute, createServer, createContext } from './server';
 import type { Hyperspan as HS } from './types';
 
 test('route fetch() returns a Response', async () => {
@@ -88,4 +88,125 @@ test('returns 405 when route path matches but HTTP method does not', async () =>
   expect(response.status).toBe(405);
   const text = await response.text();
   expect(text).toContain('Method not allowed');
+});
+
+test('createContext() can get and set cookies', () => {
+  // Create a request with cookies in the Cookie header
+  const request = new Request('http://localhost:3000/', {
+    headers: {
+      'Cookie': 'sessionId=abc123; theme=dark; userId=42',
+    },
+  });
+
+  // Create context from the request
+  const context = createContext(request);
+
+  // Test reading cookies from request
+  expect(context.req.cookies.get('sessionId')).toBe('abc123');
+  expect(context.req.cookies.get('theme')).toBe('dark');
+  expect(context.req.cookies.get('userId')).toBe('42');
+  expect(context.req.cookies.get('nonExistent')).toBeUndefined();
+
+  // Test setting a simple cookie in response
+  context.res.cookies.set('newCookie', 'newValue');
+  let setCookieHeader = context.res.headers.get('Set-Cookie');
+  expect(setCookieHeader).toBeTruthy();
+  expect(setCookieHeader).toContain('newCookie=newValue');
+
+  // Test setting a cookie with options (this will overwrite the previous Set-Cookie header)
+  context.res.cookies.set('secureCookie', 'secureValue', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    maxAge: 3600,
+  });
+
+  // Verify Set-Cookie header contains the last cookie set
+  setCookieHeader = context.res.headers.get('Set-Cookie');
+  expect(setCookieHeader).toBeTruthy();
+  expect(setCookieHeader).toContain('secureCookie=secureValue');
+  expect(setCookieHeader).toContain('HttpOnly');
+  expect(setCookieHeader).toContain('Secure');
+  expect(setCookieHeader).toContain('SameSite=Strict');
+  expect(setCookieHeader).toContain('Max-Age=3600');
+
+  // Verify the previous cookie was overwritten
+  expect(setCookieHeader).not.toContain('newCookie=newValue');
+
+  // Test deleting a cookie
+  context.res.cookies.delete('sessionId');
+  setCookieHeader = context.res.headers.get('Set-Cookie');
+  expect(setCookieHeader).toBeTruthy();
+  if (setCookieHeader) {
+    expect(setCookieHeader).toContain('sessionId=');
+    expect(setCookieHeader).toContain('Expires=');
+    // Verify it's set to expire in the past (deleted)
+    const expiresMatch = setCookieHeader.match(/Expires=([^;]+)/);
+    expect(expiresMatch).toBeTruthy();
+    if (expiresMatch) {
+      const expiresDate = new Date(expiresMatch[1]);
+      expect(expiresDate.getTime()).toBeLessThanOrEqual(new Date(0).getTime());
+    }
+  }
+});
+
+test('createContext() merge() function preserves custom headers when using response methods', () => {
+  // Create a request
+  const request = new Request('http://localhost:3000/');
+
+  // Create context from the request
+  const context = createContext(request);
+
+  // Set custom headers on the context response
+  context.res.headers.set('X-Custom-Header', 'custom-value');
+  context.res.headers.set('X-Another-Header', 'another-value');
+  context.res.headers.set('Authorization', 'Bearer token123');
+
+  // Use html() method which should merge headers
+  const response = context.res.html('<h1>Test</h1>');
+
+  // Verify the response has both the custom headers and the Content-Type header
+  expect(response.headers.get('X-Custom-Header')).toBe('custom-value');
+  expect(response.headers.get('X-Another-Header')).toBe('another-value');
+  expect(response.headers.get('Authorization')).toBe('Bearer token123');
+  expect(response.headers.get('Content-Type')).toBe('text/html; charset=UTF-8');
+
+  // Verify response body is correct
+  expect(response.status).toBe(200);
+});
+
+test('createContext() merge() function preserves custom headers with json() method', () => {
+  const request = new Request('http://localhost:3000/');
+  const context = createContext(request);
+
+  // Set custom headers
+  context.res.headers.set('X-API-Version', 'v1');
+  context.res.headers.set('X-Request-ID', 'req-123');
+
+  // Use json() method
+  const response = context.res.json({ message: 'Hello' });
+
+  // Verify headers are merged
+  expect(response.headers.get('X-API-Version')).toBe('v1');
+  expect(response.headers.get('X-Request-ID')).toBe('req-123');
+  expect(response.headers.get('Content-Type')).toBe('application/json');
+});
+
+test('createContext() merge() function allows response headers to override context headers', () => {
+  const request = new Request('http://localhost:3000/');
+  const context = createContext(request);
+
+  // Set a header on context
+  context.res.headers.set('X-Header', 'context-value');
+
+  // Use html() with options that include the same header (should override)
+  const response = context.res.html('<h1>Test</h1>', {
+    headers: {
+      'X-Header': 'response-value',
+    },
+  });
+
+  // Response header should override context header
+  expect(response.headers.get('X-Header')).toBe('response-value');
+  expect(response.headers.get('Content-Type')).toBe('text/html; charset=UTF-8');
 });
