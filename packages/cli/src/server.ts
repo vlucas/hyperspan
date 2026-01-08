@@ -59,80 +59,98 @@ export async function addDirectoryAsRoutes(
   const buildDir = join(CWD, '.build');
   const cssPublicDir = join(CWD, server._config.publicDir, CSS_PUBLIC_PATH);
 
-  // Scan directory for TypeScript files
-  for await (const file of routesGlob.scan(directoryPath)) {
-    const filePath = join(directoryPath, file);
+  try {
+    // Scan directory for TypeScript files
+    for await (const file of routesGlob.scan(directoryPath)) {
+      const filePath = join(directoryPath, file);
 
-    // Hidden directories and files start with a double underscore.
-    // These do not get added to the routes. Nothing nested under them gets added to the routes either.
-    if (filePath.includes('/__')) {
-      continue;
+      // Hidden directories and files start with a double underscore.
+      // These do not get added to the routes. Nothing nested under them gets added to the routes either.
+      if (filePath.includes('/__')) {
+        continue;
+      }
+
+      files.push(filePath);
     }
-
-    files.push(filePath);
+  } catch (error) {
+    console.error(`[Hyperspan] Directory not found: ${directoryPath}`);
   }
 
   const routeMap: { route: string; file: string }[] = [];
   const routes: Array<HS.Route> = (await Promise.all(
     files.map(async (filePath) => {
-      const relativeFilePath = filePath.split(relativeAppPath).pop() || '';
-      if (!isValidRoutePath(relativeFilePath)) {
-        return null;
-      }
-      const module = await import(filePath);
-      const route = getRunnableRoute(module);
-      const parsedPath = parsePath(relativeFilePath);
-
-      // If route has a _path() method that returns a meaningful path, use it
-      // Otherwise, parse path from file path
-      let path = parsedPath.path;
-      if (typeof route._path === 'function') {
-        const routePath = route._path();
-        // If _path() returns a meaningful path (not just '/'), use it
-        if (routePath && routePath !== '/') {
-          path = routePath;
+      try {
+        const relativeFilePath = filePath.split(relativeAppPath).pop() || '';
+        if (!isValidRoutePath(relativeFilePath)) {
+          return null;
         }
-      }
+        const module = await import(filePath);
 
-      let cssFiles: string[] = [];
+        const route = getRunnableRoute(module);
 
-      // Build the route just for the CSS files (expensive, but easiest way to do CSS compilation by route)
-      // @TODO: Optimize this at some later date... This is O(n) for each route and doesn't scale well for large projects.
-      // @TODO: This will also currently re-compile the same CSS file(s) that are included in multiple routes, which is dumb.
-      const buildResult = await Bun.build({
-        plugins: [tailwind],
-        entrypoints: [filePath],
-        outdir: buildDir,
-        naming: `${relativeAppPath}/${path.endsWith('/') ? path + 'index' : path}-[hash].[ext]`,
-        minify: IS_PROD,
-        format: 'esm',
-        target: 'node',
-      });
+        const parsedPath = parsePath(relativeFilePath);
 
-      // Move CSS files to the public directory
-      for (const output of buildResult.outputs) {
-        if (output.path.endsWith('.css')) {
-          const cssFileName = output.path.split('/').pop()!;
-          await Bun.write(join(cssPublicDir, cssFileName), Bun.file(output.path));
-          cssFiles.push(cssFileName);
+        // If route has a _path() method that returns a meaningful path, use it
+        // Otherwise, parse path from file path
+        let path = parsedPath.path;
+        if (typeof route._path === 'function') {
+          const routePath = route._path();
+          // If _path() returns a meaningful path (not just '/'), use it
+          if (routePath && routePath !== '/') {
+            path = routePath;
+          }
         }
+
+        let cssFiles: string[] = [];
+
+        // Build the route just for the CSS files (expensive, but easiest way to do CSS compilation by route)
+        // @TODO: Optimize this at some later date... This is O(n) for each route and doesn't scale well for large projects.
+        // @TODO: This will also currently re-compile the same CSS file(s) that are included in multiple routes, which is dumb.
+        const buildResult = await Bun.build({
+          plugins: [tailwind],
+          entrypoints: [filePath],
+          outdir: buildDir,
+          naming: `${relativeAppPath}/${path.endsWith('/') ? path + 'index' : path}-[hash].[ext]`,
+          minify: IS_PROD,
+          format: 'esm',
+          target: 'node',
+        });
+
+        // Move CSS files to the public directory
+        for (const output of buildResult.outputs) {
+          if (output.path.endsWith('.css')) {
+            const cssFileName = output.path.split('/').pop()!;
+            await Bun.write(join(cssPublicDir, cssFileName), Bun.file(output.path));
+            cssFiles.push(cssFileName);
+          }
+        }
+
+        // Set route path based on the file path (if not already set)
+        if (!route._config.path) {
+          route._config.path = path;
+        }
+
+        if (cssFiles.length > 0) {
+          route._config.cssImports = cssFiles;
+          CSS_ROUTE_MAP.set(path, cssFiles);
+        }
+
+        routeMap.push({ route: path, file: filePath.replace(CWD, '') });
+
+        return route;
+
+      } catch (error) {
+        console.error(`[Hyperspan] Error loading route: ${filePath}`);
+        console.error(error);
+        process.exit(1);
       }
-
-      // Set route path based on the file path (if not already set)
-      if (!route._config.path) {
-        route._config.path = path;
-      }
-
-      if (cssFiles.length > 0) {
-        route._config.cssImports = cssFiles;
-        CSS_ROUTE_MAP.set(path, cssFiles);
-      }
-
-      routeMap.push({ route: path, file: filePath.replace(CWD, '') });
-
-      return route;
     })
   )).filter((route) => route !== null);
+
+  if (routeMap.length === 0) {
+    console.log(`[Hyperspan] No routes found in ${relativeDirectory}`);
+    return;
+  }
 
   if (startConfig.development) {
     console.table(routeMap);

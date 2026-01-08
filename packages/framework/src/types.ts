@@ -49,6 +49,32 @@ export namespace Hyperspan {
     delete: (name: string) => void;
   }
 
+  export type HSRequest = {
+    url: URL;
+    raw: Request;
+    method: string; // Always uppercase
+    headers: Headers; // Case-insensitive
+    query: URLSearchParams;
+    cookies: Hyperspan.Cookies;
+    text: () => Promise<string>;
+    json<T = unknown>(): Promise<T>;
+    formData(): Promise<FormData>;
+    urlencoded(): Promise<URLSearchParams>;
+  };
+
+  export type HSResponse = {
+    cookies: Hyperspan.Cookies;
+    headers: Headers; // Headers to merge with final outgoing response
+    html: (html: string, options?: ResponseInit) => Response
+    json: (json: any, options?: ResponseInit) => Response;
+    text: (text: string, options?: ResponseInit) => Response;
+    redirect: (url: string, options?: ResponseInit) => Response;
+    error: (error: Error, options?: ResponseInit) => Response;
+    notFound: (options?: ResponseInit) => Response;
+    merge: (response: Response) => Response;
+    raw: Response;
+  };
+
   export interface Context {
     vars: Record<string, any>;
     route: {
@@ -56,30 +82,8 @@ export namespace Hyperspan {
       params: Record<string, string>;
       cssImports?: string[];
     }
-    req: {
-      url: URL;
-      raw: Request;
-      method: string; // Always uppercase
-      headers: Headers; // Case-insensitive
-      query: URLSearchParams;
-      cookies: Hyperspan.Cookies;
-      text: () => Promise<string>;
-      json<T = unknown>(): Promise<T>;
-      formData(): Promise<FormData>;
-      urlencoded(): Promise<URLSearchParams>;
-    };
-    res: {
-      cookies: Hyperspan.Cookies;
-      headers: Headers; // Headers to merge with final outgoing response
-      html: (html: string, options?: { status?: number; headers?: Record<string, string> }) => Response
-      json: (json: any, options?: { status?: number; headers?: Record<string, string> }) => Response;
-      text: (text: string, options?: { status?: number; headers?: Record<string, string> }) => Response;
-      redirect: (url: string, options?: { status?: number; headers?: Record<string, string> }) => Response;
-      error: (error: Error, options?: { status?: number; headers?: Record<string, string> }) => Response;
-      notFound: (options?: { status?: number; headers?: Record<string, string> }) => Response;
-      merge: (response: Response) => Response;
-      raw: Response;
-    };
+    req: HSRequest;
+    res: HSResponse;
   };
 
   export type ClientIslandOptions = {

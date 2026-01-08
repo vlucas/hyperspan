@@ -7,12 +7,13 @@
     },
     "packages/cli": {
       "name": "hyperspan",
-      "version": "1.0.0-alpha.6",
+      "version": "1.0.0-alpha.8",
       "bin": {
         "hyperspan": "src/index.ts",
       },
       "dependencies": {
-        "@hyperspan/framework": "^1.0.0-alpha.7",
+        "@hyperspan/framework": "^1.0.0-alpha",
+        "bun-plugin-tailwind": "^0.1.2",
         "commander": "^14.0.2",
         "degit": "^2.8.4",
       },
@@ -20,12 +21,11 @@
         "@types/bun": "^1.3.2",
         "@types/degit": "^2.8.6",
         "@types/node": "^24.10.0",
-        "bun-plugin-tailwind": "^0.1.2",
       },
     },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "1.0.0-alpha.7",
+      "version": "1.0.0-alpha.11",
       "dependencies": {
         "@hyperspan/html": "^1.0.0-alpha",
         "zod": "^4.1.12",
@@ -140,8 +140,6 @@
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
     "@hyperspan/plugin-preact/@types/bun": ["@types/bun@1.3.3", "", { "dependencies": { "bun-types": "1.3.3" } }, "sha512-ogrKbJ2X5N0kWLLFKeytG0eHDleBYtngtlbu9cyBKFtNL3cnpDZkNdQj8flVf6WTZUX5ulI9AY1oa7ljhSrp+g=="],
-
-    "hyperspan/@hyperspan/framework": ["@hyperspan/framework@1.0.0-alpha.7", "", { "dependencies": { "@hyperspan/html": "^1.0.0-alpha", "zod": "^4.1.12" } }, "sha512-UelL9Yx03Ltaz1r2pbNqmwMWQOygTpOfEHWj0EuNzuS8eQuxUFnGU+umqw+ZTI3sRXK1D18hWC/iFkTXtTAR/A=="],
 
     "@hyperspan/plugin-preact/@types/bun/bun-types": ["bun-types@1.3.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-z3Xwlg7j2l9JY27x5Qn3Wlyos8YAp0kKRlrePAOjgjMGS5IG6E7Jnlx736vH9UVI4wUICwwhC9anYL++XeOgTQ=="],
   }

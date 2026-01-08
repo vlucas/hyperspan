@@ -5,12 +5,15 @@ import { parsePath } from './utils';
 import { Cookies } from './cookies';
 
 import type { Hyperspan as HS } from './types';
+import { RequestOptions } from 'node:http';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 
-export class HTTPException extends Error {
-  constructor(public status: number, message?: string) {
-    super(message);
+export class HTTPResponseException extends Error {
+  public _response?: Response;
+  constructor(body: string | undefined, options?: ResponseInit) {
+    super(body);
+    this._response = new Response(body, options);
   }
 }
 
@@ -74,12 +77,12 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       cookies: new Cookies(req, headers),
       headers,
       raw: new Response(),
-      html: (html: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } })),
-      json: (json: any, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })),
-      text: (text: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } })),
-      redirect: (url: string, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(null, { status: 302, headers: { Location: url, ...options?.headers } })),
-      error: (error: Error, options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response(error.message, { status: 500, ...options })),
-      notFound: (options?: { status?: number; headers?: Headers | Record<string, string> }) => merge(new Response('Not Found', { status: 404, ...options })),
+      html: (html: string, options?: ResponseInit) => merge(new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } })),
+      json: (json: any, options?: ResponseInit) => merge(new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })),
+      text: (text: string, options?: ResponseInit) => merge(new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } })),
+      redirect: (url: string, options?: ResponseInit) => merge(new Response(null, { status: 302, headers: { Location: url, ...options?.headers } })),
+      error: (error: Error, options?: ResponseInit) => merge(new Response(error.message, { status: 500, ...options })),
+      notFound: (options?: ResponseInit) => merge(new Response('Not Found', { status: 404, ...options })),
       merge,
     },
   };
@@ -398,8 +401,8 @@ async function showErrorReponse(
   const message = err.message || 'Internal Server Error';
 
   // Send correct status code if HTTPException
-  if (err instanceof HTTPException) {
-    status = err.status;
+  if (err instanceof HTTPResponseException) {
+    status = err._response?.status ?? 500;
   }
 
   const stack = !IS_PROD && err.stack ? err.stack.split('\n').slice(1).join('\n') : '';

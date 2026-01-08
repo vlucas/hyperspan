@@ -6,5 +6,5 @@ export default createRoute().get(async (context) => {
 
   context.res.headers.append('X-Powered-By', 'Hyperspan');
 
-  return { foo: 'bar' };
+  return Response.json({ foo: 'bar' });
 });

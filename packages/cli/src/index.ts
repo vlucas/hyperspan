@@ -43,9 +43,19 @@ program
  */
 program
   .command('start')
+  .alias('dev')
   .option('--dir <path>', 'directory of your hyperspan project', './')
   .description('Start the server')
-  .action(async (options) => {
+  .action(async function (options) {
+
+    const IS_DEV_MODE = process.argv.includes('dev');
+
+    // Developer mode (extra logging, etc.)
+    if (IS_DEV_MODE) {
+      console.log('[Hyperspan] Developer mode enabled 🛠️');
+      process.env.NODE_ENV = 'development';
+    }
+
     // Ensure we are in a hyperspan project
     const serverFile = `${options.dir}/app/routes`;
 
@@ -59,7 +69,7 @@ program
     console.log('\n========================================');
     console.log('[Hyperspan] Starting...');
 
-    const server = await startServer({ development: process.env.NODE_ENV !== 'production' });
+    const server = await startServer({ development: IS_DEV_MODE });
 
     const routes: Record<string, (request: Request) => Promise<Response>> = {};
     for (const route of server._routes) {
