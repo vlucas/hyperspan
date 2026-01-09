@@ -35,14 +35,28 @@ export default createConfig({
   return configModule;
 }
 
+/**
+ * Create a Hyperspan server instance with all routes and actions added
+ */
 export async function createHyperspanServer(startConfig: startConfig = {}): Promise<HS.Server> {
   console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
   const server = await createServer(config);
+
+  if (config.beforeRoutesAdded) {
+    config.beforeRoutesAdded(server);
+  }
+
   console.log('[Hyperspan] Adding routes...');
   await addDirectoryAsRoutes(server, 'routes', startConfig);
+
   console.log('[Hyperspan] Adding actions...');
   await addDirectoryAsRoutes(server, 'actions', startConfig);
+
+  if (config.afterRoutesAdded) {
+    config.afterRoutesAdded(server);
+  }
+
   return server;
 }
 
