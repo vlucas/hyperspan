@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Hyperspan Plugin for Preact",
   "main": "src/index.ts",
   "types": "src/index.ts",

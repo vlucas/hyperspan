@@ -128,6 +128,15 @@ export async function addDirectoryAsRoutes(
         // Set route path based on the file path (if not already set)
         if (!route._config.path) {
           route._config.path = path;
+
+          // Initialize params object if it doesn't exist
+          if (parsedPath.params.length > 0) {
+            const params = route._config.params ?? {};
+            parsedPath.params.forEach(param => {
+              params[param] = undefined;
+            });
+            route._config.params = params;
+          }
         }
 
         if (cssFiles.length > 0) {

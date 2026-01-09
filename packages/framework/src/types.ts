@@ -77,11 +77,7 @@ export namespace Hyperspan {
 
   export interface Context {
     vars: Record<string, any>;
-    route: {
-      path: string;
-      params: Record<string, string>;
-      cssImports?: string[];
-    }
+    route: RouteConfig;
     req: HSRequest;
     res: HSResponse;
   };
@@ -94,6 +90,7 @@ export namespace Hyperspan {
   export type RouteConfig = {
     name?: string;
     path?: string;
+    params?: Record<string, string | undefined>;
     cssImports?: string[];
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;

@@ -160,7 +160,7 @@ ${componentName}.__HS_ISLAND = {
 /**
  * Render a Preact island component
  */
-export function renderPreactIsland(Component: any, props: any, options = {
+export function renderPreactIsland(Component: any, props: any = {}, options = {
   ssr: true,
   loading: undefined,
 }) {

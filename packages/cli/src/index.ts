@@ -73,7 +73,9 @@ program
 
     const routes: Record<string, (request: Request) => Promise<Response>> = {};
     for (const route of server._routes) {
-      routes[route._path()] = (request: Request) => route.fetch(request);
+      routes[route._path()] = (request: Request) => {
+        return route.fetch(request);
+      }
     }
 
     const httpServer = Bun.serve({
@@ -118,7 +120,7 @@ program
 
     const server = await import(serverFile);
 
-    console.log(server);
+    // @TODO: Build the project for SSG...
   });
 
 program.parse();

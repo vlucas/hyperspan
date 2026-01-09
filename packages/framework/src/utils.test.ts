@@ -149,13 +149,13 @@ describe('parsePath', () => {
   test('parsePath handles catch-all param with spread', () => {
     const result = parsePath('users/[...slug]');
     expect(result.path).toBe('/users/*');
-    expect(result.params).toEqual(['slug']);
+    expect(result.params).toEqual(['...slug']);
   });
 
   test('parsePath handles catch-all param at root', () => {
     const result = parsePath('[...slug]');
     expect(result.path).toBe('/*');
-    expect(result.params).toEqual(['slug']);
+    expect(result.params).toEqual(['...slug']);
   });
 
   test('parsePath preserves param names in path but converts format', () => {

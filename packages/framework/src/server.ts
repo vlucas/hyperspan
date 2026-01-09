@@ -39,7 +39,15 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const headers = new Headers(req.headers);
   const path = route?._path() || '/';
   // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
-  const params: HS.RouteParamsParser<path> = req?.params || {};
+  const params: HS.RouteParamsParser<path> & Record<string, string | undefined> = Object.assign({}, req?.params || {}, route?._config.params || {});
+
+  // Replace catch-all param with the value from the URL path
+  const catchAllParam = Object.keys(params).find(key => key.startsWith('...'));
+  if (catchAllParam && path.includes('/*')) {
+    const catchAllValue = url.pathname.split(path.replace('/*', '/')).pop();
+    params[catchAllParam.replace('...', '')] = catchAllValue;
+    delete params[catchAllParam];
+  }
 
   const merge = (response: Response) => {
     // Convert headers to plain objects and merge (response headers override context headers)
