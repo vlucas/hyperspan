@@ -170,6 +170,6 @@ export function renderPreactIsland(Component: any, props: any = {}, options = {
   }
 
   throw new Error(
-    `Module ${Component.name} was not loaded with an island plugin! Did you forget to install an island plugin and add it to the 'islandPlugins' option in your hyperspan.config.ts file?`
+    `Module ${Component.name} was not loaded with an island plugin! Did you forget to install an island plugin and add it to the 'plugins' option in your hyperspan.config.ts file?`
   );
 }

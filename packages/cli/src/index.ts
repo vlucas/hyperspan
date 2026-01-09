@@ -5,9 +5,8 @@ import degit from 'degit';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import packageJson from '../package.json';
-import { startServer } from './server';
-import { createContext } from '@hyperspan/framework';
-import { join } from 'node:path';
+import { createHyperspanServer } from './server';
+import { startBunServer } from './runtimes/bun';
 
 const program = new Command();
 
@@ -69,38 +68,13 @@ program
     console.log('\n========================================');
     console.log('[Hyperspan] Starting...');
 
-    const server = await startServer({ development: IS_DEV_MODE });
-
-    const routes: Record<string, (request: Request) => Promise<Response>> = {};
-    for (const route of server._routes) {
-      routes[route._path()] = (request: Request) => {
-        return route.fetch(request);
-      }
-    }
-
-    const httpServer = Bun.serve({
-      routes,
-      fetch: async (request: Request) => {
-        // Serve static files from the public directory
-        const url = new URL(request.url);
-        if (url.pathname.startsWith('/_hs/')) {
-          return new Response(Bun.file(join('./', server._config.publicDir, url.pathname)));
-        }
-
-        // Other static file from the public directory
-        const file = Bun.file(join('./', server._config.publicDir, url.pathname))
-        const fileExists = await file.exists()
-        if (fileExists) {
-          return new Response(file);
-        }
-
-        // Not found
-        return createContext(request).res.notFound();
-      },
-    });
+    const server = await createHyperspanServer({ development: IS_DEV_MODE });
+    const httpServer = startBunServer(server);
 
     console.log(`[Hyperspan] Server started on http://localhost:${httpServer.port} (Press Ctrl+C to stop)`);
     console.log('========================================\n');
+
+    return httpServer;
   });
 
 program

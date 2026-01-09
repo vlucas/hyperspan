@@ -65,6 +65,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   return {
     vars: {},
     route: {
+      name: route?._config.name || undefined,
       path,
       params: params,
       cssImports: route ? route._config.cssImports ?? [] : [],
@@ -101,7 +102,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
  * Define a route that can handle a direct HTTP request.
  * Route handlers should return a HSHtml or Response object
  */
-export function createRoute(config: HS.RouteConfig = {}): HS.Route {
+export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
   let _middleware: Record<string, Array<HS.MiddlewareFunction>> = { '*': [] };
 

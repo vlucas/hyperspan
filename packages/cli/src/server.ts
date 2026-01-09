@@ -35,7 +35,7 @@ export default createConfig({
   return configModule;
 }
 
-export async function startServer(startConfig: startConfig = {}): Promise<HS.Server> {
+export async function createHyperspanServer(startConfig: startConfig = {}): Promise<HS.Server> {
   console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
   const server = await createServer(config);

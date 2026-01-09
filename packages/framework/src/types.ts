@@ -88,10 +88,10 @@ export namespace Hyperspan {
   };
 
   export type RouteConfig = {
-    name?: string;
-    path?: string;
-    params?: Record<string, string | undefined>;
-    cssImports?: string[];
+    name: string | undefined;
+    path: string;
+    params: Record<string, string | undefined>;
+    cssImports: string[];
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
   export type RouteHandlerOptions = {
@@ -124,7 +124,7 @@ export namespace Hyperspan {
 
   export interface Route {
     _kind: 'hsRoute';
-    _config: Hyperspan.RouteConfig;
+    _config: Partial<Hyperspan.RouteConfig>;
     _path(): string;
     _methods(): string[];
     get: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
