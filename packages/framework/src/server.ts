@@ -1,11 +1,9 @@
-import { HSHtml, html, isHSHtml, renderStream, renderAsync, render } from '@hyperspan/html';
+import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from '@hyperspan/html';
 import { executeMiddleware } from './middleware';
-import { clientJSPlugin } from './plugins';
 import { parsePath } from './utils';
 import { Cookies } from './cookies';
 
 import type { Hyperspan as HS } from './types';
-import { RequestOptions } from 'node:http';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -25,7 +23,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
     ...config,
     appDir: config.appDir ?? './app',
     publicDir: config.publicDir ?? './public',
-    plugins: [clientJSPlugin(), ...(config.plugins ?? [])],
+    plugins: config.plugins ?? [],
   };
 }
 
@@ -228,6 +226,11 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
           return returnHTMLResponse(context, () => routeContent);
         }
 
+        const contentType = _typeOf(routeContent);
+        if (contentType === 'generator') {
+          return new StreamResponse(routeContent as AsyncGenerator);
+        }
+
         return routeContent;
       };
 
@@ -338,13 +341,23 @@ export async function returnHTMLResponse(
     // Render HSHtml if returned from route handler
     if (isHSHtml(routeContent)) {
       // @TODO: Move this to config or something...
-      const streamOpt = context.req.query.get('__nostream');
-      const streamingEnabled = (streamOpt !== undefined ? streamOpt : true);
+      const disableStreaming = context.req.query.get('__nostream') ?? '0';
+      const streamingEnabled = disableStreaming !== '1';
 
       // Stream only if enabled and there is async content to stream
       if (streamingEnabled && (routeContent as HSHtml).asyncContent?.length > 0) {
         return new StreamResponse(
-          renderStream(routeContent as HSHtml),
+          renderStream(routeContent as HSHtml, {
+            renderChunk: (chunk) => {
+              return html`
+              <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>
+              <script>
+                window._hsc = window._hsc || [];
+                window._hsc.push({id: "${chunk.id}" });
+              </script>
+            `;
+            }
+          }),
           responseOptions
         ) as Response;
       } else {

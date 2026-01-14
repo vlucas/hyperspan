@@ -178,12 +178,15 @@ export async function renderAsync(tmpl: HSHtml): Promise<string> {
   return content;
 }
 
+export type RenderStreamOptions = {
+  renderChunk?: (chunk: { id: string; content: string }) => HSHtml;
+}
 /**
  * Render HTML as a stream (async generator)
  * Uses Promise.race() to output new resolved chunks of HTML as soon as each promise resolves.
  * Primary render method for streaming HTML from server
  */
-export async function* renderStream(tmpl: HSHtml): AsyncGenerator<string> {
+export async function* renderStream(tmpl: HSHtml, { renderChunk }: RenderStreamOptions = {}): AsyncGenerator<string> {
   yield render(tmpl);
   let asyncContent = tmpl.asyncContent;
 
@@ -198,6 +201,12 @@ export async function* renderStream(tmpl: HSHtml): AsyncGenerator<string> {
     const content = _renderValue(nextContent.value, {
       asyncContent,
     });
+
+    if (renderChunk) {
+      yield render(renderChunk({ id, content }));
+    }
+
+    // Default chunk rendering
     const script = html`<template id="${id}_content">${html.raw(content)}<!--end--></template>`;
 
     yield render(script);

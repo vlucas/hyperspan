@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.0-alpha.13",
+  "version": "1.0.0-alpha.14",
   "description": "Hyperspan Web Framework",
   "main": "src/server.ts",
   "types": "src/server.ts",
@@ -36,10 +36,6 @@
     "./client/js": {
       "types": "./src/client/js.ts",
       "default": "./src/client/js.ts"
-    },
-    "./plugins": {
-      "types": "./src/plugins.ts",
-      "default": "./src/plugins.ts"
     },
     "./actions": {
       "types": "./src/actions.ts",
