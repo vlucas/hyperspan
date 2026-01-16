@@ -1,6 +1,8 @@
 {
   "name": "hyperspan",
   "private": true,
-  "workspaces": ["packages/*"],
-  "version": "0.0.1"
+  "workspaces": [
+    "packages/*"
+  ],
+  "version": "1.0.0"
 }

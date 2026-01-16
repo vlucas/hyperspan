@@ -15,11 +15,11 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@hyperspan/framework": "^1.0.0-alpha",
-    "@hyperspan/html": "^1.0.0-alpha",
-    "@hyperspan/plugin-preact": "^1.0.0-alpha",
+    "@hyperspan/framework": "^1.0.0",
+    "@hyperspan/html": "^1.0.0",
+    "@hyperspan/plugin-preact": "^1.0.0",
     "@tailwindcss/typography": "^0.5.16",
-    "hyperspan": "^1.0.0-alpha",
+    "hyperspan": "^1.0.0",
     "tailwindcss": "^4.0.17",
     "preact": "^10.26.7"
   }

@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "1.0.0-alpha.12",
+  "version": "1.0.0",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,
@@ -32,7 +32,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hyperspan/framework": "^1.0.0-alpha",
+    "@hyperspan/framework": "^1.0.0",
     "bun-plugin-tailwind": "^0.1.2",
     "commander": "^14.0.2",
     "degit": "^2.8.4"
