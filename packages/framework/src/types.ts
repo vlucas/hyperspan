@@ -68,6 +68,7 @@ export namespace Hyperspan {
   export type HSResponse = {
     cookies: Hyperspan.Cookies;
     headers: Headers; // Headers to merge with final outgoing response
+    status: number | undefined;
     html: (html: string, options?: ResponseInit) => Response
     json: (json: any, options?: ResponseInit) => Response;
     text: (text: string, options?: ResponseInit) => Response;
@@ -75,7 +76,6 @@ export namespace Hyperspan {
     error: (error: Error, options?: ResponseInit) => Response;
     notFound: (options?: ResponseInit) => Response;
     merge: (response: Response) => Response;
-    raw: Response;
   };
 
   export interface Context {

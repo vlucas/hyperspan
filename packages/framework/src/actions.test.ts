@@ -126,7 +126,7 @@ describe('createAction', () => {
     const formData = new FormData();
     formData.append('email', 'not-an-email');
 
-    const postRequest = new Request(`http://localhost:3000${action._route}`, {
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
       method: 'POST',
       body: formData,
     });
@@ -140,6 +140,57 @@ describe('createAction', () => {
     expect(responseText).toContain('name="name"');
     expect(responseText).toContain('name="email"');
     expect(responseText).toContain('Validation failed');
+    // Should NOT contain the success message from post handler
+    expect(responseText).not.toContain('Hello,');
+  });
+
+  test('uses custom error handler when provided', async () => {
+    const schema = z.object({
+      name: z.string().min(1, 'Name is required'),
+      email: z.email('Invalid email address'),
+    });
+
+    const action = createAction({
+      name: 'test',
+      schema,
+    }).form((c, { data, error }) => {
+      return html`
+          <form>
+            <input type="text" name="name" value="${data?.name || ''}" />
+            ${error ? html`<div class="error">Validation failed</div>` : ''}
+            <input type="email" name="email" value="${data?.email || ''}" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+        <p>Hello, ${data?.name}!</p>
+        <p>Your email is ${data?.email}.</p>
+      `);
+    }).errorHandler(async (c, { data, error }) => {
+      return c.res.html(`
+        <p>Caught error in custom error handler: ${error?.message}</p>
+        <p>Data: ${JSON.stringify(data)}</p>
+      `);
+    });
+
+    // Test fetch method with invalid data (missing name, invalid email)
+    const formData = new FormData();
+    formData.append('email', 'not-an-email');
+
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const response = await action.fetch(postRequest);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(400);
+
+    const responseText = await response.text();
+    // Should render the custom error handler
+    expect(responseText).toContain('Caught error in custom error handler: Input validation error(s)');
+    expect(responseText).toContain('Data: {"email":"not-an-email"}');
     // Should NOT contain the success message from post handler
     expect(responseText).not.toContain('Hello,');
   });

@@ -61,6 +61,9 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
     delete params[catchAllParam];
   }
 
+  // Status override for the response. Will use if set. (e.g. c.res.status = 400)
+  let status: number | undefined = undefined;
+
   const merge = (response: Response) => {
     // Convert headers to plain objects and merge (response headers override context headers)
     const mergedHeaders = {
@@ -69,12 +72,12 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
     };
 
     return new Response(response.body, {
-      status: response.status,
+      status: context.res.status ?? response.status,
       headers: mergedHeaders,
     });
   };
 
-  return {
+  const context: HS.Context = {
     vars: {},
     route: {
       name: route?._config.name || undefined,
@@ -89,15 +92,15 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       headers,
       query,
       cookies: new Cookies(req),
-      async text() { return req.text() },
-      async json<T = unknown>() { return await req.json() as T },
-      async formData<T = unknown>() { return await req.formData() as T },
-      async urlencoded() { return new URLSearchParams(await req.text()) },
+      async text() { return req.clone().text() },
+      async json<T = unknown>() { return await req.clone().json() as T },
+      async formData<T = unknown>() { return await req.clone().formData() as T },
+      async urlencoded() { return new URLSearchParams(await req.clone().text()) },
     },
     res: {
       cookies: new Cookies(req, headers),
       headers,
-      raw: new Response(),
+      status,
       html: (html: string, options?: ResponseInit) => merge(new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } })),
       json: (json: any, options?: ResponseInit) => merge(new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })),
       text: (text: string, options?: ResponseInit) => merge(new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } })),
@@ -107,6 +110,8 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       merge,
     },
   };
+
+  return context;
 }
 
 

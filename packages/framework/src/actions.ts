@@ -1,10 +1,10 @@
 import { html } from '@hyperspan/html';
-import { createRoute, returnHTMLResponse } from './server';
+import { createRoute, HTTPResponseException, returnHTMLResponse } from './server';
 import * as z from 'zod/v4';
 import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
 import { buildClientJS } from './client/js';
-import { validateBody } from './middleware';
+import { validateBody, ZodValidationError } from './middleware';
 
 const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-actions.client'));
 
@@ -31,47 +31,37 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
   const route = createRoute({ path, name })
     .get((c: HS.Context) => api.render(c))
     .post(async (c: HS.Context) => {
-      // Parse form data
-      const formData = await c.req.formData();
-      const jsonData = formDataToJSON(formData) as Partial<z.infer<T>>;
-      const schemaData = schema ? schema.safeParse(jsonData) : null;
-      const data = schemaData?.success ? (schemaData.data as Partial<z.infer<T>>) : jsonData;
-      let error: z.ZodError | Error | null = null;
-
-      try {
-        if (schema && schemaData?.error) {
-          throw schemaData.error;
-        }
-
-        if (!_handler) {
-          throw new Error('Action POST handler not set! Every action must have a POST handler.');
-        }
-
-        const response = await _handler(c, { data });
-
-        if (response instanceof Response) {
-          // Replace redirects with special header because fetch() automatically follows redirects
-          // and we want to redirect the user to the actual full page instead
-          if ([301, 302, 307, 308].includes(response.status)) {
-            response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
-            response.headers.delete('Location');
-          }
-        }
-
-        return response;
-      } catch (e) {
-        error = e as Error | z.ZodError;
+      if (!_handler) {
+        throw new Error('Action POST handler not set! Every action must have a POST handler.');
       }
 
-      if (error && _errorHandler) {
-        const errorHandler = _errorHandler; // Required for TypeScript to infer the correct type after narrowing
-        return await returnHTMLResponse(c, () => errorHandler(c, { data, error }), {
-          status: 400,
-        });
+      const response = await _handler(c, { data: c.vars.body });
+
+      if (response instanceof Response) {
+        // Replace redirects with special header because fetch() automatically follows redirects
+        // and we want to redirect the user to the actual full page instead
+        if ([301, 302, 307, 308].includes(response.status)) {
+          response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
+          response.headers.delete('Location');
+        }
       }
 
-      return await returnHTMLResponse(c, () => api.render(c, { data, error }), { status: 400 });
-    }, { middleware: schema ? [validateBody(schema)] : [] });
+      return response;
+    }, { middleware: schema ? [validateBody(schema)] : [] })
+    /**
+     * Custom error handler for the action since validateBody() throws a HTTPResponseException
+     */
+    .errorHandler(async (c: HS.Context, err: HTTPResponseException) => {
+      const data = c.vars.body as Partial<z.infer<T>>;
+      const error = err._error as ZodValidationError;
+
+      // Set the status to 400 by default
+      c.res.status = 400;
+
+      return await returnHTMLResponse(c, () => {
+        return _errorHandler ? _errorHandler(c, { data, error }) : api.render(c, { data, error });
+      }, { status: 400 });
+    });
 
   // Set the name of the action for the route
   route._config.name = name;

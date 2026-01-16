@@ -40,13 +40,13 @@ export function validateQuery(schema: ZodObject | ZodAny): HS.MiddlewareFunction
     const query = formDataToJSON(context.req.query);
     const validated = schema.safeParse(query);
 
+    // Store the validated query in the context variables
+    context.vars.query = validated.data as z.infer<typeof schema>;
+
     if (!validated.success) {
       const err = formatZodError(validated.error);
       return context.res.error(err, { status: 400 });
     }
-
-    // Store the validated query in the context variables
-    context.vars.query = validated.data as z.infer<typeof schema>;
 
     return next();
   }
@@ -67,6 +67,8 @@ export function validateBody(schema: ZodObject | ZodAny, type?: TValidationType)
       const urlencoded = await context.req.urlencoded();
       body = formDataToJSON(urlencoded);
     }
+
+    context.vars.body = body as z.infer<typeof schema>;
     const validated = schema.safeParse(body);
 
     if (!validated.success) {
@@ -74,9 +76,6 @@ export function validateBody(schema: ZodObject | ZodAny, type?: TValidationType)
       throw new HTTPResponseException(err, { status: 400 });
       //return context.res.error(err, { status: 400 });
     }
-
-    // Store the validated body in the context variables
-    context.vars.body = validated.data as z.infer<typeof schema>;
 
     return next();
   }
