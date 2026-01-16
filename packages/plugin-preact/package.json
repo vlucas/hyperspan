@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "Hyperspan Plugin for Preact",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -28,8 +28,8 @@
     "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "@hyperspan/html": "0.1.7",
-    "@hyperspan/framework": "0.5.3"
+    "@hyperspan/html": "^1.0.0",
+    "@hyperspan/framework": "^1.0.1"
   },
   "dependencies": {
     "preact": "^10.26.5",

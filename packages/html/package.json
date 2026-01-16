@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/html",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Hyperspan HTML Templates",
   "main": "dist/html.js",
   "types": "src/html.ts",

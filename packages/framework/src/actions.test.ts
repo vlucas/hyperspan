@@ -1,106 +1,198 @@
-import { z } from 'zod/v4';
-import { unstable__createAction } from './actions';
-import { describe, it, expect } from 'bun:test';
+import { test, expect, describe } from 'bun:test';
+import { createAction } from './actions';
 import { html, render, type HSHtml } from '@hyperspan/html';
-import type { THSContext } from './server';
+import { createContext } from './server';
+import type { Hyperspan as HS } from './types';
+import * as z from 'zod/v4';
 
 describe('createAction', () => {
-  const formWithNameOnly = (c: THSContext, { data }: { data?: { name: string } }) => {
-    return html`
-      <form>
-        <p>
-          Name:
-          <input type="text" name="name" value="${data?.name || ''}" />
-        </p>
-        <button type="submit">Submit</button>
-      </form>
-    `;
-  };
-
-  describe('with form content', () => {
-    it('should create an action with a form that renders provided data', async () => {
-      const schema = z.object({
-        name: z.string(),
-      });
-      const action = unstable__createAction(schema, formWithNameOnly);
-      const mockContext = {
-        req: {
-          method: 'POST',
-          formData: async () => {
-            const formData = new FormData();
-            formData.append('name', 'John');
-            return formData;
-          },
-        },
-      } as THSContext;
-
-      const formResponse = render(action.render(mockContext, { data: { name: 'John' } }) as HSHtml);
-      expect(formResponse).toContain('value="John"');
+  test('creates an action with a simple form and no schema', async () => {
+    const action = createAction({
+      name: 'test',
+      schema: z.object({
+        name: z.string().min(1, 'Name is required'),
+      }),
+    }).form((c) => {
+      return html`
+          <form>
+            <input type="text" name="name" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+          <p>Hello, ${data?.name}!</p>
+        `);
     });
+
+    expect(action).toBeDefined();
+    expect(action._kind).toBe('hsAction');
+    expect(action._path()).toContain('/__actions/');
+
+    // Test render method
+    const request = new Request('http://localhost:3000/');
+    const context = createContext(request);
+    const rendered = render(action.render(context) as HSHtml);
+
+    expect(rendered).not.toBeNull();
+    const htmlString = rendered;
+    expect(htmlString).toContain('<hs-action');
+    expect(htmlString).toContain('name="name"');
   });
 
-  describe('when data is valid', () => {
-    it('should run the handler and return the result', async () => {
-      const schema = z.object({
-        name: z.string().nonempty(),
-      });
-      const action = unstable__createAction(schema, formWithNameOnly)
-        .post((c, { data }) => {
-          return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;
-        })
-        .error((c, { error }) => {
-          return html`<div>There was an error! ${error?.message}</div>`;
-        });
-
-      // Mock context to run action
-      const mockContext = {
-        req: {
-          method: 'POST',
-          formData: async () => {
-            const formData = new FormData();
-            formData.append('name', 'John');
-            return formData;
-          },
-        },
-      } as THSContext;
-
-      const response = await action.run(mockContext);
-
-      const formResponse = render(response as HSHtml);
-      expect(formResponse).toContain('Thanks for submitting the form, John!');
+  test('creates an action with a Zod schema matching form inputs', async () => {
+    const schema = z.object({
+      name: z.string().min(1, 'Name is required'),
+      email: z.email('Invalid email address'),
     });
+
+    const action = createAction({
+      name: 'test',
+      schema,
+    }).form((c, { data }) => {
+      return html`
+          <form>
+            <input type="text" name="name" />
+            <input type="email" name="email" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+        <p>Hello, ${data?.name}!</p>
+        <p>Your email is ${data?.email}.</p>
+      `);
+    });
+
+    expect(action).toBeDefined();
+    expect(action._kind).toBe('hsAction');
+    expect(action._path()).toContain('/__actions/');
+
+    // Test render method
+    const request = new Request('http://localhost:3000/');
+    const context = createContext(request);
+    const rendered = action.render(context);
+
+    expect(rendered).not.toBeNull();
+    const htmlString = render(rendered as unknown as HSHtml);
+    expect(htmlString).toContain('name="name"');
+    expect(htmlString).toContain('name="email"');
+
+    // Test fetch method with POST request to trigger validation
+    const formData = new FormData();
+    formData.append('name', 'John Doe');
+    formData.append('email', 'john@example.com');
+
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const response = await action.fetch(postRequest);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(200);
+
+    const responseText = await response.text();
+    expect(responseText).toContain('Hello, John Doe!');
+    expect(responseText).toContain('Your email is john@example.com.');
   });
 
-  describe.skip('when data is invalid', () => {
-    it('should return the content of the form with error', async () => {
-      const schema = z.object({
-        name: z.string().nonempty(),
-      });
-      const action = unstable__createAction(schema)
-        .form(formWithNameOnly)
-        .post((c, { data }) => {
-          return html`<div>Thanks for submitting the form, ${data?.name}!</div>`;
-        })
-        .error((c, { error }) => {
-          return html`<div>There was an error! ${error?.message}</div>`;
-        });
-
-      // Mock context to run action
-      const mockContext = {
-        req: {
-          method: 'POST',
-          formData: async () => {
-            const formData = new FormData();
-            formData.append('name', ''); // No name = error
-            return formData;
-          },
-        },
-      } as THSContext;
-
-      const response = await action.run(mockContext);
-
-      const formResponse = render(response as HSHtml);
-      expect(formResponse).toContain('There was an error!');
+  test('re-renders form with error when schema validation fails', async () => {
+    const schema = z.object({
+      name: z.string().min(1, 'Name is required'),
+      email: z.email('Invalid email address'),
     });
+
+    const action = createAction({
+      name: 'test',
+      schema,
+    }).form((c, { data, error }) => {
+      return html`
+          <form>
+            <input type="text" name="name" value="${data?.name || ''}" />
+            ${error ? html`<div class="error">Validation failed</div>` : ''}
+            <input type="email" name="email" value="${data?.email || ''}" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+        <p>Hello, ${data?.name}!</p>
+        <p>Your email is ${data?.email}.</p>
+      `);
+    });
+
+    // Test fetch method with invalid data (missing name, invalid email)
+    const formData = new FormData();
+    formData.append('email', 'not-an-email');
+
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const response = await action.fetch(postRequest);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(400);
+
+    const responseText = await response.text();
+    // Should re-render the form, not the post handler output
+    expect(responseText).toContain('name="name"');
+    expect(responseText).toContain('name="email"');
+    expect(responseText).toContain('Validation failed');
+    // Should NOT contain the success message from post handler
+    expect(responseText).not.toContain('Hello,');
+  });
+
+  test('uses custom error handler when provided', async () => {
+    const schema = z.object({
+      name: z.string().min(1, 'Name is required'),
+      email: z.email('Invalid email address'),
+    });
+
+    const action = createAction({
+      name: 'test',
+      schema,
+    }).form((c, { data, error }) => {
+      return html`
+          <form>
+            <input type="text" name="name" value="${data?.name || ''}" />
+            ${error ? html`<div class="error">Validation failed</div>` : ''}
+            <input type="email" name="email" value="${data?.email || ''}" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+        <p>Hello, ${data?.name}!</p>
+        <p>Your email is ${data?.email}.</p>
+      `);
+    }).errorHandler(async (c, { data, error }) => {
+      return c.res.html(`
+        <p>Caught error in custom error handler: ${error?.message}</p>
+        <p>Data: ${JSON.stringify(data)}</p>
+      `);
+    });
+
+    // Test fetch method with invalid data (missing name, invalid email)
+    const formData = new FormData();
+    formData.append('email', 'not-an-email');
+
+    const postRequest = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const response = await action.fetch(postRequest);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(400);
+
+    const responseText = await response.text();
+    // Should render the custom error handler
+    expect(responseText).toContain('Caught error in custom error handler: Input validation error(s)');
+    expect(responseText).toContain('Data: {"email":"not-an-email"}');
+    // Should NOT contain the success message from post handler
+    expect(responseText).not.toContain('Hello,');
   });
 });
+

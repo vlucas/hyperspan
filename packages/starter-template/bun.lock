@@ -1,12 +1,13 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "hyperspan-template",
       "dependencies": {
-        "@hyperspan/framework": "^0.5.2",
-        "@hyperspan/html": "^0.1.7",
-        "@hyperspan/plugin-preact": "^0.1.6",
+        "@hyperspan/framework": "^0.5.5",
+        "@hyperspan/html": "^0.2.0",
+        "@hyperspan/plugin-preact": "^0.2.0",
         "preact": "^10.26.7",
       },
       "devDependencies": {
@@ -22,11 +23,11 @@
     },
   },
   "packages": {
-    "@hyperspan/framework": ["@hyperspan/framework@0.5.2", "", { "dependencies": { "@hyperspan/html": "0.1.7", "hono": "^4.9.4", "isbot": "^5.1.30", "timestring": "^7.0.0", "zod": "^4.1.5" } }, "sha512-hHs34HUiPXWENBjrvAB2vkeUEEyxaF8wUo7IiN7qoDppskzfpCFUO5GXRiEImtInrgidk3+EoqrA9qfymKrUpw=="],
+    "@hyperspan/framework": ["@hyperspan/framework@0.5.5", "", { "dependencies": { "@hyperspan/html": "0.2.0", "hono": "^4.9.4", "isbot": "^5.1.30", "timestring": "^7.0.0", "zod": "^4.1.5" } }, "sha512-mPs4irn/VdcHFYylUT8I852fgh9qZPAKKRX4c6uaQweo7XyRU5bJM3ubxItH2Drj+m7Cu/brntcPaeq5YRKIKQ=="],
 
-    "@hyperspan/html": ["@hyperspan/html@0.1.7", "", {}, "sha512-MNU7oxA2PNvfGmr98IG1uMEPfsFVcmTSHRmc/yWuTTHX/QY08tqRWdPl1wWTDvjkCcekNxK3/yujyRiXm9m3GQ=="],
+    "@hyperspan/html": ["@hyperspan/html@0.2.0", "", {}, "sha512-oeEwkOWrjPebzTs2sNqDgRe6oPzbqsO1EaNbrvpSmGLRD44CYHrX1STe/hThbNnvV+h8Zig+eG+mikdL8K5QRA=="],
 
-    "@hyperspan/plugin-preact": ["@hyperspan/plugin-preact@0.1.6", "", { "dependencies": { "preact": "^10.26.5", "preact-render-to-string": "^6.1.0" }, "peerDependencies": { "@hyperspan/framework": "^0.4.2", "@hyperspan/html": "^0.1.7" } }, "sha512-qtTLv8/f+yNUin16mi9KroDN3GPdfyOzMmIRtCR+wASjS1HFdBkSwCac0ylS84vcbRVnZOiiMRDdOy7K472vTg=="],
+    "@hyperspan/plugin-preact": ["@hyperspan/plugin-preact@0.2.1", "", { "dependencies": { "preact": "^10.26.5", "preact-render-to-string": "^6.1.0" }, "peerDependencies": { "@hyperspan/framework": "0.5.3", "@hyperspan/html": "0.1.7" } }, "sha512-21IbgJvpw27JJcn6exIHj2R90XKb5D8x0DI5N2AVgIrpFfBygiB52dVuG6Q8m1NaXOxnLNAr5AwbDjBRbvlC8g=="],
 
     "@parcel/watcher": ["@parcel/watcher@2.5.1", "", { "dependencies": { "detect-libc": "^1.0.3", "is-glob": "^4.0.3", "micromatch": "^4.0.5", "node-addon-api": "^7.0.0" }, "optionalDependencies": { "@parcel/watcher-android-arm64": "2.5.1", "@parcel/watcher-darwin-arm64": "2.5.1", "@parcel/watcher-darwin-x64": "2.5.1", "@parcel/watcher-freebsd-x64": "2.5.1", "@parcel/watcher-linux-arm-glibc": "2.5.1", "@parcel/watcher-linux-arm-musl": "2.5.1", "@parcel/watcher-linux-arm64-glibc": "2.5.1", "@parcel/watcher-linux-arm64-musl": "2.5.1", "@parcel/watcher-linux-x64-glibc": "2.5.1", "@parcel/watcher-linux-x64-musl": "2.5.1", "@parcel/watcher-win32-arm64": "2.5.1", "@parcel/watcher-win32-ia32": "2.5.1", "@parcel/watcher-win32-x64": "2.5.1" } }, "sha512-dfUnCxiN9H4ap84DvD2ubjw+3vUNpstxa0TneY/Paat8a3R4uQZDLSvWjmznAY/DoahqTHl9V46HF/Zs3F29pg=="],
 

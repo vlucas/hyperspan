@@ -1,12 +1,13 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
-import MarketingLayout from '@/app/layouts/marketing-layout';
-import { renderIsland } from '@hyperspan/framework/assets';
-import ClientCounter from '@/app/components/client-counter';
+import { renderPreactIsland } from '@hyperspan/plugin-preact';
+import MarketingLayout from '~/app/layouts/marketing-layout';
+import ClientCounter from '~/app/components/client-counter';
+import '~/app/styles/index.css';
 
-export default createRoute(() => {
+export default createRoute().get((context) => {
   const content = html`
-    <main class="w-full mt-10">
+    <main class="main w-full mt-10">
       <section class=" py-12 text-center bg-gray-200">
         <h1 class="my-6 text-5xl/14">Your Big Headline Here</h1>
         <h2 class="my-10 text-2xl">Sub-Headline Goes Here</h2>
@@ -23,12 +24,12 @@ export default createRoute(() => {
 
       <section class="mt-10 p-8">
         <!-- Call ClientCounter with renderIsland() and pass props! -->
-        ${renderIsland(ClientCounter, { count: 5 })}
+        ${renderPreactIsland(ClientCounter, { count: 5 })}
       </section>
     </main>
   `;
 
-  return MarketingLayout({
+  return MarketingLayout(context, {
     title: 'Homepage',
     content,
   });

@@ -1,10 +1,12 @@
-import { html, HSHtml } from '@hyperspan/html';
+import { html } from '@hyperspan/html';
+import { createRoute, HTTPResponseException, returnHTMLResponse } from './server';
 import * as z from 'zod/v4';
-import { HTTPException } from 'hono/http-exception';
-import { assetHash } from './assets';
-import { IS_PROD, returnHTMLResponse, type THSContext, type THSResponseTypes } from './server';
-import type { MiddlewareHandler } from 'hono';
-import type { HandlerResponse, Next, TypedResponse } from 'hono/types';
+import type { Hyperspan as HS } from './types';
+import { assetHash, formDataToJSON } from './utils';
+import { buildClientJS } from './client/js';
+import { validateBody, ZodValidationError } from './middleware';
+
+const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-actions.client'));
 
 /**
  * Actions = Form + route handler
@@ -19,69 +21,64 @@ import type { HandlerResponse, Next, TypedResponse } from 'hono/types';
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export type TActionResponse =
-  | THSResponseTypes
-  | HandlerResponse<any>
-  | TypedResponse<any, any, any>;
-export interface HSAction<T extends z.ZodTypeAny> {
-  _kind: string;
-  _route: string;
-  _form: Parameters<HSAction<T>['form']>[0];
-  form(
-    renderForm: (
-      c: THSContext,
-      { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-    ) => HSHtml | void | null | Promise<HSHtml | void | null>
-  ): HSAction<T>;
-  post(
-    handler: (
-      c: THSContext,
-      { data }: { data?: Partial<z.infer<T>> }
-    ) => TActionResponse | Promise<TActionResponse>
-  ): HSAction<T>;
-  error(
-    handler: (
-      c: THSContext,
-      { data, error }: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-    ) => TActionResponse
-  ): HSAction<T>;
-  render(
-    c: THSContext,
-    props?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }
-  ): TActionResponse;
-  run(c: THSContext): TActionResponse | Promise<TActionResponse>;
-  middleware: (
-    middleware: Array<
-      | MiddlewareHandler
-      | ((context: THSContext) => TActionResponse | Promise<TActionResponse> | void | Promise<void>)
-    >
-  ) => HSAction<T>;
-  _getRouteHandlers: () => Array<
-    | MiddlewareHandler
-    | ((context: THSContext, next: Next) => TActionResponse | Promise<TActionResponse>)
-    | ((context: THSContext) => TActionResponse | Promise<TActionResponse>)
-  >;
-}
+export function createAction<T extends z.ZodObject<any, any>>(params: { name: string; schema?: T }): HS.Action<T> {
+  const { name, schema } = params;
+  const path = `/__actions/${assetHash(name)}`;
 
-export function unstable__createAction<T extends z.ZodTypeAny>(
-  schema: T | null = null,
-  form: Parameters<HSAction<T>['form']>[0]
-) {
-  let _handler: Parameters<HSAction<T>['post']>[0] | null = null,
-    _form: Parameters<HSAction<T>['form']>[0] = form,
-    _errorHandler: Parameters<HSAction<T>['error']>[0] | null = null,
-    _middleware: Array<
-      | MiddlewareHandler
-      | ((context: THSContext, next: Next) => TActionResponse | Promise<TActionResponse>)
-      | ((context: THSContext) => TActionResponse | Promise<TActionResponse>)
-    > = [];
+  let _handler: Parameters<HS.Action<T>['post']>[0] | null = null;
+  let _errorHandler: Parameters<HS.Action<T>['errorHandler']>[0] | null = null;
 
-  const api: HSAction<T> = {
+  const route = createRoute({ path, name })
+    .get((c: HS.Context) => api.render(c))
+    .post(async (c: HS.Context) => {
+      if (!_handler) {
+        throw new Error('Action POST handler not set! Every action must have a POST handler.');
+      }
+
+      const response = await _handler(c, { data: c.vars.body });
+
+      if (response instanceof Response) {
+        // Replace redirects with special header because fetch() automatically follows redirects
+        // and we want to redirect the user to the actual full page instead
+        if ([301, 302, 307, 308].includes(response.status)) {
+          response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
+          response.headers.delete('Location');
+        }
+      }
+
+      return response;
+    }, { middleware: schema ? [validateBody(schema)] : [] })
+    /**
+     * Custom error handler for the action since validateBody() throws a HTTPResponseException
+     */
+    .errorHandler(async (c: HS.Context, err: HTTPResponseException) => {
+      const data = c.vars.body as Partial<z.infer<T>>;
+      const error = err._error as ZodValidationError;
+
+      // Set the status to 400 by default
+      c.res.status = 400;
+
+      return await returnHTMLResponse(c, () => {
+        return _errorHandler ? _errorHandler(c, { data, error }) : api.render(c, { data, error });
+      }, { status: 400 });
+    });
+
+  // Set the name of the action for the route
+  route._config.name = name;
+
+  const api: HS.Action<T> = {
     _kind: 'hsAction',
-    _route: `/__actions/${assetHash(_form.toString())}`,
-    _form,
-    form(renderForm) {
-      _form = renderForm;
+    _config: route._config,
+    _path() {
+      return path;
+    },
+    _form: null,
+    /**
+     * Form to render
+     * This will be wrapped in a <hs-action> web component and submitted via fetch()
+     */
+    form(form: HS.ActionFormHandler<T>) {
+      api._form = form;
       return api;
     },
     /**
@@ -95,162 +92,22 @@ export function unstable__createAction<T extends z.ZodTypeAny>(
       return api;
     },
     /**
-     * Cusotm error handler if you want to display something other than the default
+     * Get form renderer method
      */
-    error(handler) {
+    render(c: HS.Context, props?: HS.ActionProps<T>) {
+      const formContent = api._form ? api._form(c, props || {}) : null;
+      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${actionsClientJS.renderScriptTag()}` : null;
+    },
+    errorHandler(handler) {
       _errorHandler = handler;
       return api;
     },
-    /**
-     * Add middleware specific to this route
-     */
-    middleware(middleware) {
-      _middleware = middleware;
+    middleware(middleware: Array<HS.MiddlewareFunction>) {
+      route.middleware(middleware);
       return api;
     },
-    /**
-     * Get form renderer method
-     */
-    render(c: THSContext, formState?: { data?: Partial<z.infer<T>>; error?: z.ZodError | Error }) {
-      const form = _form ? _form(c, formState || {}) : null;
-      return form ? html`<hs-action url="${this._route}">${form}</hs-action>` : null;
-    },
-
-    _getRouteHandlers() {
-      return [
-        ..._middleware,
-        async (c: THSContext) => {
-          const response = await returnHTMLResponse(c, () => api.run(c));
-
-          // Replace redirects with special header because fetch() automatically follows redirects
-          // and we want to redirect the user to the actual full page instead
-          if ([301, 302, 307, 308].includes(response.status)) {
-            response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
-            response.headers.delete('Location');
-          }
-
-          return response;
-        },
-      ];
-    },
-
-    /**
-     * Run action
-     *
-     * Returns result from form processing if successful
-     * Re-renders form with data and error information otherwise
-     */
-    async run(c) {
-      const method = c.req.method;
-
-      if (method === 'GET') {
-        return await api.render(c);
-      }
-
-      if (method !== 'POST') {
-        throw new HTTPException(405, { message: 'Actions only support GET and POST requests' });
-      }
-
-      const formData = await c.req.formData();
-      const jsonData = unstable__formDataToJSON(formData) as Partial<z.infer<T>>;
-      const schemaData = schema ? schema.safeParse(jsonData) : null;
-      const data = schemaData?.success ? (schemaData.data as Partial<z.infer<T>>) : jsonData;
-      let error: z.ZodError | Error | null = null;
-
-      try {
-        if (schema && schemaData?.error) {
-          throw schemaData.error;
-        }
-
-        if (!_handler) {
-          throw new Error('Action POST handler not set! Every action must have a POST handler.');
-        }
-
-        return await _handler(c, { data });
-      } catch (e) {
-        error = e as Error | z.ZodError;
-        !IS_PROD && console.error(error);
-      }
-
-      if (error && _errorHandler) {
-        // @ts-ignore
-        return await returnHTMLResponse(c, () => _errorHandler(c, { data, error }), {
-          status: 400,
-        });
-      }
-
-      return await returnHTMLResponse(c, () => api.render(c, { data, error }), { status: 400 });
-    },
+    fetch: route.fetch,
   };
 
   return api;
-}
-
-/**
- * Return JSON data structure for a given FormData object
- * Accounts for array fields (e.g. name="options[]" or <select multiple>)
- *
- * @link https://stackoverflow.com/a/75406413
- */
-export function unstable__formDataToJSON(formData: FormData): Record<string, string | string[]> {
-  let object = {};
-
-  /**
-   * Parses FormData key xxx`[x][x][x]` fields into array
-   */
-  const parseKey = (key: string) => {
-    const subKeyIdx = key.indexOf('[');
-
-    if (subKeyIdx !== -1) {
-      const keys = [key.substring(0, subKeyIdx)];
-      key = key.substring(subKeyIdx);
-
-      for (const match of key.matchAll(/\[(?<key>.*?)]/gm)) {
-        if (match.groups) {
-          keys.push(match.groups.key);
-        }
-      }
-      return keys;
-    } else {
-      return [key];
-    }
-  };
-
-  /**
-   * Recursively iterates over keys and assigns key/values to object
-   */
-  const assign = (keys: string[], value: FormDataEntryValue, object: any): void => {
-    const key = keys.shift();
-
-    // When last key in the iterations
-    if (key === '' || key === undefined) {
-      return object.push(value);
-    }
-
-    if (Reflect.has(object, key)) {
-      // If key has been found, but final pass - convert the value to array
-      if (keys.length === 0) {
-        if (!Array.isArray(object[key])) {
-          object[key] = [object[key], value];
-          return;
-        }
-      }
-      // Recurse again with found object
-      return assign(keys, value, object[key]);
-    }
-
-    // Create empty object for key, if next key is '' do array instead, otherwise set value
-    if (keys.length >= 1) {
-      object[key] = keys[0] === '' ? [] : {};
-      return assign(keys, value, object[key]);
-    } else {
-      object[key] = value;
-    }
-  };
-
-  for (const pair of formData.entries()) {
-    assign(parseKey(pair[0]), pair[1], object);
-  }
-
-  return object;
 }
