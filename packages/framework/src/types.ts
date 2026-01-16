@@ -27,6 +27,9 @@ export namespace Hyperspan {
     // For customizing the routes and adding your own...
     beforeRoutesAdded?: (server: Hyperspan.Server) => void;
     afterRoutesAdded?: (server: Hyperspan.Server) => void;
+    responseOptions?: {
+      disableStreaming?: (context: Hyperspan.Context) => boolean;
+    };
   };
 
   export type CookieOptions = {
@@ -92,6 +95,9 @@ export namespace Hyperspan {
     path: string;
     params: Record<string, string | undefined>;
     cssImports: string[];
+    responseOptions?: {
+      disableStreaming?: (context: Hyperspan.Context) => boolean;
+    };
   };
   export type RouteHandler = (context: Hyperspan.Context) => unknown;
   export type RouteHandlerOptions = {
@@ -114,6 +120,11 @@ export namespace Hyperspan {
   export type NextFunction = () => Promise<Response>;
 
   /**
+   * Error handler function signature
+   */
+  export type ErrorHandler = (context: Hyperspan.Context, error: Error) => unknown | undefined;
+
+  /**
    * Middleware function signature
    * Accepts context and next function, returns a Response
    */
@@ -125,6 +136,7 @@ export namespace Hyperspan {
   export interface Route {
     _kind: 'hsRoute';
     _config: Partial<Hyperspan.RouteConfig>;
+    _serverConfig?: Hyperspan.Config;
     _path(): string;
     _methods(): string[];
     get: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
@@ -133,7 +145,7 @@ export namespace Hyperspan {
     patch: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     delete: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
-    errorHandler: (handler: Hyperspan.RouteHandler) => Hyperspan.Route;
+    errorHandler: (handler: Hyperspan.ErrorHandler) => Hyperspan.Route;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Hyperspan.Route;
     fetch: (request: Request) => Promise<Response>;
   };
@@ -148,7 +160,7 @@ export namespace Hyperspan {
   ) => ActionResponse;
   export interface Action<T extends z.ZodTypeAny> {
     _kind: 'hsAction';
-    _config: Hyperspan.RouteConfig;
+    _config: Partial<Hyperspan.RouteConfig>;
     _path(): string;
     _form: null | ActionFormHandler<T>;
     form(form: ActionFormHandler<T>): Action<T>;
@@ -157,5 +169,20 @@ export namespace Hyperspan {
     errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Action<T>;
     fetch: (request: Request) => Promise<Response>;
+  }
+
+  /**
+   * Client JS Module = ESM Module + Public Path + Render Script Tag
+   */
+  export type ClientJSBuildResult = {
+    assetHash: string; // Asset hash of the module path
+    esmName: string; // Filename of the built JavaScript file without the extension
+    publicPath: string; // Full public path of the built JavaScript file
+    /**
+     * Render a <script type="module"> tag for the JS module
+     * @param loadScript - A function that loads the module or a string of code to load the module
+     * @returns HSHtml Template with the <script type="module"> tag
+     */
+    renderScriptTag: (loadScript?: ((module: unknown) => HSHtml | string) | string) => HSHtml;
   }
 }

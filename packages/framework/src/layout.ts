@@ -1,9 +1,9 @@
 import { html } from '@hyperspan/html';
-import { JS_IMPORT_MAP, loadClientJS } from './client/js';
+import { JS_IMPORT_MAP, buildClientJS } from './client/js';
 import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from './client/css';
 import type { Hyperspan as HS } from './types';
 
-const clientStreamingJS = await loadClientJS(import.meta.resolve('./client/_hs/hyperspan-streaming.client'));
+const clientStreamingJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-streaming.client'));
 
 /**
  * Output the importmap for the client so we can use ESModules on the client to load JS files on demand

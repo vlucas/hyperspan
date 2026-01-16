@@ -14,6 +14,9 @@ export function startBunServer(server: HS.Server) {
   for (const route of server._routes) {
     const path = route._path();
 
+    // Add server config to route
+    route._serverConfig = server._config;
+
     // Add main route
     routes[path] = (request: Request) => {
       return route.fetch(request);
@@ -33,6 +36,7 @@ export function startBunServer(server: HS.Server) {
   }
 
   const httpServer = Bun.serve({
+    development: process.env.NODE_ENV === 'development',
     routes,
     fetch: async (request: Request) => {
       // Serve static files from the public directory

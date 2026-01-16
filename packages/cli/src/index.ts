@@ -31,10 +31,10 @@ program
     await emitter.clone(`${name}`);
     console.log(`Hyperspan project created in ${name}`);
     console.log(`Installing dependencies...`);
-    execSync(`cd ${name} && bun install`, { stdio: 'inherit' });
-    console.log(`Dependencies installed`);
+    execSync(`cd ${name} && bun install`, { stdio: 'pipe' });
+    console.log(`Dependencies installed!`);
     console.log(`Running dev server...`);
-    execSync(`cd ${name} && bun dev`, { stdio: 'inherit' });
+    execSync(`cd ${name} && bun dev`, { stdio: 'pipe' });
   });
 
 /**
@@ -82,19 +82,9 @@ program
   .option('--dir <path>', 'directory of your hyperspan project', './')
   .description('Build the project for SSG')
   .action(async (options) => {
-    // Ensure we are in a hyperspan project
-    const serverFile = `${options.dir}/app/server.ts`;
+    console.error('Error: SSG build not implemented yet... :(');
+    process.exit(1);
 
-    if (!fs.existsSync(serverFile)) {
-      console.error(
-        'Error: Could not find app/server.ts - Are you in a Hyperspan project directory?'
-      );
-      process.exit(1);
-    }
-
-    const server = await import(serverFile);
-
-    // @TODO: Build the project for SSG...
   });
 
 program.parse();

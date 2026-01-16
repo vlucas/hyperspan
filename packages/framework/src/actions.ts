@@ -1,10 +1,12 @@
-import { html, HSHtml } from '@hyperspan/html';
+import { html } from '@hyperspan/html';
 import { createRoute, returnHTMLResponse } from './server';
 import * as z from 'zod/v4';
 import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
-import * as actionsClient from './client/_hs/hyperspan-actions.client';
-import { renderClientJS } from './client/js';
+import { buildClientJS } from './client/js';
+import { validateBody } from './middleware';
+
+const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-actions.client'));
 
 /**
  * Actions = Form + route handler
@@ -19,7 +21,7 @@ import { renderClientJS } from './client/js';
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export function createAction<T extends z.ZodTypeAny>(params: { name: string; schema?: T }): HS.Action<T> {
+export function createAction<T extends z.ZodObject<any, any>>(params: { name: string; schema?: T }): HS.Action<T> {
   const { name, schema } = params;
   const path = `/__actions/${assetHash(name)}`;
 
@@ -30,7 +32,7 @@ export function createAction<T extends z.ZodTypeAny>(params: { name: string; sch
     .get((c: HS.Context) => api.render(c))
     .post(async (c: HS.Context) => {
       // Parse form data
-      const formData = await c.req.raw.formData();
+      const formData = await c.req.formData();
       const jsonData = formDataToJSON(formData) as Partial<z.infer<T>>;
       const schemaData = schema ? schema.safeParse(jsonData) : null;
       const data = schemaData?.success ? (schemaData.data as Partial<z.infer<T>>) : jsonData;
@@ -69,7 +71,10 @@ export function createAction<T extends z.ZodTypeAny>(params: { name: string; sch
       }
 
       return await returnHTMLResponse(c, () => api.render(c, { data, error }), { status: 400 });
-    });
+    }, { middleware: schema ? [validateBody(schema)] : [] });
+
+  // Set the name of the action for the route
+  route._config.name = name;
 
   const api: HS.Action<T> = {
     _kind: 'hsAction',
@@ -101,7 +106,7 @@ export function createAction<T extends z.ZodTypeAny>(params: { name: string; sch
      */
     render(c: HS.Context, props?: HS.ActionProps<T>) {
       const formContent = api._form ? api._form(c, props || {}) : null;
-      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${renderClientJS(actionsClient)}` : null;
+      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${actionsClientJS.renderScriptTag()}` : null;
     },
     errorHandler(handler) {
       _errorHandler = handler;

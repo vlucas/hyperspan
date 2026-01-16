@@ -1,5 +1,5 @@
 import { createRoute } from '@hyperspan/framework';
-import { sleep } from '@/src/lib/sleep';
+import { sleep } from '~/src/lib/sleep';
 
 export default createRoute().get(async (context) => {
   await sleep(200);

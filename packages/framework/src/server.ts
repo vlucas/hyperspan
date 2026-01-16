@@ -1,4 +1,5 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from '@hyperspan/html';
+import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
 import { parsePath } from './utils';
 import { Cookies } from './cookies';
@@ -8,10 +9,12 @@ import type { Hyperspan as HS } from './types';
 export const IS_PROD = process.env.NODE_ENV === 'production';
 
 export class HTTPResponseException extends Error {
+  public _error?: Error;
   public _response?: Response;
-  constructor(body: string | undefined, options?: ResponseInit) {
-    super(body);
-    this._response = new Response(body, options);
+  constructor(body: string | Error | undefined, options?: ResponseInit) {
+    super(body instanceof Error ? body.message : body);
+    this._error = body instanceof Error ? body : undefined;
+    this._response = new Response(body instanceof Error ? body.message : body, options);
   }
 }
 
@@ -19,11 +22,22 @@ export class HTTPResponseException extends Error {
  * Ensures a valid config object is returned, even with an empty object or partial object passed in
  */
 export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
+  const defaultConfig: HS.Config = {
+    appDir: './app',
+    publicDir: './public',
+    plugins: [],
+    responseOptions: {
+      // Disable streaming for bots by default
+      disableStreaming: (c) => isbot(c.req.raw.headers.get('user-agent') ?? ''),
+    },
+  };
   return {
+    ...defaultConfig,
     ...config,
-    appDir: config.appDir ?? './app',
-    publicDir: config.publicDir ?? './public',
-    plugins: config.plugins ?? [],
+    responseOptions: {
+      ...defaultConfig.responseOptions,
+      ...config.responseOptions,
+    },
   };
 }
 
@@ -102,6 +116,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
  */
 export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
+  let _errorHandler: HS.ErrorHandler | undefined = undefined;
   let _middleware: Record<string, Array<HS.MiddlewareFunction>> = { '*': [] };
 
   const api: HS.Route = {
@@ -141,19 +156,19 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       return api;
     },
     /**
-     * Add a DELETE route handler (typically to delete existing data)
-     */
-    delete(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
-      _handlers['DELETE'] = handler;
-      _middleware['DELETE'] = handlerOptions?.middleware || [];
-      return api;
-    },
-    /**
      * Add a PATCH route handler (typically to update existing data)
      */
     patch(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['PATCH'] = handler;
       _middleware['PATCH'] = handlerOptions?.middleware || [];
+      return api;
+    },
+    /**
+     * Add a DELETE route handler (typically to delete existing data)
+     */
+    delete(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      _handlers['DELETE'] = handler;
+      _middleware['DELETE'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -164,8 +179,11 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       _middleware['OPTIONS'] = handlerOptions?.middleware || [];
       return api;
     },
-    errorHandler(handler: HS.RouteHandler) {
-      _handlers['_ERROR'] = handler;
+    /**
+     * Set a custom error handler for this route to fall back to if the route handler throws an error
+     */
+    errorHandler(handler: HS.ErrorHandler) {
+      _errorHandler = handler;
       return api;
     },
     /**
@@ -223,7 +241,9 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
         }
 
         if (isHTMLContent(routeContent)) {
-          return returnHTMLResponse(context, () => routeContent);
+          // Merge server and route-specific response options
+          const responseOptions = { ...(api._serverConfig?.responseOptions ?? {}), ...(api._config?.responseOptions ?? {}) };
+          return returnHTMLResponse(context, () => routeContent, responseOptions);
         }
 
         const contentType = _typeOf(routeContent);
@@ -239,8 +259,9 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       try {
         return await executeMiddleware(context, [...globalMiddleware, ...methodMiddleware, methodHandler]);
       } catch (e) {
-        if (_handlers['_ERROR']) {
-          return await (_handlers['_ERROR'](context) as Promise<Response>);
+        if (_errorHandler !== undefined) {
+          const responseOptions = { ...(api._serverConfig?.responseOptions ?? {}), ...(api._config?.responseOptions ?? {}) };
+          return returnHTMLResponse(context, () => (_errorHandler as HS.ErrorHandler)(context, e as Error), responseOptions);
         }
         throw e;
       }
@@ -328,7 +349,7 @@ function isHTMLContent(response: unknown): response is Response {
 export async function returnHTMLResponse(
   context: HS.Context,
   handlerFn: () => unknown,
-  responseOptions?: { status?: number; headers?: Record<string, string> }
+  responseOptions?: { status?: number; headers?: Record<string, string>; disableStreaming?: (context: HS.Context) => boolean }
 ): Promise<Response> {
   try {
     const routeContent = await handlerFn();
@@ -340,12 +361,10 @@ export async function returnHTMLResponse(
 
     // Render HSHtml if returned from route handler
     if (isHSHtml(routeContent)) {
-      // @TODO: Move this to config or something...
-      const disableStreaming = context.req.query.get('__nostream') ?? '0';
-      const streamingEnabled = disableStreaming !== '1';
+      const disableStreaming = responseOptions?.disableStreaming?.(context) ?? false;
 
       // Stream only if enabled and there is async content to stream
-      if (streamingEnabled && (routeContent as HSHtml).asyncContent?.length > 0) {
+      if (!disableStreaming && (routeContent as HSHtml).asyncContent?.length > 0) {
         return new StreamResponse(
           renderStream(routeContent as HSHtml, {
             renderChunk: (chunk) => {

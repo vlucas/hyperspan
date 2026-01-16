@@ -1,6 +1,7 @@
-import { HSHtml, html } from '@hyperspan/html';
-import { assetHash } from '../utils';
+import { html } from '@hyperspan/html';
+import { assetHash as assetHashFn } from '../utils';
 import { join } from 'node:path';
+import type { Hyperspan as HS } from '../types';
 
 const CWD = process.cwd();
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -11,23 +12,15 @@ export const JS_IMPORT_MAP = new Map<string, string>();
 const CLIENT_JS_CACHE = new Map<string, { esmName: string, exports: string, fnArgs: string, publicPath: string }>();
 const EXPORT_REGEX = /export\{(.*)\}/g;
 
-type ClientJSModuleReturn = {
-  esmName: string;
-  jsId: string;
-  publicPath: string;
-  renderScriptTag: (loadScript?: ((module: unknown) => HSHtml | string) | string) => HSHtml;
-}
-
 /**
- * Load a client JS module
+ * Build a client JS module and return a Hyperspan.ClientJSBuildResult object
  */
-export async function loadClientJS(modulePathResolved: string): Promise<ClientJSModuleReturn> {
+export async function buildClientJS(modulePathResolved: string): Promise<HS.ClientJSBuildResult> {
   const modulePath = modulePathResolved.replace('file://', '');
-  const jsId = assetHash(modulePath);
+  const assetHash = assetHashFn(modulePath);
 
   // Cache: Avoid re-processing the same file
-  if (!CLIENT_JS_CACHE.has(jsId)) {
-
+  if (!CLIENT_JS_CACHE.has(assetHash)) {
     // Build the client JS module
     const result = await Bun.build({
       entrypoints: [modulePath],
@@ -62,31 +55,31 @@ export async function loadClientJS(modulePathResolved: string): Promise<ClientJS
         '}';
     }
     const fnArgs = exports.replace(/(\w+)\s*as\s*(\w+)/g, '$1: $2');
-    CLIENT_JS_CACHE.set(jsId, { esmName, exports, fnArgs, publicPath });
+    CLIENT_JS_CACHE.set(assetHash, { esmName, exports, fnArgs, publicPath });
   }
 
-  const { esmName, exports, fnArgs, publicPath } = CLIENT_JS_CACHE.get(jsId)!;
+  const { esmName, exports, fnArgs, publicPath } = CLIENT_JS_CACHE.get(assetHash)!;
 
   return {
+    assetHash,
     esmName,
-    jsId,
     publicPath,
     renderScriptTag: (loadScript) => {
       const t = typeof loadScript;
 
       if (t === 'string') {
         return html`
-          <script type="module" data-source-id="${jsId}">import ${exports} from "${esmName}";\n(${html.raw(loadScript as string)})(${fnArgs});</script>
+          <script type="module" data-source-id="${assetHash}">import ${exports} from "${esmName}";\n(${html.raw(loadScript as string)})(${fnArgs});</script>
         `;
       }
       if (t === 'function') {
         return html`
-          <script type="module" data-source-id="${jsId}">import ${exports} from "${esmName}";\n(${html.raw(functionToString(loadScript))})(${fnArgs});</script>
+          <script type="module" data-source-id="${assetHash}">import ${exports} from "${esmName}";\n(${html.raw(functionToString(loadScript))})(${fnArgs});</script>
         `;
       }
 
       return html`
-        <script type="module" data-source-id="${jsId}">import "${esmName}";</script>
+        <script type="module" data-source-id="${assetHash}">import "${esmName}";</script>
       `;
     }
   }
@@ -97,7 +90,5 @@ export async function loadClientJS(modulePathResolved: string): Promise<ClientJS
  * Handles named, async, and arrow functions
  */
 export function functionToString(fn: any) {
-  let str = fn.toString().trim();
-
-  return str;
+  return fn.toString().trim();
 }

@@ -7,7 +7,7 @@
     },
     "packages/cli": {
       "name": "hyperspan",
-      "version": "1.0.0-alpha.8",
+      "version": "1.0.0-alpha.11",
       "bin": {
         "hyperspan": "src/index.ts",
       },
@@ -25,9 +25,10 @@
     },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "1.0.0-alpha.11",
+      "version": "1.0.0-alpha.14",
       "dependencies": {
         "@hyperspan/html": "^1.0.0-alpha",
+        "isbot": "^5.1.32",
         "zod": "^4.1.12",
       },
       "devDependencies": {
@@ -39,30 +40,16 @@
     },
     "packages/html": {
       "name": "@hyperspan/html",
-      "version": "1.0.0-alpha.0",
+      "version": "1.0.0-alpha.1",
       "devDependencies": {
         "@types/bun": "^1.2.11",
         "prettier": "^3.2.5",
         "typescript": "^5.0.0",
       },
     },
-    "packages/middleware-zod": {
-      "name": "@hyperspan/middleware-zod",
-      "version": "1.0.0-alpha.2",
-      "dependencies": {
-        "zod": "^4.3.5",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-      },
-      "peerDependencies": {
-        "@hyperspan/framework": "^1.0.0-alpha",
-        "typescript": "^5",
-      },
-    },
     "packages/plugin-preact": {
       "name": "@hyperspan/plugin-preact",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.3",
       "dependencies": {
         "preact": "^10.26.5",
         "preact-render-to-string": "^6.1.0",
@@ -82,8 +69,6 @@
     "@hyperspan/framework": ["@hyperspan/framework@workspace:packages/framework"],
 
     "@hyperspan/html": ["@hyperspan/html@workspace:packages/html"],
-
-    "@hyperspan/middleware-zod": ["@hyperspan/middleware-zod@workspace:packages/middleware-zod"],
 
     "@hyperspan/plugin-preact": ["@hyperspan/plugin-preact@workspace:packages/plugin-preact"],
 
@@ -126,6 +111,8 @@
     "degit": ["degit@2.8.4", "", { "bin": { "degit": "degit" } }, "sha512-vqYuzmSA5I50J882jd+AbAhQtgK6bdKUJIex1JNfEUPENCgYsxugzKVZlFyMwV4i06MmnV47/Iqi5Io86zf3Ng=="],
 
     "hyperspan": ["hyperspan@workspace:packages/cli"],
+
+    "isbot": ["isbot@5.1.32", "", {}, "sha512-VNfjM73zz2IBZmdShMfAUg10prm6t7HFUQmNAEOAVS4YH92ZrZcvkMcGX6cIgBJAzWDzPent/EeAtYEHNPNPBQ=="],
 
     "preact": ["preact@10.26.5", "", {}, ""],
 
