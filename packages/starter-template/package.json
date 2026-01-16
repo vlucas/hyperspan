@@ -15,7 +15,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@hyperspan/framework": "^1.0.0",
+    "@hyperspan/framework": "^1.0.1",
     "@hyperspan/html": "^1.0.0",
     "@hyperspan/plugin-preact": "^1.0.0",
     "@tailwindcss/typography": "^0.5.16",

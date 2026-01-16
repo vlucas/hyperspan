@@ -32,7 +32,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hyperspan/framework": "^1.0.0",
+    "@hyperspan/framework": "^1.0.1",
     "bun-plugin-tailwind": "^0.1.2",
     "commander": "^14.0.2",
     "degit": "^2.8.4"

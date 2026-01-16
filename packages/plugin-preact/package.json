@@ -29,7 +29,7 @@
   },
   "peerDependencies": {
     "@hyperspan/html": "^1.0.0",
-    "@hyperspan/framework": "^1.0.0"
+    "@hyperspan/framework": "^1.0.1"
   },
   "dependencies": {
     "preact": "^10.26.5",
