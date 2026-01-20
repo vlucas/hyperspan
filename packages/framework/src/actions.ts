@@ -5,7 +5,9 @@ import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
 import { buildClientJS } from './client/js';
 import { validateBody, ZodValidationError } from './middleware';
+import { debug } from 'debug';
 
+const log = debug('hyperspan:actions');
 const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-actions.client'));
 
 /**
@@ -35,7 +37,10 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
         throw new Error('Action POST handler not set! Every action must have a POST handler.');
       }
 
-      const response = await _handler(c, { data: c.vars.body });
+      const data = c.vars.body as z.infer<T> || formDataToJSON(await c.req.formData()) || {};
+      log('POST handler', { data });
+      const response = await _handler(c, { data });
+      log('POST handler response', { response });
 
       if (response instanceof Response) {
         // Replace redirects with special header because fetch() automatically follows redirects
@@ -52,11 +57,13 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
      * Custom error handler for the action since validateBody() throws a HTTPResponseException
      */
     .errorHandler(async (c: HS.Context, err: HTTPResponseException) => {
-      const data = c.vars.body as Partial<z.infer<T>>;
-      const error = err._error as ZodValidationError;
+      const data = c.vars.body as z.infer<T> || formDataToJSON(await c.req.formData()) || {};
+      const error = err._error as ZodValidationError || err;
 
-      // Set the status to 400 by default
-      c.res.status = 400;
+      // Set the status to 400 if it's a ZodValidationError, otherwise 500 (Error thrown by user POST handler)
+      c.res.status = err._error ? 400 : 500;
+
+      log('errorHandler', { data, error });
 
       return await returnHTMLResponse(c, () => {
         return _errorHandler ? _errorHandler(c, { data, error }) : api.render(c, { data, error });

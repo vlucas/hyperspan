@@ -40,6 +40,74 @@ describe('createAction', () => {
     expect(htmlString).toContain('name="name"');
   });
 
+  test('creates an action with a simple form and no schema that returns HTML on POST', async () => {
+    const action = createAction({
+      name: 'test',
+    }).form((c) => {
+      return html`
+          <form>
+            <input type="text" name="name" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return c.res.html(`
+          <p>Hello, ${data?.name}!</p>
+        `);
+    });
+
+    // Build form data
+    const formData = new FormData();
+    formData.append('name', 'John Doe');
+
+    // Test render method
+    const request = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const response = await action.fetch(request);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(200);
+    const responseText = await response.text();
+    expect(responseText).toContain('<p>Hello, John Doe!</p>');
+  });
+
+  test('errors thrown on POST handler provided by user are caught and rendered', async () => {
+    const action = createAction({
+      name: 'test',
+    }).form((c, { error }) => {
+      if (error) {
+        return html`
+          <p>Error: ${error.message}</p>
+        `;
+      }
+
+      return html`
+          <form>
+            <input type="text" name="name" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      throw new Error('Test error');
+    });
+
+    // Build form data
+    const formData = new FormData();
+    formData.append('name', 'John Doe');
+
+    // Test render method
+    const request = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const response = await action.fetch(request);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(500);
+    const responseText = await response.text();
+    expect(responseText).toContain('<p>Error: Test error</p>');
+  });
+
   test('creates an action with a Zod schema matching form inputs', async () => {
     const schema = z.object({
       name: z.string().min(1, 'Name is required'),
