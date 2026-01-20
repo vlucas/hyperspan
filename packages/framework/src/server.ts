@@ -64,14 +64,14 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   // Status override for the response. Will use if set. (e.g. c.res.status = 400)
   let status: number | undefined = undefined;
 
-  const merge = (response: Response) => {
+  const merge = async (response: Response) => {
     // Convert headers to plain objects and merge (response headers override context headers)
     const mergedHeaders = {
       ...Object.fromEntries(headers.entries()),
       ...Object.fromEntries(response.headers.entries()),
     };
 
-    return new Response(response.body, {
+    return new Response(await response.text(), {
       status: context.res.status ?? response.status,
       headers: mergedHeaders,
     });

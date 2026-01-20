@@ -144,7 +144,7 @@ test('createContext() can get and set cookies', () => {
   }
 });
 
-test('createContext() merge() function preserves custom headers when using response methods', () => {
+test('createContext() merge() function preserves custom headers when using response methods', async () => {
   // Create a request
   const request = new Request('http://localhost:3000/');
 
@@ -157,7 +157,7 @@ test('createContext() merge() function preserves custom headers when using respo
   context.res.headers.set('Authorization', 'Bearer token123');
 
   // Use html() method which should merge headers
-  const response = context.res.html('<h1>Test</h1>');
+  const response = await context.res.html('<h1>Test</h1>');
 
   // Verify the response has both the custom headers and the Content-Type header
   expect(response.headers.get('X-Custom-Header')).toBe('custom-value');
@@ -169,7 +169,7 @@ test('createContext() merge() function preserves custom headers when using respo
   expect(response.status).toBe(200);
 });
 
-test('createContext() merge() function preserves custom headers with json() method', () => {
+test('createContext() merge() function preserves custom headers with json() method', async () => {
   const request = new Request('http://localhost:3000/');
   const context = createContext(request);
 
@@ -178,7 +178,7 @@ test('createContext() merge() function preserves custom headers with json() meth
   context.res.headers.set('X-Request-ID', 'req-123');
 
   // Use json() method
-  const response = context.res.json({ message: 'Hello' });
+  const response = await context.res.json({ message: 'Hello' });
 
   // Verify headers are merged
   expect(response.headers.get('X-API-Version')).toBe('v1');
@@ -186,7 +186,7 @@ test('createContext() merge() function preserves custom headers with json() meth
   expect(response.headers.get('Content-Type')).toBe('application/json');
 });
 
-test('createContext() merge() function allows response headers to override context headers', () => {
+test('createContext() merge() function allows response headers to override context headers', async () => {
   const request = new Request('http://localhost:3000/');
   const context = createContext(request);
 
@@ -194,7 +194,7 @@ test('createContext() merge() function allows response headers to override conte
   context.res.headers.set('X-Header', 'context-value');
 
   // Use html() with options that include the same header (should override)
-  const response = context.res.html('<h1>Test</h1>', {
+  const response = await context.res.html('<h1>Test</h1>', {
     headers: {
       'X-Header': 'response-value',
     },

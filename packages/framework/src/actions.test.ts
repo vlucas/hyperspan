@@ -2,7 +2,6 @@ import { test, expect, describe } from 'bun:test';
 import { createAction } from './actions';
 import { html, render, type HSHtml } from '@hyperspan/html';
 import { createContext } from './server';
-import type { Hyperspan as HS } from './types';
 import * as z from 'zod/v4';
 
 describe('createAction', () => {

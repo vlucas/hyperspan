@@ -1,7 +1,10 @@
 import { createContext } from "@hyperspan/framework";
 import { join } from 'node:path';
+import debug from 'debug';
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
+
+const log = debug('hyperspan:cli');
 
 /**
  * Use Bun server. We don't have to do any path parsing here because Bun has its own path parsing logic with param passing in req.params.
@@ -39,20 +42,17 @@ export function startBunServer(server: HS.Server) {
     development: process.env.NODE_ENV === 'development',
     routes,
     fetch: async (request: Request) => {
-      // Serve static files from the public directory
       const url = new URL(request.url);
-      if (url.pathname.startsWith('/_hs/')) {
-        return new Response(Bun.file(join('./', server._config.publicDir, url.pathname)));
-      }
 
-      // Other static file from the public directory
+      // Serve static files from the public directory
       const file = Bun.file(join('./', server._config.publicDir, url.pathname))
       const fileExists = await file.exists()
       if (fileExists) {
+        log(`Serving static file: ${url.pathname}`);
         return new Response(file);
       }
 
-      // Not found
+      log(`Serving 404: ${url.pathname}`);
       return createContext(request).res.notFound();
     },
   });

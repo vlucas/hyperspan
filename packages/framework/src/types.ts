@@ -69,13 +69,13 @@ export namespace Hyperspan {
     cookies: Hyperspan.Cookies;
     headers: Headers; // Headers to merge with final outgoing response
     status: number | undefined;
-    html: (html: string, options?: ResponseInit) => Response
-    json: (json: any, options?: ResponseInit) => Response;
-    text: (text: string, options?: ResponseInit) => Response;
-    redirect: (url: string, options?: ResponseInit) => Response;
-    error: (error: Error, options?: ResponseInit) => Response;
-    notFound: (options?: ResponseInit) => Response;
-    merge: (response: Response) => Response;
+    html: (html: string, options?: ResponseInit) => Promise<Response>;
+    json: (json: any, options?: ResponseInit) => Promise<Response>;
+    text: (text: string, options?: ResponseInit) => Promise<Response>;
+    redirect: (url: string, options?: ResponseInit) => Promise<Response>;
+    error: (error: Error, options?: ResponseInit) => Promise<Response>;
+    notFound: (options?: ResponseInit) => Promise<Response>;
+    merge: (response: Response) => Promise<Response>;
   };
 
   export interface Context {

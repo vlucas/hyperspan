@@ -3,6 +3,7 @@ import { createServer, getRunnableRoute, IS_PROD } from '@hyperspan/framework';
 import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from '@hyperspan/framework/client/css';
 import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
 import { join } from 'node:path';
+import debug from 'debug';
 import tailwind from "bun-plugin-tailwind"
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
@@ -12,6 +13,7 @@ type startConfig = {
 };
 
 const CWD = process.cwd();
+const log = debug('hyperspan:server');
 
 export async function loadConfig(): Promise<HS.Config> {
   const configFile = join(CWD, 'hyperspan.config.ts');
@@ -73,9 +75,11 @@ export async function addDirectoryAsRoutes(
   const buildDir = join(CWD, '.build');
   const cssPublicDir = join(CWD, server._config.publicDir, CSS_PUBLIC_PATH);
 
+  log(`Scanning directory for routes: ${directoryPath}`);
+
   try {
     // Scan directory for TypeScript files
-    for await (const file of routesGlob.scan(directoryPath)) {
+    for await (const file of routesGlob.scan({ cwd: directoryPath, onlyFiles: true })) {
       const filePath = join(directoryPath, file);
 
       // Hidden directories and files start with a double underscore.
@@ -98,6 +102,9 @@ export async function addDirectoryAsRoutes(
         if (!isValidRoutePath(relativeFilePath)) {
           return null;
         }
+
+        log(`Loading route: ${filePath}`);
+
         const module = await import(filePath);
 
         const route = getRunnableRoute(module);

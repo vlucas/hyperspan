@@ -73,8 +73,6 @@ program
 
     console.log(`[Hyperspan] Server started on http://localhost:${httpServer.port} (Press Ctrl+C to stop)`);
     console.log('========================================\n');
-
-    return httpServer;
   });
 
 program
