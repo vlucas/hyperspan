@@ -186,6 +186,6 @@ export namespace Hyperspan {
      * @param loadScript - A function that loads the module or a string of code to load the module
      * @returns HSHtml Template with the <script type="module"> tag
      */
-    renderScriptTag: (loadScript?: ((module: unknown) => HSHtml | string) | string) => HSHtml;
+    renderScriptTag: (loadScript?: ((module: unknown) => HSHtml | string | void) | string) => HSHtml;
   }
 }
