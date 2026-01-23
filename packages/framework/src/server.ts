@@ -185,6 +185,14 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       return api;
     },
     /**
+     * Add a ALL route handler (typically to handle all HTTP methods)
+     */
+    all(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      _handlers['*'] = handler;
+      _middleware['*'] = handlerOptions?.middleware || [];
+      return api;
+    },
+    /**
      * Set a custom error handler for this route to fall back to if the route handler throws an error
      */
     errorHandler(handler: HS.ErrorHandler) {
@@ -192,7 +200,15 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       return api;
     },
     /**
-     * Add middleware specific to this route
+     * Add a middleware function to this route (for all HTTP methods) (non-destructive)
+     */
+    use(middleware: HS.MiddlewareFunction) {
+      _middleware['*'].push(middleware);
+      return api;
+    },
+    /**
+     * Set the complete middleware stack for this route (for all HTTP methods) (destructive)
+     * NOTE: This will override the middleware stack for this route
      */
     middleware(middleware: Array<HS.MiddlewareFunction>) {
       _middleware['*'] = middleware;
@@ -231,7 +247,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
           );
         }
 
-        const handler = method === 'HEAD' ? _handlers['GET'] : _handlers[method];
+        const handler = (method === 'HEAD' ? _handlers['GET'] : _handlers[method]) ?? _handlers['*'];
 
         if (!handler) {
           return context.res.error(new Error('Method not allowed'), { status: 405 });
@@ -328,6 +344,12 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
     },
     options(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       const route = createRoute().options(handler, handlerOptions);
+      route._config.path = path;
+      _routes.push(route);
+      return route;
+    },
+    all(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
+      const route = createRoute().all(handler, handlerOptions);
       route._config.path = path;
       _routes.push(route);
       return route;

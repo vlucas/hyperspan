@@ -16,6 +16,7 @@ export namespace Hyperspan {
     patch: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     delete: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     options: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    all: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
   };
 
   export type Plugin = (config: Hyperspan.Config) => Promise<void> | void;
@@ -145,7 +146,9 @@ export namespace Hyperspan {
     patch: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     delete: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
+    all: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     errorHandler: (handler: Hyperspan.ErrorHandler) => Hyperspan.Route;
+    use: (middleware: Hyperspan.MiddlewareFunction) => Hyperspan.Route;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Hyperspan.Route;
     fetch: (request: Request) => Promise<Response>;
   };

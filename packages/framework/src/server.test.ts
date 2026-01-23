@@ -67,6 +67,34 @@ test('server returns a route with a POST request', async () => {
   expect(await response.text()).toBe('<h1>POST /users</h1>');
 });
 
+test('server returns a route with a ALL request', async () => {
+  const server = await createServer({
+    appDir: './app',
+    publicDir: './public',
+    plugins: [],
+  });
+
+  server.all('/users', (context: HS.Context) => {
+    return context.res.html('<h1>ALL /users</h1>');
+  });
+
+  const route = server._routes.find((route: HS.Route) => route._path() === '/users' && route._methods().includes('*')) as HS.Route;
+
+  // GET request
+  let request = new Request('http://localhost:3000/users', { method: 'GET' });
+  let response = await route.fetch(request);
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe('<h1>ALL /users</h1>');
+
+  // POST request
+  request = new Request('http://localhost:3000/users', { method: 'POST' });
+  response = await route.fetch(request);
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe('<h1>ALL /users</h1>');
+});
+
 test('returns 405 when route path matches but HTTP method does not', async () => {
   const server = await createServer({
     appDir: './app',
