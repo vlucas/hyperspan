@@ -1,7 +1,7 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
-import { parsePath } from './utils';
+import { parsePath, removeUndefined } from './utils';
 import { Cookies } from './cookies';
 
 import type { Hyperspan as HS } from './types';
@@ -51,7 +51,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const headers = new Headers(req.headers);
   const path = route?._path() || '/';
   // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
-  const params: HS.RouteParamsParser<path> & Record<string, string | undefined> = Object.assign({}, req?.params || {}, route?._config.params || {});
+  const params: HS.RouteParamsParser<path> & Record<string, string | undefined> = Object.assign({}, req?.params || {}, removeUndefined(route?._config.params || {}));
 
   // Replace catch-all param with the value from the URL path
   const catchAllParam = Object.keys(params).find(key => key.startsWith('...'));

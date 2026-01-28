@@ -137,3 +137,10 @@ export function formDataToJSON(formData: FormData | URLSearchParams): Record<str
 
   return object;
 }
+
+/**
+ * Remove undefined values from an object
+ */
+export function removeUndefined(obj: Record<string, any>): Record<string, any> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
