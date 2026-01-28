@@ -84,8 +84,8 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
      * Form to render
      * This will be wrapped in a <hs-action> web component and submitted via fetch()
      */
-    form(form: HS.ActionFormHandler<T>) {
-      api._form = form;
+    form(_formFn) {
+      api._form = _formFn;
       return api;
     },
     /**
@@ -101,12 +101,16 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
     /**
      * Get form renderer method
      */
-    render(c: HS.Context, props?: HS.ActionProps<T>) {
+    render(c, props) {
       const formContent = api._form ? api._form(c, props || {}) : null;
       return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${actionsClientJS.renderScriptTag()}` : null;
     },
     errorHandler(handler) {
       _errorHandler = handler;
+      return api;
+    },
+    use(middleware: HS.MiddlewareFunction) {
+      route.use(middleware);
       return api;
     },
     middleware(middleware: Array<HS.MiddlewareFunction>) {

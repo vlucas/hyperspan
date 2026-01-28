@@ -1,4 +1,5 @@
 import { HSHtml } from '@hyperspan/html';
+import { ZodValidationError } from './middleware';
 import * as z from 'zod/v4';
 
 /**
@@ -156,20 +157,29 @@ export namespace Hyperspan {
   /**
    * Action = Form + route handler
    */
-  export type ActionResponse = HSHtml | void | null | Promise<HSHtml | void | null> | Response | Promise<Response>;
-  export type ActionProps<T extends z.ZodTypeAny> = { data?: Partial<z.infer<T>>; error?: z.ZodError | Error };
+  // Form renderer
+  export type ActionFormResponse = HSHtml | void | null | Promise<HSHtml | void | null>;
+  export type ActionFormProps<T extends z.ZodTypeAny> = { data?: Partial<z.infer<T>>; error?: ZodValidationError };
+  export type ActionForm<T extends z.ZodTypeAny> = (
+    c: Context, props: ActionFormProps<T>
+  ) => ActionFormResponse;
+  // Form handler
+  export type ActionFormHandlerResponse = ActionFormResponse | Response | Promise<Response>;
+  export type ActionFormHandlerProps<T extends z.ZodTypeAny> = { data: z.infer<T>; error?: ZodValidationError | Error };
   export type ActionFormHandler<T extends z.ZodTypeAny> = (
-    c: Context, props: ActionProps<T>
-  ) => ActionResponse;
+    c: Context, props: ActionFormHandlerProps<T>
+  ) => ActionFormHandlerResponse;
+  // Action API
   export interface Action<T extends z.ZodTypeAny> {
     _kind: 'hsAction';
     _config: Partial<Hyperspan.RouteConfig>;
     _path(): string;
-    _form: null | ActionFormHandler<T>;
-    form(form: ActionFormHandler<T>): Action<T>;
-    render: (c: Context, props?: ActionProps<T>) => ActionResponse;
+    _form: null | ActionForm<T>;
+    form(form: ActionForm<T>): Action<T>;
+    render: (c: Context, props?: ActionFormProps<T>) => ActionFormResponse;
     post: (handler: ActionFormHandler<T>) => Action<T>;
     errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
+    use: (middleware: Hyperspan.MiddlewareFunction) => Action<T>;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Action<T>;
     fetch: (request: Request) => Promise<Response>;
   }

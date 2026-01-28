@@ -256,7 +256,7 @@ describe('createAction', () => {
 
     const responseText = await response.text();
     // Should render the custom error handler
-    expect(responseText).toContain('Caught error in custom error handler: Input validation error(s)');
+    expect(responseText).toContain('Invalid email address');
     expect(responseText).toContain('Data: {"email":"not-an-email"}');
     // Should NOT contain the success message from post handler
     expect(responseText).not.toContain('Hello,');
