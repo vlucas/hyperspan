@@ -91,7 +91,7 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
 
       const target = content.includes('<html') ? window.document.body : hsActionTag || form;
 
-      Idiomorph.morph(target, content);
+      Idiomorph.morph(target, content, { morphStyle: 'innerHTML' });
       opts.afterResponse && opts.afterResponse();
       lazyLoadScripts();
     });
