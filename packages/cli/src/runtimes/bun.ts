@@ -22,6 +22,11 @@ export function startBunServer(server: HS.Server) {
 
     // Add main route
     routes[path] = (request: Request) => {
+      // Add server middleware to route. Server middleware will run before the route middleware.
+      for (const method of Object.keys(server._middleware) as HS.MiddlewareMethod[]) {
+        route._middleware[method] = server._middleware[method].concat(route._middleware?.[method] || []);
+      }
+
       return route.fetch(request);
     }
 

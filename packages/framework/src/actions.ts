@@ -109,12 +109,12 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
       _errorHandler = handler;
       return api;
     },
-    use(middleware: HS.MiddlewareFunction) {
-      route.use(middleware);
+    use(middleware: HS.MiddlewareFunction, opts?: HS.MiddlewareMethodOptions) {
+      route.use(middleware, opts);
       return api;
     },
-    middleware(middleware: Array<HS.MiddlewareFunction>) {
-      route.middleware(middleware);
+    middleware(middleware: Array<HS.MiddlewareFunction>, opts?: HS.MiddlewareMethodOptions) {
+      route.middleware(middleware, opts);
       return api;
     },
     fetch: route.fetch,

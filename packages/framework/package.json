@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Hyperspan Web Framework",
   "main": "src/server.ts",
   "types": "src/server.ts",

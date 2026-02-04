@@ -8,8 +8,8 @@ export namespace Hyperspan {
   export interface Server {
     _config: Hyperspan.Config;
     _routes: Array<Hyperspan.Route>;
-    _middleware: Array<Hyperspan.MiddlewareFunction>;
-    use: (middleware: Hyperspan.MiddlewareFunction) => Hyperspan.Server;
+    _middleware: Record<Hyperspan.MiddlewareMethod, Array<Hyperspan.MiddlewareFunction>>;
+    use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Hyperspan.Server;
     get: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     post: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     put: (path: string, handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
@@ -133,11 +133,16 @@ export namespace Hyperspan {
     context: Hyperspan.Context,
     next: Hyperspan.NextFunction
   ) => Promise<Response> | Response;
+  export type MiddlewareMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | '*';
+  export type MiddlewareMethodOptions = {
+    method?: Hyperspan.MiddlewareMethod;
+  };
 
   export interface Route {
     _kind: 'hsRoute';
     _config: Partial<Hyperspan.RouteConfig>;
     _serverConfig?: Hyperspan.Config;
+    _middleware: Record<MiddlewareMethod, Array<Hyperspan.MiddlewareFunction>>;
     _path(): string;
     _methods(): string[];
     get: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
@@ -148,8 +153,8 @@ export namespace Hyperspan {
     options: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     all: (handler: Hyperspan.RouteHandler, handlerOptions?: Hyperspan.RouteHandlerOptions) => Hyperspan.Route;
     errorHandler: (handler: Hyperspan.ErrorHandler) => Hyperspan.Route;
-    use: (middleware: Hyperspan.MiddlewareFunction) => Hyperspan.Route;
-    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Hyperspan.Route;
+    use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Hyperspan.Route;
+    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Hyperspan.Route;
     fetch: (request: Request) => Promise<Response>;
   };
 
@@ -178,8 +183,8 @@ export namespace Hyperspan {
     render: (c: Context, props?: ActionFormProps<T>) => ActionFormResponse;
     post: (handler: ActionFormHandler<T>) => Action<T>;
     errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
-    use: (middleware: Hyperspan.MiddlewareFunction) => Action<T>;
-    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>) => Action<T>;
+    use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
+    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
     fetch: (request: Request) => Promise<Response>;
   }
 

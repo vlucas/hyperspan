@@ -122,11 +122,11 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
 export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
   let _errorHandler: HS.ErrorHandler | undefined = undefined;
-  let _middleware: Record<string, Array<HS.MiddlewareFunction>> = { '*': [] };
 
   const api: HS.Route = {
     _kind: 'hsRoute',
     _config: config,
+    _middleware: { GET: [], POST: [], PUT: [], PATCH: [], DELETE: [], HEAD: [], OPTIONS: [], '*': [] },
     _methods: () => Object.keys(_handlers),
     _path() {
       if (this._config.path) {
@@ -141,7 +141,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     get(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['GET'] = handler;
-      _middleware['GET'] = handlerOptions?.middleware || [];
+      api._middleware['GET'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -149,7 +149,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     post(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['POST'] = handler;
-      _middleware['POST'] = handlerOptions?.middleware || [];
+      api._middleware['POST'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -157,7 +157,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     put(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['PUT'] = handler;
-      _middleware['PUT'] = handlerOptions?.middleware || [];
+      api._middleware['PUT'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -165,7 +165,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     patch(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['PATCH'] = handler;
-      _middleware['PATCH'] = handlerOptions?.middleware || [];
+      api._middleware['PATCH'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -173,7 +173,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     delete(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['DELETE'] = handler;
-      _middleware['DELETE'] = handlerOptions?.middleware || [];
+      api._middleware['DELETE'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -181,7 +181,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     options(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['OPTIONS'] = handler;
-      _middleware['OPTIONS'] = handlerOptions?.middleware || [];
+      api._middleware['OPTIONS'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -189,7 +189,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     all(handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
       _handlers['*'] = handler;
-      _middleware['*'] = handlerOptions?.middleware || [];
+      api._middleware['*'] = handlerOptions?.middleware || [];
       return api;
     },
     /**
@@ -202,16 +202,24 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
     /**
      * Add a middleware function to this route (for all HTTP methods) (non-destructive)
      */
-    use(middleware: HS.MiddlewareFunction) {
-      _middleware['*'].push(middleware);
+    use(middleware: HS.MiddlewareFunction, opts: { method?: HS.MiddlewareMethod } = {}) {
+      if (opts.method) {
+        api._middleware[opts.method].push(middleware);
+      } else {
+        api._middleware['*'].push(middleware);
+      }
       return api;
     },
     /**
      * Set the complete middleware stack for this route (for all HTTP methods) (destructive)
      * NOTE: This will override the middleware stack for this route
      */
-    middleware(middleware: Array<HS.MiddlewareFunction>) {
-      _middleware['*'] = middleware;
+    middleware(middleware: Array<HS.MiddlewareFunction>, opts: { method?: HS.MiddlewareMethod } = {}) {
+      if (opts.method) {
+        api._middleware[opts.method] = middleware;
+      } else {
+        api._middleware['*'] = middleware;
+      }
       return api;
     },
 
@@ -220,9 +228,9 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     async fetch(request: Request) {
       const context = createContext(request, api);
-      const method = context.req.method;
-      const globalMiddleware = _middleware['*'] || [];
-      const methodMiddleware = _middleware[method] || [];
+      const method = context.req.method as HS.MiddlewareMethod;
+      const globalMiddleware = api._middleware['*'] || [];
+      const methodMiddleware = api._middleware[method] || [];
 
       const methodHandler = async (context: HS.Context) => {
         // Handle CORS preflight requests (if no OPTIONS handler is defined)
@@ -306,7 +314,6 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
  * Creates a server object that can compose routes and middleware
  */
 export async function createServer(config: HS.Config = {} as HS.Config): Promise<HS.Server> {
-  const _middleware: HS.MiddlewareFunction[] = [];
   const _routes: HS.Route[] = [];
 
   // Load plugins, if any
@@ -317,9 +324,13 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
   const api: HS.Server = {
     _config: config,
     _routes: _routes,
-    _middleware: _middleware,
-    use(middleware: HS.MiddlewareFunction) {
-      _middleware.push(middleware);
+    _middleware: { GET: [], POST: [], PUT: [], PATCH: [], DELETE: [], HEAD: [], OPTIONS: [], '*': [] },
+    use(middleware: HS.MiddlewareFunction, opts?: HS.MiddlewareMethodOptions) {
+      if (opts?.method) {
+        api._middleware[opts.method].push(middleware);
+      } else {
+        api._middleware['*'].push(middleware);
+      }
       return this;
     },
     get(path: string, handler: HS.RouteHandler, handlerOptions?: HS.RouteHandlerOptions) {
