@@ -253,8 +253,18 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
           return context.res.error(new Error('Method not allowed'), { status: 405 });
         }
 
-        // @TODO: Handle errors from route handler
-        const routeContent = await handler(context);
+        // Run the route handler
+        let routeContent: unknown;
+        try {
+          routeContent = await handler(context);
+        } catch (e) {
+          // Return the response from the HTTPResponseException if it exists
+          if (e instanceof HTTPResponseException) {
+            routeContent = e._response;
+          } else {
+            throw e;
+          }
+        }
 
         // Return Response if returned from route handler
         if (routeContent instanceof Response) {

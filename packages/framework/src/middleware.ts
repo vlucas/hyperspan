@@ -1,9 +1,9 @@
 import { formDataToJSON } from './utils';
 import { z, flattenError, prettifyError } from 'zod/v4';
+import { HTTPResponseException } from './server';
 
 import type { ZodAny, ZodObject, ZodError } from 'zod/v4';
 import type { Hyperspan as HS } from './types';
-import { HTTPResponseException } from './server';
 
 export type TValidationType = 'json' | 'form' | 'urlencoded';
 
@@ -25,7 +25,7 @@ function inferValidationType(headers: Headers): TValidationType {
   return 'json';
 }
 
-export class ZodValidationError extends Error {
+export class ZodValidationError extends Error implements HS.ZodValidationError {
   public fieldErrors;
   public formErrors: unknown[];
   constructor(error: ZodError, schema: ZodObject | ZodAny) {
@@ -38,6 +38,9 @@ export class ZodValidationError extends Error {
   }
 }
 
+/**
+ * Validate the query parameters of the request using a Zod schema.
+ */
 export function validateQuery(schema: ZodObject | ZodAny): HS.MiddlewareFunction {
   return async (context: HS.Context, next: HS.NextFunction) => {
     const query = formDataToJSON(context.req.query);
@@ -55,6 +58,9 @@ export function validateQuery(schema: ZodObject | ZodAny): HS.MiddlewareFunction
   }
 }
 
+/**
+ * Validate the body of the request using a Zod schema. Type can be inferred from the Content-Type header or provided explicitly.
+ */
 export function validateBody(schema: ZodObject | ZodAny, type?: TValidationType): HS.MiddlewareFunction {
   return async (context: HS.Context, next: HS.NextFunction) => {
     // Infer type from Content-Type header if not provided

@@ -1,5 +1,4 @@
 import { HSHtml } from '@hyperspan/html';
-import { ZodValidationError } from './middleware';
 import * as z from 'zod/v4';
 
 /**
@@ -197,5 +196,13 @@ export namespace Hyperspan {
      * @returns HSHtml Template with the <script type="module"> tag
      */
     renderScriptTag: (loadScript?: ((module: unknown) => HSHtml | string | void) | string) => HSHtml;
+  }
+
+  /**
+   * Zod validation error type. Used in actions and validation middleware.
+   */
+  export interface ZodValidationError extends Error {
+    fieldErrors: Record<string, string[] | undefined>;
+    formErrors: unknown[];
   }
 }

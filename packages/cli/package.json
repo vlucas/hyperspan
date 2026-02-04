@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,
@@ -16,7 +16,8 @@
     }
   },
   "bin": {
-    "hyperspan": "src/index.ts"
+    "hyperspan": "src/index.ts",
+    "hyperspan-dev": "src/dev.ts"
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
