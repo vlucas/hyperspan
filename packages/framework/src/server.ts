@@ -202,9 +202,11 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
     /**
      * Add a middleware function to this route (for all HTTP methods) (non-destructive)
      */
-    use(middleware: HS.MiddlewareFunction, opts: { method?: HS.MiddlewareMethod } = {}) {
-      if (opts.method) {
-        api._middleware[opts.method].push(middleware);
+    use(middleware: HS.MiddlewareFunction, opts: HS.MiddlewareMethodOptions = {}) {
+      if (opts?.methods) {
+        opts.methods.forEach(method => {
+          api._middleware[method].push(middleware);
+        });
       } else {
         api._middleware['*'].push(middleware);
       }
@@ -214,9 +216,11 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      * Set the complete middleware stack for this route (for all HTTP methods) (destructive)
      * NOTE: This will override the middleware stack for this route
      */
-    middleware(middleware: Array<HS.MiddlewareFunction>, opts: { method?: HS.MiddlewareMethod } = {}) {
-      if (opts.method) {
-        api._middleware[opts.method] = middleware;
+    middleware(middleware: Array<HS.MiddlewareFunction>, opts: HS.MiddlewareMethodOptions = {}) {
+      if (opts?.methods) {
+        opts.methods.forEach(method => {
+          api._middleware[method] = middleware;
+        });
       } else {
         api._middleware['*'] = middleware;
       }
@@ -326,8 +330,10 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
     _routes: _routes,
     _middleware: { GET: [], POST: [], PUT: [], PATCH: [], DELETE: [], HEAD: [], OPTIONS: [], '*': [] },
     use(middleware: HS.MiddlewareFunction, opts?: HS.MiddlewareMethodOptions) {
-      if (opts?.method) {
-        api._middleware[opts.method].push(middleware);
+      if (opts?.methods) {
+        opts.methods.forEach(method => {
+          api._middleware[method].push(middleware);
+        });
       } else {
         api._middleware['*'].push(middleware);
       }

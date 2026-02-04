@@ -135,7 +135,7 @@ export namespace Hyperspan {
   ) => Promise<Response> | Response;
   export type MiddlewareMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | '*';
   export type MiddlewareMethodOptions = {
-    method?: Hyperspan.MiddlewareMethod;
+    methods?: Hyperspan.MiddlewareMethod[];
   };
 
   export interface Route {
