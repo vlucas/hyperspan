@@ -20,15 +20,17 @@ export function startBunServer(server: HS.Server) {
     // Add server config to route
     route._serverConfig = server._config;
 
-    // Add main route
-    routes[path] = (request: Request) => {
-      // Add server middleware to route. Server middleware will run before the route middleware.
-      if (server._middleware && route._middleware) {
-        for (const method of Object.keys(server._middleware) as HS.MiddlewareMethod[]) {
-          route._middleware[method] = server._middleware[method].concat(route._middleware[method] || []);
+    // Add server middleware to route. Server middleware will run before the route middleware.
+    if (server._middleware && route._middleware) {
+      for (const method of Object.keys(server._middleware) as HS.MiddlewareMethod[]) {
+        if (Array.isArray(server._middleware[method]) && Array.isArray(route._middleware[method])) {
+          route._middleware[method] = server._middleware[method].concat(route._middleware[method]);
         }
       }
+    }
 
+    // Add main route
+    routes[path] = (request: Request) => {
       return route.fetch(request);
     }
 
