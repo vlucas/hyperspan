@@ -47,21 +47,7 @@ export async function buildClientJS(modulePathResolved: string): Promise<HS.Clie
 
         // Get the contents of the file to extract the exports
         const contents = await result.outputs[0].text();
-        const exportLine = EXPORT_REGEX.exec(contents);
-
-        let exports = '{}';
-        if (exportLine) {
-          const exportName = exportLine[1];
-          exports =
-            '{' +
-            exportName
-              .split(',')
-              .map((name) => name.trim().split(' as '))
-              .map(([name, alias]) => `${alias === 'default' ? 'default as ' + name : alias}`)
-              .join(', ') +
-            '}';
-        }
-        const fnArgs = exports.replace(/(\w+)\s*as\s*(\w+)/g, '$1: $2');
+        const { exports, fnArgs } = extractExports(contents);
 
         CLIENT_JS_CACHE.set(assetHash, { esmName, exports, fnArgs, publicPath });
       })();
@@ -100,6 +86,36 @@ export async function buildClientJS(modulePathResolved: string): Promise<HS.Clie
       `;
     }
   }
+}
+
+/**
+ * Extract the exports from a client JS module
+ */
+export function extractExports(contents: string): { exports: string, fnArgs: string } {
+  const exportLine = EXPORT_REGEX.exec(contents);
+  let exports = '{}';
+  let fnArgs = '{}';
+
+  if (exportLine) {
+    const exportName = exportLine[1];
+    exports =
+      '{' +
+      exportName
+        .split(',')
+        .map((name) => name.trim().split(' as '))
+        .map(([name, alias]) => `${alias === 'default' ? 'default as ' + name : alias}`)
+        .join(', ') +
+      '}';
+  }
+
+  fnArgs = exports.replace(/(\w+)\s*as\s*(\w+)/g, '$1: $2').trim();
+
+  if (exports === '{}' && fnArgs === '{}') {
+    exports = '* as _module'
+    fnArgs = '_module'
+  }
+
+  return { exports, fnArgs };
 }
 
 /**
