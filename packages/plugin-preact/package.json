@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Hyperspan Plugin for Preact",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -23,16 +23,16 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.11",
-    "prettier": "^3.2.5",
-    "typescript": "^5.0.0"
+    "@types/bun": "^1.3.8",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "@hyperspan/html": "^1.0.0",
     "@hyperspan/framework": "^1.0.1"
   },
   "dependencies": {
-    "preact": "^10.26.5",
-    "preact-render-to-string": "^6.1.0"
+    "preact": "^10.28.3",
+    "preact-render-to-string": "^6.6.5"
   }
 }

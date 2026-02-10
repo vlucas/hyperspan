@@ -105,7 +105,7 @@ export function preactPlugin(): HS.Plugin {
           }
 
           // Add to contents so this is in the client JS as well
-          contents = `import { h, h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';${contents}`;
+          contents = `import { h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';${contents}`;
 
           // Some _interesting_ work at play here...
           // We have to modify the original file contents to add an __HS_PLUGIN export that the renderIsland() function can use to render the component.
