@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Hyperspan Plugin for Preact",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -32,6 +32,7 @@
     "@hyperspan/framework": "^1.0.1"
   },
   "dependencies": {
+    "debug": "^4.4.3",
     "preact": "^10.28.3",
     "preact-render-to-string": "^6.6.5"
   }
