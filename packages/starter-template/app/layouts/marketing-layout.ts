@@ -1,6 +1,7 @@
 import { html } from '@hyperspan/html';
 import { hyperspanScriptTags, hyperspanStyleTags } from '@hyperspan/framework/layout';
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import '../styles/globals.css';
 
 export default function MarketingLayout(context: HS.Context, { title, content }: { title: string; content: any }) {
   return html`

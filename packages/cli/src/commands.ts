@@ -18,21 +18,21 @@ program
   .description('Create a new hyperspan project')
   .argument('<string>', 'project name')
   .action(async (name) => {
-    console.log(`Creating project ${name}`);
+    console.log(`[Hyperspan] Creating project ${name}`);
 
     const emitter = degit('vlucas/hyperspan/packages/starter-template', {
-      cache: true,
+      cache: false,
       force: true,
       verbose: false,
     });
 
     await emitter.clone(`${name}`);
-    console.log(`Hyperspan project created in ${name}`);
-    console.log(`Installing dependencies...`);
+    console.log(`[Hyperspan] project created in ${name}`);
+    console.log(`[Hyperspan] Installing dependencies...`);
     execSync(`cd ${name} && bun install`, { stdio: 'pipe' });
-    console.log(`Dependencies installed!`);
-    console.log(`Running dev server...`);
-    execSync(`cd ${name} && bun dev`, { stdio: 'pipe' });
+    console.log(`[Hyperspan] Dependencies installed!`);
+    console.log(`[Hyperspan] Start your server (copy & paste):`);
+    console.log(`\n\ncd ${name} && bun run dev`);
   });
 
 /**
@@ -44,7 +44,6 @@ program
   .option('--dir <path>', 'directory of your hyperspan project', './')
   .description('Start the server')
   .action(async function (options) {
-
     const IS_DEV_MODE = process.argv.includes('dev');
 
     // Developer mode (extra logging, etc.)
@@ -57,9 +56,7 @@ program
     const serverFile = `${options.dir}/app/routes`;
 
     if (!fs.existsSync(serverFile)) {
-      console.error(
-        'Error: Could not find app/routes - Are you in a Hyperspan project directory?'
-      );
+      console.error('Error: Could not find app/routes - Are you in a Hyperspan project directory?');
       process.exit(1);
     }
 
@@ -69,7 +66,9 @@ program
     const server = await createHyperspanServer({ development: IS_DEV_MODE });
     const httpServer = startBunServer(server);
 
-    console.log(`[Hyperspan] Server started on http://localhost:${httpServer.port} (Press Ctrl+C to stop)`);
+    console.log(
+      `[Hyperspan] Server started on http://localhost:${httpServer.port} (Press Ctrl+C to stop)`
+    );
     console.log('========================================\n');
   });
 
@@ -80,7 +79,6 @@ program
   .action(async (options) => {
     console.error('Error: SSG build not implemented yet... :(');
     process.exit(1);
-
   });
 
 program.parse();
