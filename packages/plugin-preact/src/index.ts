@@ -120,8 +120,6 @@ export function preactPlugin(): HS.Plugin {
               );
             }
 
-            log('component name', componentName);
-
             // Add to contents so this is in the client JS as well
             contents = `import { h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';${contents}`;
 
