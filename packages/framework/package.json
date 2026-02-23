@@ -73,7 +73,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@hyperspan/html": "^1.0.0",
+    "@hyperspan/html": "^1.0.1",
     "debug": "^4.4.3",
     "isbot": "^5.1.32",
     "zod": "^4.1.12"
