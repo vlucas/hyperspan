@@ -62,5 +62,24 @@ function renderStreamChunk(chunk: { id: string }) {
   }
 }
 
-// @ts-ignore
-window._hscc = renderStreamChunk;
+/**
+ * Define the _hsc property on the Window object for streaming content
+ * Render all current chunks in the _hsc array when the window is loaded
+ */
+declare global {
+  interface Window {
+    _hsc: {
+      push: (e: { id: string }) => void;
+      forEach: (callback: (e: { id: string }) => void) => void;
+    };
+  }
+}
+
+window._hsc = window._hsc || [];
+window._hsc.push = function (e: { id: string }) {
+  Array.prototype.push.call(window._hsc, e);
+  renderStreamChunk(e);
+};
+window._hsc.forEach((e: { id: string }) => {
+  renderStreamChunk(e);
+});

@@ -16,22 +16,13 @@ export function hyperspanScriptTags() {
     <script id="hyperspan-streaming-script">
       // [Hyperspan] Streaming - Load the client streaming JS module only when the first chunk is loaded
       window._hsc = window._hsc || [];
-      var hscc = function(e) {
-        if (window._hscc !== undefined) {
-          window._hscc(e);
-        }
-      };
       window._hsc.push = function(e) {
         Array.prototype.push.call(window._hsc, e);
         if (window._hsc.length === 1) {
           const script = document.createElement('script');
           script.src = "${clientStreamingJS.publicPath}";
           document.body.appendChild(script);
-          script.onload = function() {
-            hscc(e);
-          };
         }
-        hscc(e);
       };
     </script>
   `;

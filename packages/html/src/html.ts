@@ -5,6 +5,7 @@ export class HSHtml {
   content = '';
   asyncContent: Array<{
     id: string;
+    handled: boolean;
     promise: Promise<{ id: string; value: unknown }>;
   }>;
 
@@ -101,6 +102,7 @@ function _renderValue(
       if (typeof value.renderAsync === 'function') {
         opts.asyncContent.push({
           id,
+          handled: false,
           // @ts-ignore
           promise: value.renderAsync().then((result: unknown) => ({
             id,
@@ -120,6 +122,7 @@ function _renderValue(
       id = `async_loading_${htmlId++}`;
       opts.asyncContent.push({
         id,
+        handled: false,
         promise: (value as Promise<any>).then((result: unknown) => ({
           id,
           value: result,
@@ -187,41 +190,49 @@ export type RenderStreamOptions = {
  * Primary render method for streaming HTML from server
  */
 export async function* renderStream(tmpl: HSHtml, { renderChunk }: RenderStreamOptions = {}): AsyncGenerator<string> {
+  // Yield the static HTML first
   yield render(tmpl);
+
+  // Attach promises to the async content
   let asyncContent = tmpl.asyncContent;
 
+  // Resolve the next async content as soon as it is ready
   while (asyncContent.length > 0) {
-    // Resolve the next async content as soon as it is ready
     const nextContent = await Promise.race(_asyncContentWithErrorHandling(asyncContent));
 
     // Remove current promise from list (resolved now)
     asyncContent = asyncContent.filter((p) => p.id !== nextContent.id);
 
+    // Render the content and yield the chunk
     const id = nextContent.id;
     const content = _renderValue(nextContent.value, {
+      id,
       asyncContent,
     });
 
+    // Custom chunk rendering function
     if (renderChunk) {
       yield render(renderChunk({ id, content }));
     }
 
     // Default chunk rendering
-    const script = html`<template id="${id}_content">${html.raw(content)}<!--end--></template>`;
-
-    yield render(script);
+    yield render(html`<template id="${id}_content">${html.raw(content)}<!--end--></template>`);
   }
 }
 
 function _asyncContentWithErrorHandling(asyncContent: HSHtml['asyncContent']) {
-  return asyncContent.map((p) =>
-    p.promise.catch((e) => {
+  return asyncContent.map((p) => {
+    if (p.handled) {
+      return p.promise;
+    }
+    p.handled = true;
+    return p.promise.catch((e) => {
       return {
         id: p.id,
         value: _renderError(e),
       };
-    })
-  );
+    });
+  });
 }
 
 export function _renderError(e: Error) {

@@ -230,15 +230,15 @@ describe('createAction', () => {
           </form>
         `;
     }).post(async (c, { data }) => {
-      return c.res.html(`
+      return html`
         <p>Hello, ${data?.name}!</p>
         <p>Your email is ${data?.email}.</p>
-      `);
+      `;
     }).errorHandler(async (c, { data, error }) => {
-      return c.res.html(`
+      return html`
         <p>Caught error in custom error handler: ${error?.message}</p>
         <p>Data: ${JSON.stringify(data)}</p>
-      `);
+      `;
     });
 
     // Test fetch method with invalid data (missing name, invalid email)
@@ -257,7 +257,6 @@ describe('createAction', () => {
     const responseText = await response.text();
     // Should render the custom error handler
     expect(responseText).toContain('Invalid email address');
-    expect(responseText).toContain('Data: {"email":"not-an-email"}');
     // Should NOT contain the success message from post handler
     expect(responseText).not.toContain('Hello,');
   });

@@ -131,7 +131,7 @@ export async function addDirectoryAsRoutes(
           plugins: [tailwind],
           entrypoints: [filePath],
           outdir: buildDir,
-          naming: `${relativeAppPath}/${path.endsWith('/') ? path + 'index' : path}-[hash].[ext]`,
+          naming: `${relativeAppPath}/${filePath.split('/').pop()}-[hash].[ext]`,
           minify: IS_PROD,
           format: 'esm',
           target: 'node',
@@ -140,8 +140,11 @@ export async function addDirectoryAsRoutes(
         // Move CSS files to the public directory
         for (const output of buildResult.outputs) {
           if (output.path.endsWith('.css')) {
-            const cssFileName = output.path.split('/').pop()!;
-            await Bun.write(join(cssPublicDir, cssFileName), Bun.file(output.path));
+            const contentHash = output.hash;
+            const cssFileName = `${contentHash}.css`;
+            const cssOutputFile = Bun.file(output.path);
+            await Bun.write(join(cssPublicDir, cssFileName), cssOutputFile);
+            cssOutputFile.delete();
             cssFiles.push(cssFileName);
           }
         }
