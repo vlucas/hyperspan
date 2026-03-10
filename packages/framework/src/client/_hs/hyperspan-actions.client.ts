@@ -58,10 +58,18 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
   const formData = new FormData(form);
   const formUrl = form.getAttribute('action') || '';
   const method = form.getAttribute('method')?.toUpperCase() || 'POST';
+  const confirmMessage = form.getAttribute('data-confirm') || '';
   const headers = {
     Accept: 'text/html',
     'X-Request-Type': 'partial',
   };
+
+  if (confirmMessage) {
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) {
+      return;
+    }
+  }
 
   const hsActionTag = form.closest('hs-action');
   const submitBtn = form.querySelector('button[type=submit],input[type=submit]');
@@ -92,6 +100,13 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
       const target = content.includes('<html') ? window.document.body : hsActionTag || form;
 
       Idiomorph.morph(target, content, { morphStyle: 'innerHTML' });
+
+      // Check for nested hs-action elements and remove them if present
+      const outerElement = target.querySelector('hs-action');
+      if (outerElement) {
+        outerElement.replaceWith(...outerElement.childNodes);
+      }
+
       opts.afterResponse && opts.afterResponse();
       lazyLoadScripts();
     });
