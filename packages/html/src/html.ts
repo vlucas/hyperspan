@@ -71,7 +71,7 @@ function _renderValue(
     asyncContent: [],
   }
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (value === null || value === undefined || value === false || Number.isNaN(value)) {
     return '';
   }
   const kind = opts.kind || _typeOf(value);

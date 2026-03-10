@@ -34,4 +34,11 @@ describe('html templates', () => {
     expect(content).not.toContain('&gt;');
     expect(content).toContain('<span>');
   });
+
+  it('will render boolean false as an empty string to allow for easy conditional rendering', () => {
+    const tmpl = html`<div>${false && 'true'}</div>`;
+    const content = render(tmpl);
+
+    expect(content).toBe('<div></div>');
+  });
 });
