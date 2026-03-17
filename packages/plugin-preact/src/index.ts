@@ -4,9 +4,38 @@ import { IS_PROD } from '@hyperspan/framework/server';
 import { join, resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
+import { h } from 'preact';
+import { render as preactRenderToString } from 'preact-render-to-string';
 import debug from 'debug';
 
 const log = debug('hyperspan:plugin-preact');
+
+/**
+ * Build the island wrapper HTML: a div for SSR content + a module script tag for client hydration.
+ * Exported so it can be imported by generated island module code and used directly in tests.
+ */
+export function buildIslandHtml(
+  jsId: string,
+  componentName: string,
+  esmName: string,
+  jsContent: string,
+  ssrContent: string,
+  options: { loading?: string } = {}
+): string {
+  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">import ${componentName} from "${esmName}";${jsContent}</script>`;
+  if (options.loading === 'lazy') {
+    return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
+  }
+  return `<div id="${jsId}">${ssrContent}</div>\n${scriptTag}`;
+}
+
+/**
+ * Render a Preact component to an HTML string (SSR).
+ * Exported for direct use in tests and external tooling.
+ */
+export function renderPreactSSR(Component: any, props: any = {}): string {
+  return preactRenderToString(h(Component, props));
+}
 
 // External ESM = https://esm.sh/preact@10.26.4/compat
 const PREACT_ISLAND_CACHE = new Map<string, string>();
@@ -131,18 +160,14 @@ export function preactPlugin(): HS.Plugin {
             // Finally, we need to export all of the functions that do this work in a special way so we don't change the default export or other functions in the module, so that only the Hyperspan renderIsland() function can use them.
             const moduleCode = `// hyperspan:processed
 import { render as __hs_renderToString } from 'preact-render-to-string';
+import { buildIslandHtml as __hs_buildIslandHtml } from '@hyperspan/plugin-preact';
 
 // Original file contents
 ${contents}
 
 // hyperspan:preact-plugin
 function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
-  const scriptTag = \`<script type="module" id="${jsId}_script" data-source-id="${jsId}">import ${componentName} from "${esmName}";\${jsContent}</script>\`;
-  if (options.loading === 'lazy') {
-    return \`<div id="${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n\${scriptTag}</template></div>\`;
-  }
-
-  return \`<div id="${jsId}">\${ssrContent}</div>\n\${scriptTag}\`;
+  return __hs_buildIslandHtml("${jsId}", "${componentName}", "${esmName}", jsContent, ssrContent, options);
 }
 ${componentName}.__HS_ISLAND = {
   id: "${jsId}",
