@@ -4,7 +4,7 @@
 </script>
 
 <div>
-  <p class="py-2 text-sm text-slate-600">A Svelte 5 island with reactive state.</p>
+  <p class="py-2 text-sm text-slate-600">A Svelte 5 island.</p>
   <p class="font-bold text-2xl my-3">Count: {current}</p>
   <div class="flex gap-2 mt-3">
     <button

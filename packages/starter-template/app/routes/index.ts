@@ -98,7 +98,6 @@ export default createRoute().get(async (context) => {
                   >Preact Island</span
                 >
               </div>
-              <p class="py-2 text-sm text-slate-600">A Preact island with reactive state.</p>
               ${renderPreactIsland(ClientCounter, { count: 0 })}
             </div>
 

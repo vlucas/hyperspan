@@ -79,6 +79,7 @@ async function compileVueSFC(
       id,
       ssr,
       scoped: descriptor.styles.some((s) => s.scoped),
+      ssrCssVars: [],
       // Pass binding metadata so the template compiler knows which vars are
       // <script setup> bindings and generates $setup.x refs instead of _ctx.x
       compilerOptions: bindingMetadata ? { bindingMetadata } : undefined,

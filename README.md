@@ -13,4 +13,6 @@ Visit: [Hyperspan.dev](https://www.hyperspan.dev)
 - `@hyperspan/html` - Streaming HTML templates, useable in any project
 - `@hyperspan/framework` - Hyperspan web framework for sites and apps
 - `@hyperspan/plugin-preact` - Preact Islands plugin for Hyperspan
+- `@hyperspan/plugin-svelte` - Svelte 5 Islands plugin for Hyperspan
+- `@hyperspan/plugin-vue` - Vue 3 Islands plugin for Hyperspan
 - `@hyperspan/starter-template` - Hyperspan starter template references in docs
