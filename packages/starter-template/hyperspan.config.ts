@@ -1,12 +1,14 @@
 import { preactPlugin } from '@hyperspan/plugin-preact';
+import { sveltePlugin } from '@hyperspan/plugin-svelte';
+import { vuePlugin } from '@hyperspan/plugin-vue';
 import { createConfig } from '@hyperspan/framework';
 
 /**
  * Hyperspan config
- * This file should be imported FIRST in your app/server.ts file so that plugins are loaded BEFORE other file imports.
+ * @see https://www.hyperspan.dev/docs/config
  */
 export default createConfig({
   appDir: './app',
   publicDir: './public',
-  plugins: [preactPlugin()],
+  plugins: [preactPlugin(), sveltePlugin(), vuePlugin()],
 });

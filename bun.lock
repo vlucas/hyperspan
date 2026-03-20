@@ -7,7 +7,7 @@
     },
     "packages/cli": {
       "name": "hyperspan",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "bin": {
         "hyperspan": "src/index.ts",
         "hyperspan-dev": "src/dev.ts",
@@ -73,6 +73,7 @@
       "version": "1.0.0",
       "dependencies": {
         "debug": "^4.4.3",
+        "svelte": "^5.0.0",
       },
       "devDependencies": {
         "@types/bun": "^1.3.8",
@@ -82,7 +83,6 @@
       "peerDependencies": {
         "@hyperspan/framework": "^1.0.1",
         "@hyperspan/html": "^1.0.0",
-        "svelte": "^5.0.0",
       },
     },
     "packages/plugin-vue": {
@@ -92,33 +92,36 @@
         "@vue/compiler-sfc": "^3.5.0",
         "@vue/server-renderer": "^3.5.0",
         "debug": "^4.4.3",
+        "vue": "^3.5.30",
       },
       "devDependencies": {
         "@types/bun": "^1.3.8",
         "prettier": "^3.8.1",
         "typescript": "^5.9.3",
+        "vue": "^3.5.0",
       },
       "peerDependencies": {
         "@hyperspan/framework": "^1.0.1",
         "@hyperspan/html": "^1.0.0",
-        "vue": "^3.5.30",
       },
     },
     "packages/starter-template": {
       "name": "hyperspan-app",
       "version": "1.0.0",
       "dependencies": {
-        "@hyperspan/framework": "^1.0.13",
-        "@hyperspan/html": "^1.0.0",
+        "@hyperspan/framework": "^1.0.15",
+        "@hyperspan/html": "^1.0.2",
         "@hyperspan/plugin-preact": "^1.0.2",
+        "@hyperspan/plugin-svelte": "^1.0.0",
+        "@hyperspan/plugin-vue": "^1.0.0",
         "@tailwindcss/typography": "^0.5.19",
-        "hyperspan": "^1.0.5",
-        "preact": "^10.28.3",
-        "tailwindcss": "^4.1.18",
+        "hyperspan": "^1.0.8",
+        "preact": "^10.29.0",
+        "tailwindcss": "^4.2.2",
       },
       "devDependencies": {
-        "@types/bun": "^1.3.9",
-        "@types/node": "^22.19.11",
+        "@types/bun": "^1.3.11",
+        "@types/node": "^22.19.15",
         "@types/react": "^19.2.14",
         "prettier": "^3.8.1",
         "typescript": "^5.9.3",
@@ -180,7 +183,7 @@
 
     "@tailwindcss/typography": ["@tailwindcss/typography@0.5.19", "", { "dependencies": { "postcss-selector-parser": "6.0.10" }, "peerDependencies": { "tailwindcss": ">=3.0.0 || insiders || >=4.0.0-alpha.20 || >=4.0.0-beta.1" } }, "sha512-w31dd8HOx3k9vPtcQh5QHP9GwKcgbMp87j58qi6xgiBnFFtKEAgCWnDw4qUT8aHwkCp8bKvb/KGKWWHedP0AAg=="],
 
-    "@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
+    "@types/bun": ["@types/bun@1.3.11", "", { "dependencies": { "bun-types": "1.3.11" } }, "sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg=="],
 
     "@types/debug": ["@types/debug@4.1.12", "", { "dependencies": { "@types/ms": "*" } }, "sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ=="],
 
@@ -226,7 +229,7 @@
 
     "bun-plugin-tailwind": ["bun-plugin-tailwind@0.1.2", "", { "peerDependencies": { "bun": ">=1.0.0" } }, "sha512-41jNC1tZRSK3s1o7pTNrLuQG8kL/0vR/JgiTmZAJ1eHwe0w5j6HFPKeqEk0WAD13jfrUC7+ULuewFBBCoADPpg=="],
 
-    "bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
+    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
 
@@ -272,7 +275,7 @@
 
     "postcss-selector-parser": ["postcss-selector-parser@6.0.10", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-IQ7TZdoaqbT+LCpShg46jnZVlhWD2w6iQYAcYXfHARZ7X1t/UGhhceQDs5X0cGqKvYlHNOuv7Oa1xmb0oQuA3w=="],
 
-    "preact": ["preact@10.28.3", "", {}, "sha512-tCmoRkPQLpBeWzpmbhryairGnhW9tKV6c6gr/w+RhoRoKEJwsjzipwp//1oCpGPOchvSLaAPlpcJi9MwMmoPyA=="],
+    "preact": ["preact@10.29.0", "", {}, "sha512-wSAGyk2bYR1c7t3SZ3jHcM6xy0lcBcDel6lODcs9ME6Th++Dx2KU+6D3HD8wMMKGA8Wpw7OMd3/4RGzYRpzwRg=="],
 
     "preact-render-to-string": ["preact-render-to-string@6.6.5", "", { "peerDependencies": { "preact": ">=10 || >= 11.0.0-0" } }, "sha512-O6MHzYNIKYaiSX3bOw0gGZfEbOmlIDtDfWwN1JJdc/T3ihzRT6tGGSEWE088dWrEDGa1u7101q+6fzQnO9XCPA=="],
 
@@ -282,7 +285,7 @@
 
     "svelte": ["svelte@5.53.12", "", { "dependencies": { "@jridgewell/remapping": "^2.3.4", "@jridgewell/sourcemap-codec": "^1.5.0", "@sveltejs/acorn-typescript": "^1.0.5", "@types/estree": "^1.0.5", "@types/trusted-types": "^2.0.7", "acorn": "^8.12.1", "aria-query": "5.3.1", "axobject-query": "^4.1.0", "clsx": "^2.1.1", "devalue": "^5.6.4", "esm-env": "^1.2.1", "esrap": "^2.2.2", "is-reference": "^3.0.3", "locate-character": "^3.0.0", "magic-string": "^0.30.11", "zimmerframe": "^1.1.2" } }, "sha512-4x/uk4rQe/d7RhfvS8wemTfNjQ0bJbKvamIzRBfTe2eHHjzBZ7PZicUQrC2ryj83xxEacfA1zHKd1ephD1tAxA=="],
 
-    "tailwindcss": ["tailwindcss@4.1.18", "", {}, "sha512-4+Z+0yiYyEtUVCScyfHCxOYP06L5Ne+JiHhY2IjR2KWMIWhJOYZKLSGZaP5HkZ8+bY0cxfzwDE5uOmzFXyIwxw=="],
+    "tailwindcss": ["tailwindcss@4.2.2", "", {}, "sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
@@ -296,7 +299,9 @@
 
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
-    "hyperspan-app/@types/node": ["@types/node@22.19.11", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w=="],
+    "hyperspan-app/@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
+
+    "hyperspan-app/hyperspan": ["hyperspan@1.0.8", "", { "dependencies": { "@hyperspan/framework": "^1.0.13", "bun-plugin-tailwind": "^0.1.2", "commander": "^14.0.3", "degit": "^2.8.4" }, "bin": { "hyperspan": "src/index.ts", "hyperspan-dev": "src/dev.ts" } }, "sha512-YEvoRrVcq8J9CNO6VHhW9S48HwqdPsDxGFHGKrnwb1w4J/7m5IL0dy8r5aeHszb2tcqJilRdrmJCKXhA7J0c8w=="],
 
     "hyperspan-app/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
   }

@@ -214,6 +214,75 @@ test('createContext() merge() function preserves custom headers with json() meth
   expect(response.headers.get('Content-Type')).toBe('application/json');
 });
 
+test('route returning AsyncGenerator produces a streaming response', async () => {
+  async function* streamingHandler() {
+    yield '<h1>Hello</h1>';
+    yield '<p>World</p>';
+    yield '<p>Streaming</p>';
+  }
+
+  const route = createRoute().get(async (_context: HS.Context) => {
+    return streamingHandler();
+  });
+
+  const request = new Request('http://localhost:3000/');
+  const response = await route.fetch(request);
+
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Transfer-Encoding')).toBe('chunked');
+  expect(response.headers.get('Content-Type')).toBe('text/html; charset=UTF-8');
+
+  const text = await response.text();
+  expect(text).toBe('<h1>Hello</h1><p>World</p><p>Streaming</p>');
+});
+
+test('route returning a sync Generator produces a streaming response', async () => {
+  function* streamingHandler() {
+    yield '<h1>Hello</h1>';
+    yield '<p>World</p>';
+    yield '<p>Streaming</p>';
+  }
+
+  const route = createRoute().get((_context: HS.Context) => {
+    return streamingHandler();
+  });
+
+  const request = new Request('http://localhost:3000/');
+  const response = await route.fetch(request);
+
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Transfer-Encoding')).toBe('chunked');
+  expect(response.headers.get('Content-Type')).toBe('text/html; charset=UTF-8');
+
+  const text = await response.text();
+  expect(text).toBe('<h1>Hello</h1><p>World</p><p>Streaming</p>');
+});
+
+test('route returning a Generator respects Content-Type set on context.res.headers', async () => {
+  async function* streamingHandler() {
+    yield 'Hello';
+    yield ' World';
+  }
+
+  const route = createRoute().get((context: HS.Context) => {
+    context.res.headers.set('Content-Type', 'text/plain');
+    return streamingHandler();
+  });
+
+  const request = new Request('http://localhost:3000/');
+  const response = await route.fetch(request);
+
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Transfer-Encoding')).toBe('chunked');
+  expect(response.headers.get('Content-Type')).toBe('text/plain');
+
+  const text = await response.text();
+  expect(text).toBe('Hello World');
+});
+
 test('createContext() merge() function allows response headers to override context headers', async () => {
   const request = new Request('http://localhost:3000/');
   const context = createContext(request);

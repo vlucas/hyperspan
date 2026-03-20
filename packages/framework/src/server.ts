@@ -291,7 +291,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
 
         const contentType = _typeOf(routeContent);
         if (contentType === 'generator') {
-          return new StreamResponse(routeContent as AsyncGenerator);
+          return new StreamResponse(routeContent as AsyncGenerator, { headers: Object.fromEntries(context.res.headers.entries()) });
         }
 
         return routeContent;
@@ -545,14 +545,20 @@ export class StreamResponse extends Response {
     const { status, headers, ...restOptions } = options;
     const stream = createReadableStreamFromAsyncGenerator(iterator as AsyncGenerator);
 
+    const mergedHeaders = new Headers({
+      'Transfer-Encoding': 'chunked',
+      'Content-Type': 'text/html; charset=UTF-8',
+      'Content-Encoding': 'Identity',
+    });
+    if (headers) {
+      for (const [key, value] of Object.entries(headers)) {
+        mergedHeaders.set(key, value);
+      }
+    }
+
     return new Response(stream, {
       status: status ?? 200,
-      headers: {
-        'Transfer-Encoding': 'chunked',
-        'Content-Type': 'text/html; charset=UTF-8',
-        'Content-Encoding': 'Identity',
-        ...(headers ?? {}),
-      },
+      headers: mergedHeaders,
       ...restOptions,
     });
   }

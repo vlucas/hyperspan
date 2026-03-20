@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
 import debug from 'debug';
+import { parse, compileScript, compileTemplate, rewriteDefault } from '@vue/compiler-sfc';
+import './types.d';
 
 const log = debug('hyperspan:plugin-vue');
 
@@ -50,9 +52,6 @@ async function compileVueSFC(
   id: string,
   ssr: boolean
 ): Promise<string> {
-  const { parse, compileScript, compileTemplate, rewriteDefault } =
-    await import('@vue/compiler-sfc');
-
   const { descriptor, errors } = parse(source, { filename: filepath });
 
   if (errors.length) {
@@ -63,8 +62,10 @@ async function compileVueSFC(
 
   // Compile <script> / <script setup> block
   let scriptCode = 'const __sfc__ = {};';
+  let bindingMetadata: Record<string, any> | undefined;
   if (descriptor.script || descriptor.scriptSetup) {
     const scriptResult = compileScript(descriptor, { id });
+    bindingMetadata = scriptResult.bindings;
     // Rename `export default` to `const __sfc__ =` so we can augment it
     scriptCode = rewriteDefault(scriptResult.content, '__sfc__');
   }
@@ -78,6 +79,9 @@ async function compileVueSFC(
       id,
       ssr,
       scoped: descriptor.styles.some((s) => s.scoped),
+      // Pass binding metadata so the template compiler knows which vars are
+      // <script setup> bindings and generates $setup.x refs instead of _ctx.x
+      compilerOptions: bindingMetadata ? { bindingMetadata } : undefined,
     });
 
     if (templateResult.errors.length) {
@@ -98,6 +102,18 @@ async function compileVueSFC(
  * Build Vue client JS and copy to public folder
  */
 async function copyVueToPublicFolder(config: HS.Config) {
+  const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
+  const devOutputFile = join(outdir, 'vue-client.js');
+
+  // In dev mode, skip the build if the file already exists to avoid
+  // conflicts with bun --watch (building vue triggers watch restarts)
+  if (!IS_PROD && (await Bun.file(devOutputFile).exists())) {
+    const builtFilePath = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
+    JS_IMPORT_MAP.set('vue', builtFilePath);
+    JS_IMPORT_MAP.set('vue/dist/vue.esm-bundler.js', builtFilePath);
+    return;
+  }
+
   const currentNodeEnv = process.env.NODE_ENV || 'production';
   const sourceFile = resolve(__dirname, './vue-client.ts');
 
@@ -105,11 +121,16 @@ async function copyVueToPublicFolder(config: HS.Config) {
   process.env.NODE_ENV = 'production';
   const result = await Bun.build({
     entrypoints: [sourceFile],
-    outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
+    outdir,
     naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
     minify: true,
     format: 'esm',
     target: 'browser',
+    define: {
+      __VUE_OPTIONS_API__: 'true',
+      __VUE_PROD_DEVTOOLS__: 'false',
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+    },
   });
   process.env.NODE_ENV = currentNodeEnv;
 
@@ -157,40 +178,57 @@ export function vuePlugin(): HS.Plugin {
             // Compile the Vue SFC for server-side rendering
             const ssrCode = await compileVueSFC(source, args.path, jsId, true);
 
-            // Build the client-side bundle using an inline Vue SFC compiler plugin
-            const vueClientPlugin = {
-              name: 'vue-client-compiler',
-              setup(clientBuild: any) {
-                clientBuild.onLoad(
-                  { filter: /\.vue$/ },
-                  async ({ path }: { path: string }) => {
-                    const src = await Bun.file(path).text();
-                    const clientId = assetHash(path);
-                    const compiledCode = await compileVueSFC(src, path, clientId, false);
-                    return { contents: compiledCode, loader: 'js' };
-                  }
-                );
-              },
-            };
+            const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
+            const baseName = args.path.split('/').pop()!.replace('.vue', '');
 
-            // We need to build the file to ship it to the client with dependencies
-            const clientResult = await Bun.build({
-              entrypoints: [args.path],
-              outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
-              naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
-              external: Array.from(JS_IMPORT_MAP.keys()),
-              minify: true,
-              format: 'esm',
-              target: 'browser',
-              plugins: [vueClientPlugin],
-              env: 'APP_PUBLIC_*',
-            });
+            let esmName: string;
+            if (!IS_PROD) {
+              // In dev mode, write compiled JS directly — avoids nested Bun.build() inside
+              // Bun.plugin() onLoad which causes EISDIR conflicts under bun --watch.
+              // The browser import map resolves 'vue' to vue-client.js.
+              const clientCode = await compileVueSFC(source, args.path, jsId, false);
+              await Bun.write(join(outdir, `${baseName}.js`), clientCode);
+              esmName = baseName;
+            } else {
+              // Production: full bundle with tree-shaking and minification
+              const vueClientPlugin = {
+                name: 'vue-client-compiler',
+                setup(clientBuild: any) {
+                  clientBuild.onLoad(
+                    { filter: /\.vue$/ },
+                    async ({ path }: { path: string }) => {
+                      const src = await Bun.file(path).text();
+                      const clientId = assetHash(path);
+                      const compiledCode = await compileVueSFC(src, path, clientId, false);
+                      return { contents: compiledCode, loader: 'js' };
+                    }
+                  );
+                },
+              };
 
-            // Add output file to import map
-            const esmName = String(clientResult.outputs[0].path.split('/').reverse()[0]).replace(
-              '.js',
-              ''
-            );
+              const clientResult = await Bun.build({
+                entrypoints: [args.path],
+                outdir,
+                naming: '[dir]/[name]-[hash].[ext]',
+                external: Array.from(JS_IMPORT_MAP.keys()),
+                minify: true,
+                format: 'esm',
+                target: 'browser',
+                plugins: [vueClientPlugin],
+                env: 'APP_PUBLIC_*',
+                define: {
+                  __VUE_OPTIONS_API__: 'true',
+                  __VUE_PROD_DEVTOOLS__: 'false',
+                  __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+                },
+              });
+
+              esmName = String(clientResult.outputs[0].path.split('/').reverse()[0]).replace(
+                '.js',
+                ''
+              );
+            }
+
             JS_IMPORT_MAP.set(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
             log('added to import map', esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
 
@@ -203,9 +241,14 @@ export function vuePlugin(): HS.Plugin {
             // The client script imports the ESM bundle and uses Vue's createSSRApp for hydration.
             // Note: render() is async because Vue's renderToString() returns a Promise.
             const moduleCode = `// hyperspan:processed
-import { createSSRApp as __hs_createSSRApp } from 'vue';
-import { renderToString as __hs_renderToString } from '@vue/server-renderer';
-import { buildIslandHtml as __hs_buildIslandHtml } from '@hyperspan/plugin-vue';
+function __hs_buildIslandHtml(jsId, componentName, esmName, jsContent, ssrContent, options) {
+  options = options || {};
+  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">import \${componentName} from "\${esmName}";\${jsContent}</script>\`;
+  if (options.loading === 'lazy') {
+    return \`<div id="\${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\\n\${scriptTag}</template></div>\`;
+  }
+  return \`<div id="\${jsId}">\${ssrContent}</div>\\n\${scriptTag}\`;
+}
 
 // Server-side compiled Vue component
 ${ssrCode}
@@ -218,6 +261,11 @@ function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
 ${componentName}.__HS_ISLAND = {
   id: "${jsId}",
   render: async (props, options = {}) => {
+    // Dynamic imports keep vue/server-renderer out of the static module graph
+    // so the CSS-extraction bundler does not try to bundle them.
+    const { createSSRApp: __hs_createSSRApp } = await import('vue');
+    const { renderToString: __hs_renderToString } = await import('@vue/server-renderer');
+
     if (options.ssr === false) {
       const jsContent = \`import { createApp as __hs_createApp } from 'vue';__hs_createApp(__hs_vue_component, \${JSON.stringify(props)}).mount(document.getElementById("${jsId}"));\`;
       return __hs_renderIsland(jsContent, '', options);

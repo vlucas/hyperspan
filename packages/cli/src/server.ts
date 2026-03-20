@@ -135,11 +135,15 @@ export async function addDirectoryAsRoutes(
           minify: IS_PROD,
           format: 'esm',
           target: 'node',
+          // Only extract CSS — don't bundle framework packages or component files.
+          // Under bun --watch, bundling @hyperspan/* causes EISDIR path collisions.
+          external: ['@hyperspan/*', '*.vue', '*.svelte', '*.tsx', '*.jsx'],
         });
 
         // Move CSS files to the public directory
         for (const output of buildResult.outputs) {
           if (output.path.endsWith('.css')) {
+            // Use content hash for filename so that we don't duplicate CSS files with the same content (helps browser caching).
             const contentHash = output.hash;
             const cssFileName = `${contentHash}.css`;
             const cssOutputFile = Bun.file(output.path);
