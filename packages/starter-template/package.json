@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.11",
-    "@types/node": "^22.19.15",
+    "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3"
@@ -17,9 +17,9 @@
   "dependencies": {
     "@hyperspan/framework": "^1.0.15",
     "@hyperspan/html": "^1.0.2",
-    "@hyperspan/plugin-preact": "^1.0.2",
-    "@hyperspan/plugin-svelte": "^1.0.0",
-    "@hyperspan/plugin-vue": "^1.0.0",
+    "@hyperspan/plugin-preact": "^1.0.3",
+    "@hyperspan/plugin-svelte": "^1.0.1",
+    "@hyperspan/plugin-vue": "^1.0.2",
     "@tailwindcss/typography": "^0.5.19",
     "hyperspan": "^1.0.9",
     "preact": "^10.29.0",

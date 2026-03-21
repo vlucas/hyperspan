@@ -26,7 +26,7 @@
     },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "1.0.15",
+      "version": "1.0.16",
       "dependencies": {
         "@hyperspan/html": "^1.0.1",
         "debug": "^4.4.3",
@@ -52,7 +52,7 @@
     },
     "packages/plugin-preact": {
       "name": "@hyperspan/plugin-preact",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "dependencies": {
         "debug": "^4.4.3",
         "preact": "^10.28.3",
@@ -70,7 +70,7 @@
     },
     "packages/plugin-svelte": {
       "name": "@hyperspan/plugin-svelte",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "debug": "^4.4.3",
         "svelte": "^5.0.0",
@@ -87,7 +87,7 @@
     },
     "packages/plugin-vue": {
       "name": "@hyperspan/plugin-vue",
-      "version": "1.0.0",
+      "version": "1.0.2",
       "dependencies": {
         "@vue/compiler-sfc": "^3.5.0",
         "@vue/server-renderer": "^3.5.0",
@@ -115,13 +115,13 @@
         "@hyperspan/plugin-svelte": "^1.0.0",
         "@hyperspan/plugin-vue": "^1.0.0",
         "@tailwindcss/typography": "^0.5.19",
-        "hyperspan": "^1.0.8",
+        "hyperspan": "^1.0.9",
         "preact": "^10.29.0",
         "tailwindcss": "^4.2.2",
       },
       "devDependencies": {
         "@types/bun": "^1.3.11",
-        "@types/node": "^22.19.15",
+        "@types/node": "^25.5.0",
         "@types/react": "^19.2.14",
         "prettier": "^3.8.1",
         "typescript": "^5.9.3",
@@ -299,10 +299,8 @@
 
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
-    "hyperspan-app/@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
+    "hyperspan-app/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
 
-    "hyperspan-app/hyperspan": ["hyperspan@1.0.8", "", { "dependencies": { "@hyperspan/framework": "^1.0.13", "bun-plugin-tailwind": "^0.1.2", "commander": "^14.0.3", "degit": "^2.8.4" }, "bin": { "hyperspan": "src/index.ts", "hyperspan-dev": "src/dev.ts" } }, "sha512-YEvoRrVcq8J9CNO6VHhW9S48HwqdPsDxGFHGKrnwb1w4J/7m5IL0dy8r5aeHszb2tcqJilRdrmJCKXhA7J0c8w=="],
-
-    "hyperspan-app/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+    "hyperspan-app/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
   }
 }
