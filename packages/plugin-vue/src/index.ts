@@ -1,3 +1,4 @@
+import './types.d';
 import { JS_IMPORT_MAP, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { assetHash } from '@hyperspan/framework/utils';
 import { IS_PROD } from '@hyperspan/framework/server';
@@ -5,10 +6,38 @@ import { join, resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
 import debug from 'debug';
-import { parse, compileScript, compileTemplate, rewriteDefault } from '@vue/compiler-sfc';
-import './types.d';
+// Use the ESM browser build: the Node CJS build inlines consolidate and static `require()`
+// calls for optional engines (velocityjs, pug, etc.). Bun resolves those at bundle time and
+// errors unless every optional package is installed. The browser bundle has the same SFC API
+// without those preprocessors — fine for compile-from-source string workflows.
+import { parse, compileScript, compileTemplate, rewriteDefault } from '@vue/compiler-sfc/dist/compiler-sfc.esm-browser.js';
 
 const log = debug('hyperspan:plugin-vue');
+
+/** Dev: stable `[name].js` via Bun default. Prod: hashed filenames for caching. */
+const ISLAND_JS_NAMING = IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined;
+
+function islandBundleBaseName(outputPath: string): string {
+  return String(outputPath.split('/').reverse()[0]!.replace(/\.js$/i, ''));
+}
+
+/** Prefer the real entry artifact — `outputs[0]` is often a shared chunk, not the .vue entry. */
+function pickEntryPointJsOutput(
+  outputs: ReadonlyArray<{ path: string; kind?: string }>,
+  entrySourcePath: string
+): { path: string } {
+  const js = outputs.filter((o) => o.path.endsWith('.js'));
+  const entry = js.find((o) => o.kind === 'entry-point');
+  if (entry) return entry;
+  const sourceBase = entrySourcePath.split('/').pop()!.replace(/\.(vue|ts)$/i, '');
+  const byName = js.find((o) => {
+    const b = islandBundleBaseName(o.path);
+    return b === sourceBase || b.startsWith(`${sourceBase}-`);
+  });
+  if (byName) return byName;
+  if (js[0]) return js[0];
+  throw new Error('[Hyperspan] Vue island client build produced no JS output');
+}
 
 /**
  * Build the island wrapper HTML: a div for SSR content + a module script tag for client hydration.
@@ -40,7 +69,9 @@ export async function renderVueSSR(Component: any, props: any = {}): Promise<str
   return renderToString(app);
 }
 
-const VUE_ISLAND_CACHE = new Map<string, string>();
+type VueIslandCacheEntry = { contents: string; esmName: string };
+
+const VUE_ISLAND_CACHE = new Map<string, VueIslandCacheEntry>();
 
 /**
  * Compile a Vue SFC to JavaScript using @vue/compiler-sfc.
@@ -104,16 +135,6 @@ async function compileVueSFC(
  */
 async function copyVueToPublicFolder(config: HS.Config) {
   const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
-  const devOutputFile = join(outdir, 'vue-client.js');
-
-  // In dev mode, skip the build if the file already exists to avoid
-  // conflicts with bun --watch (building vue triggers watch restarts)
-  if (!IS_PROD && (await Bun.file(devOutputFile).exists())) {
-    const builtFilePath = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
-    JS_IMPORT_MAP.set('vue', builtFilePath);
-    JS_IMPORT_MAP.set('vue/dist/vue.esm-bundler.js', builtFilePath);
-    return;
-  }
 
   const currentNodeEnv = process.env.NODE_ENV || 'production';
   const sourceFile = resolve(__dirname, './vue-client.ts');
@@ -123,7 +144,7 @@ async function copyVueToPublicFolder(config: HS.Config) {
   const result = await Bun.build({
     entrypoints: [sourceFile],
     outdir,
-    naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+    naming: ISLAND_JS_NAMING,
     minify: true,
     format: 'esm',
     target: 'browser',
@@ -135,7 +156,8 @@ async function copyVueToPublicFolder(config: HS.Config) {
   });
   process.env.NODE_ENV = currentNodeEnv;
 
-  const builtFileName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
+  const vueClientEntry = pickEntryPointJsOutput(result.outputs, sourceFile);
+  const builtFileName = islandBundleBaseName(vueClientEntry.path);
   const builtFilePath = `${JS_ISLAND_PUBLIC_PATH}/${builtFileName}.js`;
 
   JS_IMPORT_MAP.set('vue', builtFilePath);
@@ -163,11 +185,18 @@ export function vuePlugin(): HS.Plugin {
             log('vue file loaded', args.path);
             const jsId = assetHash(args.path);
 
+            if (!JS_IMPORT_MAP.has('vue')) {
+              await copyVueToPublicFolder(config);
+            }
+
             // Cache: Avoid re-processing the same file
             if (VUE_ISLAND_CACHE.has(jsId)) {
+              const hit = VUE_ISLAND_CACHE.get(jsId)!;
+              // Re-register: JS_IMPORT_MAP may have been reset (e.g. module reload) while this cache survives.
+              JS_IMPORT_MAP.set(hit.esmName, `${JS_ISLAND_PUBLIC_PATH}/${hit.esmName}.js`);
               log('vue file cached', args.path);
               return {
-                contents: VUE_ISLAND_CACHE.get(jsId) || '',
+                contents: hit.contents,
                 loader: 'js',
               };
             }
@@ -180,55 +209,41 @@ export function vuePlugin(): HS.Plugin {
             const ssrCode = await compileVueSFC(source, args.path, jsId, true);
 
             const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
-            const baseName = args.path.split('/').pop()!.replace('.vue', '');
 
-            let esmName: string;
-            if (!IS_PROD) {
-              // In dev mode, write compiled JS directly — avoids nested Bun.build() inside
-              // Bun.plugin() onLoad which causes EISDIR conflicts under bun --watch.
-              // The browser import map resolves 'vue' to vue-client.js.
-              const clientCode = await compileVueSFC(source, args.path, jsId, false);
-              await Bun.write(join(outdir, `${baseName}.js`), clientCode);
-              esmName = baseName;
-            } else {
-              // Production: full bundle with tree-shaking and minification
-              const vueClientPlugin = {
-                name: 'vue-client-compiler',
-                setup(clientBuild: any) {
-                  clientBuild.onLoad(
-                    { filter: /\.vue$/ },
-                    async ({ path }: { path: string }) => {
-                      const src = await Bun.file(path).text();
-                      const clientId = assetHash(path);
-                      const compiledCode = await compileVueSFC(src, path, clientId, false);
-                      return { contents: compiledCode, loader: 'js' };
-                    }
-                  );
-                },
-              };
+            const vueClientPlugin = {
+              name: 'vue-client-compiler',
+              setup(clientBuild: any) {
+                clientBuild.onLoad(
+                  { filter: /\.vue$/ },
+                  async ({ path }: { path: string }) => {
+                    const src = await Bun.file(path).text();
+                    const clientId = assetHash(path);
+                    const compiledCode = await compileVueSFC(src, path, clientId, false);
+                    return { contents: compiledCode, loader: 'js' };
+                  }
+                );
+              },
+            };
 
-              const clientResult = await Bun.build({
-                entrypoints: [args.path],
-                outdir,
-                naming: '[dir]/[name]-[hash].[ext]',
-                external: Array.from(JS_IMPORT_MAP.keys()),
-                minify: true,
-                format: 'esm',
-                target: 'browser',
-                plugins: [vueClientPlugin],
-                env: 'APP_PUBLIC_*',
-                define: {
-                  __VUE_OPTIONS_API__: 'true',
-                  __VUE_PROD_DEVTOOLS__: 'false',
-                  __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
-                },
-              });
+            const clientResult = await Bun.build({
+              entrypoints: [args.path],
+              outdir,
+              naming: ISLAND_JS_NAMING,
+              external: Array.from(JS_IMPORT_MAP.keys()),
+              minify: true,
+              format: 'esm',
+              target: 'browser',
+              plugins: [vueClientPlugin],
+              env: 'APP_PUBLIC_*',
+              define: {
+                __VUE_OPTIONS_API__: 'true',
+                __VUE_PROD_DEVTOOLS__: 'false',
+                __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+              },
+            });
 
-              esmName = String(clientResult.outputs[0].path.split('/').reverse()[0]).replace(
-                '.js',
-                ''
-              );
-            }
+            const entryOut = pickEntryPointJsOutput(clientResult.outputs, args.path);
+            const esmName = islandBundleBaseName(entryOut.path);
 
             JS_IMPORT_MAP.set(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
             log('added to import map', esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
@@ -280,7 +295,7 @@ ${componentName}.__HS_ISLAND = {
 };
 `;
 
-            VUE_ISLAND_CACHE.set(jsId, moduleCode);
+            VUE_ISLAND_CACHE.set(jsId, { contents: moduleCode, esmName });
 
             return {
               contents: moduleCode,

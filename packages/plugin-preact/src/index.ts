@@ -10,6 +10,30 @@ import debug from 'debug';
 
 const log = debug('hyperspan:plugin-preact');
 
+/** Dev: stable `[name].js` via Bun default. Prod: hashed filenames for caching. */
+const ISLAND_JS_NAMING = IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined;
+
+function islandBundleBaseName(outputPath: string): string {
+  return String(outputPath.split('/').reverse()[0]!.replace(/\.js$/i, ''));
+}
+
+function pickEntryPointJsOutput(
+  outputs: ReadonlyArray<{ path: string; kind?: string }>,
+  entrySourcePath: string
+): { path: string } {
+  const js = outputs.filter((o) => o.path.endsWith('.js'));
+  const entry = js.find((o) => o.kind === 'entry-point');
+  if (entry) return entry;
+  const sourceBase = entrySourcePath.split('/').pop()!.replace(/\.(tsx|ts|jsx|js)$/i, '');
+  const byName = js.find((o) => {
+    const b = islandBundleBaseName(o.path);
+    return b === sourceBase || b.startsWith(`${sourceBase}-`);
+  });
+  if (byName) return byName;
+  if (js[0]) return js[0];
+  throw new Error('[Hyperspan] Preact island build produced no JS output');
+}
+
 /**
  * Build the island wrapper HTML: a div for SSR content + a module script tag for client hydration.
  * Exported so it can be imported by generated island module code and used directly in tests.
@@ -38,7 +62,9 @@ export function renderPreactSSR(Component: any, props: any = {}): string {
 }
 
 // External ESM = https://esm.sh/preact@10.26.4/compat
-const PREACT_ISLAND_CACHE = new Map<string, string>();
+type PreactIslandCacheEntry = { contents: string; esmName: string };
+
+const PREACT_ISLAND_CACHE = new Map<string, PreactIslandCacheEntry>();
 
 /**
  * Build Preact client JS and copy to public folder
@@ -52,14 +78,15 @@ async function copyPreactToPublicFolder(config: HS.Config) {
   const result = await Bun.build({
     entrypoints: [sourceFile],
     outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
-    naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+    naming: ISLAND_JS_NAMING,
     minify: true,
     format: 'esm',
     target: 'browser',
   });
   process.env.NODE_ENV = currentNodeEnv;
 
-  const builtFileName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
+  const preactEntry = pickEntryPointJsOutput(result.outputs, sourceFile);
+  const builtFileName = islandBundleBaseName(preactEntry.path);
   const builtFilePath = `${JS_ISLAND_PUBLIC_PATH}/${builtFileName}.js`;
 
   JS_IMPORT_MAP.set('preact', builtFilePath);
@@ -80,7 +107,7 @@ async function copyPreactToPublicFolder(config: HS.Config) {
 export function preactPlugin(): HS.Plugin {
   return async (config: HS.Config) => {
     try {
-      log('plguin loaded');
+      log('plugin loaded');
       // Ensure Preact can be loaded on the client
       if (!JS_IMPORT_MAP.has('preact')) {
         await copyPreactToPublicFolder(config);
@@ -95,11 +122,17 @@ export function preactPlugin(): HS.Plugin {
             log('tsx file loaded', args.path);
             const jsId = assetHash(args.path);
 
+            if (!JS_IMPORT_MAP.has('preact')) {
+              await copyPreactToPublicFolder(config);
+            }
+
             // Cache: Avoid re-processing the same file
             if (PREACT_ISLAND_CACHE.has(jsId)) {
+              const hit = PREACT_ISLAND_CACHE.get(jsId)!;
+              JS_IMPORT_MAP.set(hit.esmName, `${JS_ISLAND_PUBLIC_PATH}/${hit.esmName}.js`);
               log('tsx file cached', args.path);
               return {
-                contents: PREACT_ISLAND_CACHE.get(jsId) || '',
+                contents: hit.contents,
                 loader: 'js',
               };
             }
@@ -110,7 +143,7 @@ export function preactPlugin(): HS.Plugin {
             const result = await Bun.build({
               entrypoints: [args.path],
               outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
-              naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+              naming: ISLAND_JS_NAMING,
               external: Array.from(JS_IMPORT_MAP.keys()),
               minify: true,
               format: 'esm',
@@ -118,12 +151,14 @@ export function preactPlugin(): HS.Plugin {
               env: 'APP_PUBLIC_*',
             });
 
+            const entryOut = pickEntryPointJsOutput(result.outputs, args.path);
+            const esmName = islandBundleBaseName(entryOut.path);
+
             // Add output file to import map
-            const esmName = String(result.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
             JS_IMPORT_MAP.set(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
             log('added to import map', esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
 
-            let contents = await result.outputs[0].text();
+            let contents = await Bun.file(entryOut.path).text();
 
             // Look for the default export
             const RE_EXPORT_DEFAULT = /export\{([^\s]+) as default\}/;
@@ -185,7 +220,7 @@ ${componentName}.__HS_ISLAND = {
 }
 `;
 
-            PREACT_ISLAND_CACHE.set(jsId, moduleCode);
+            PREACT_ISLAND_CACHE.set(jsId, { contents: moduleCode, esmName });
 
             return {
               contents: moduleCode,

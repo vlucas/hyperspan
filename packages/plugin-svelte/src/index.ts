@@ -10,6 +10,31 @@ import './types.d';
 
 const log = debug('hyperspan:plugin-svelte');
 
+/** Dev: stable `[name].js` via Bun default. Prod: hashed filenames for caching. */
+const ISLAND_JS_NAMING = IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined;
+
+function islandBundleBaseName(outputPath: string): string {
+  return String(outputPath.split('/').reverse()[0]!.replace(/\.js$/i, ''));
+}
+
+/** Prefer the real entry artifact — `outputs[0]` is often a shared chunk, not the source entry. */
+function pickEntryPointJsOutput(
+  outputs: ReadonlyArray<{ path: string; kind?: string }>,
+  entrySourcePath: string
+): { path: string } {
+  const js = outputs.filter((o) => o.path.endsWith('.js'));
+  const entry = js.find((o) => o.kind === 'entry-point');
+  if (entry) return entry;
+  const sourceBase = entrySourcePath.split('/').pop()!.replace(/\.(svelte|ts)$/i, '');
+  const byName = js.find((o) => {
+    const b = islandBundleBaseName(o.path);
+    return b === sourceBase || b.startsWith(`${sourceBase}-`);
+  });
+  if (byName) return byName;
+  if (js[0]) return js[0];
+  throw new Error('[Hyperspan] Svelte island build produced no JS output');
+}
+
 /** Import specifiers that resolve to the unified Svelte browser bundle (one closure for hydration state). */
 const SVELTE_CLIENT_BUNDLE_SPECIFIERS = [
   'svelte',
@@ -57,21 +82,15 @@ export async function renderSvelteSSR(Component: any, props: any = {}): Promise<
   return render(Component, { props }).html;
 }
 
-const SVELTE_ISLAND_CACHE = new Map<string, string>();
+type SvelteIslandCacheEntry = { contents: string; esmName: string };
+
+const SVELTE_ISLAND_CACHE = new Map<string, SvelteIslandCacheEntry>();
 
 /**
  * Build Svelte client JS and copy to public folder
  */
 async function copySvelteToPublicFolder(config: HS.Config) {
   const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
-  const devClientBundleFile = join(outdir, 'svelte-client.js');
-
-  // In dev mode, skip the build if the file already exists to avoid
-  // conflicts with bun --watch (building svelte triggers watch restarts)
-  if (!IS_PROD && (await Bun.file(devClientBundleFile).exists())) {
-    registerSvelteClientBundle(`${JS_ISLAND_PUBLIC_PATH}/svelte-client.js`);
-    return;
-  }
 
   const currentNodeEnv = process.env.NODE_ENV || 'production';
   const internalSourceFile = resolve(__dirname, './svelte-client.ts');
@@ -81,14 +100,15 @@ async function copySvelteToPublicFolder(config: HS.Config) {
   const internalResult = await Bun.build({
     entrypoints: [internalSourceFile],
     outdir,
-    naming: IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined,
+    naming: ISLAND_JS_NAMING,
     minify: true,
     format: 'esm',
     target: 'browser',
   });
   process.env.NODE_ENV = currentNodeEnv;
 
-  const internalFileName = String(internalResult.outputs[0].path.split('/').reverse()[0]).replace('.js', '');
+  const internalEntry = pickEntryPointJsOutput(internalResult.outputs, internalSourceFile);
+  const internalFileName = islandBundleBaseName(internalEntry.path);
   const internalFilePath = `${JS_ISLAND_PUBLIC_PATH}/${internalFileName}.js`;
 
   registerSvelteClientBundle(internalFilePath);
@@ -115,11 +135,17 @@ export function sveltePlugin(): HS.Plugin {
             log('svelte file loaded', args.path);
             const jsId = assetHash(args.path);
 
+            if (!JS_IMPORT_MAP.has('svelte')) {
+              await copySvelteToPublicFolder(config);
+            }
+
             // Cache: Avoid re-processing the same file
             if (SVELTE_ISLAND_CACHE.has(jsId)) {
+              const hit = SVELTE_ISLAND_CACHE.get(jsId)!;
+              JS_IMPORT_MAP.set(hit.esmName, `${JS_ISLAND_PUBLIC_PATH}/${hit.esmName}.js`);
               log('svelte file cached', args.path);
               return {
-                contents: SVELTE_ISLAND_CACHE.get(jsId) || '',
+                contents: hit.contents,
                 loader: 'js',
               };
             }
@@ -137,51 +163,34 @@ export function sveltePlugin(): HS.Plugin {
             const ssrCode = ssrResult.js.code;
 
             const outdir = join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH);
-            const baseName = args.path.split('/').pop()!.replace('.svelte', '');
 
-            let esmName: string;
-            if (!IS_PROD) {
-              // In dev mode, write compiled JS directly — avoids nested Bun.build() inside
-              // Bun.plugin() onLoad which causes EISDIR conflicts under bun --watch.
-              // The browser import map resolves 'svelte' to svelte-client.js.
-              const clientResult = compile(source, {
-                filename: args.path,
-                generate: 'client',
-              });
-              await Bun.write(join(outdir, `${baseName}.js`), clientResult.js.code);
-              esmName = baseName;
-            } else {
-              // Production: full bundle with tree-shaking and minification
-              const svelteClientPlugin = {
-                name: 'svelte-client-compiler',
-                setup(clientBuild: any) {
-                  clientBuild.onLoad(
-                    { filter: /\.svelte$/ },
-                    async ({ path }: { path: string }) => {
-                      const src = await Bun.file(path).text();
-                      const result = compile(src, { filename: path, generate: 'client' });
-                      return { contents: result.js.code, loader: 'js' };
-                    }
-                  );
-                },
-              };
-              const clientResult = await Bun.build({
-                entrypoints: [args.path],
-                outdir,
-                naming: '[dir]/[name]-[hash].[ext]',
-                external: Array.from(JS_IMPORT_MAP.keys()),
-                minify: true,
-                format: 'esm',
-                target: 'browser',
-                plugins: [svelteClientPlugin],
-                env: 'APP_PUBLIC_*',
-              });
+            const svelteClientPlugin = {
+              name: 'svelte-client-compiler',
+              setup(clientBuild: any) {
+                clientBuild.onLoad(
+                  { filter: /\.svelte$/ },
+                  async ({ path }: { path: string }) => {
+                    const src = await Bun.file(path).text();
+                    const result = compile(src, { filename: path, generate: 'client' });
+                    return { contents: result.js.code, loader: 'js' };
+                  }
+                );
+              },
+            };
+            const clientResult = await Bun.build({
+              entrypoints: [args.path],
+              outdir,
+              naming: ISLAND_JS_NAMING,
+              external: Array.from(JS_IMPORT_MAP.keys()),
+              minify: true,
+              format: 'esm',
+              target: 'browser',
+              plugins: [svelteClientPlugin],
+              env: 'APP_PUBLIC_*',
+            });
 
-              esmName = String(clientResult.outputs[0].path.split('/').reverse()[0]).replace(
-                '.js',
-                ''
-              );
-            }
+            const entryOut = pickEntryPointJsOutput(clientResult.outputs, args.path);
+            const esmName = islandBundleBaseName(entryOut.path);
 
             // Add output file to import map
             JS_IMPORT_MAP.set(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
@@ -245,7 +254,7 @@ ${componentName}.__HS_ISLAND = {
 };
 `;
 
-            SVELTE_ISLAND_CACHE.set(jsId, moduleCode);
+            SVELTE_ISLAND_CACHE.set(jsId, { contents: moduleCode, esmName });
 
             return {
               contents: moduleCode,

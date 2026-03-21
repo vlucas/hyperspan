@@ -1,5 +1,6 @@
 {
   "compileOnSave": true,
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
