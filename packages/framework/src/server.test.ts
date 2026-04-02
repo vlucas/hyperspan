@@ -15,6 +15,28 @@ test('route fetch() returns a Response', async () => {
   expect(await response.text()).toBe('<h1>Hello World</h1>');
 });
 
+test('route handler returning undefined or null yields 204 No Content', async () => {
+  const withHeader = createRoute().get((context: HS.Context) => {
+    context.res.headers.set('X-Empty', '1');
+  });
+
+  const req = new Request('http://localhost:3000/');
+  let response = await withHeader.fetch(req);
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(204);
+  expect(response.headers.get('X-Empty')).toBe('1');
+  expect(await response.text()).toBe('');
+
+  const explicitNull = createRoute().get(() => null);
+  response = await explicitNull.fetch(req);
+  expect(response.status).toBe(204);
+  expect(await response.text()).toBe('');
+
+  const asyncVoid = createRoute().get(async () => undefined);
+  response = await asyncVoid.fetch(req);
+  expect(response.status).toBe(204);
+});
+
 test('server with two routes can return Response from one', async () => {
   const server = await createServer({
     appDir: './app',
@@ -212,6 +234,52 @@ test('createContext() merge() function preserves custom headers with json() meth
   expect(response.headers.get('X-API-Version')).toBe('v1');
   expect(response.headers.get('X-Request-ID')).toBe('req-123');
   expect(response.headers.get('Content-Type')).toBe('application/json');
+});
+
+test('route returning ReadableStream produces a streaming response', async () => {
+  const route = createRoute().get((_context: HS.Context) => {
+    return new ReadableStream({
+      start(controller) {
+        const enc = new TextEncoder();
+        controller.enqueue(enc.encode('alpha'));
+        controller.enqueue(enc.encode('beta'));
+        controller.close();
+      },
+    });
+  });
+
+  const request = new Request('http://localhost:3000/');
+  const response = await route.fetch(request);
+
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(response.body).toBeInstanceOf(ReadableStream);
+  expect(response.headers.get('Transfer-Encoding')).toBe('chunked');
+  expect(response.headers.get('Content-Encoding')).toBe('Identity');
+  expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
+  expect(await response.text()).toBe('alphabeta');
+});
+
+test('route returning ReadableStream respects Content-Type set on context.res.headers', async () => {
+  const route = createRoute().get((context: HS.Context) => {
+    context.res.headers.set('Content-Type', 'text/plain; charset=UTF-8');
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('ok'));
+        controller.close();
+      },
+    });
+  });
+
+  const request = new Request('http://localhost:3000/');
+  const response = await route.fetch(request);
+
+  expect(response).toBeInstanceOf(Response);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Transfer-Encoding')).toBe('chunked');
+  expect(response.headers.get('Content-Encoding')).toBe('Identity');
+  expect(response.headers.get('Content-Type')).toBe('text/plain; charset=UTF-8');
+  expect(await response.text()).toBe('ok');
 });
 
 test('route returning AsyncGenerator produces a streaming response', async () => {

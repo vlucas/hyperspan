@@ -114,10 +114,20 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   return context;
 }
 
+/**
+ * 204 No Content when the route handler returns `undefined` or `null`.
+ */
+function noContentResponse(context: HS.Context): Response {
+  return new Response(null, {
+    status: 204,
+    headers: context.res.headers,
+  });
+}
 
 /**
  * Define a route that can handle a direct HTTP request.
- * Route handlers should return a HSHtml or Response object
+ * Route handlers should return HSHtml, a Response, a stream, a generator, etc.
+ * Returning `undefined` or `null` sends 204 No Content (with merged `context.res` headers).
  */
 export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
   const _handlers: Record<string, HS.RouteHandler> = {};
@@ -236,7 +246,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       const globalMiddleware = api._middleware['*'] || [];
       const methodMiddleware = api._middleware[method] || [];
 
-      const methodHandler = async (context: HS.Context) => {
+      const methodHandler: HS.RouteHandler = async (context) => {
         // Handle CORS preflight requests (if no OPTIONS handler is defined)
         if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
           return context.res.html(
@@ -289,12 +299,25 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
           return returnHTMLResponse(context, () => routeContent, responseOptions);
         }
 
+        const streamOptions = {
+          status: context.res.status ?? 200,
+          headers: Object.fromEntries(context.res.headers.entries()),
+        };
+
         const contentType = _typeOf(routeContent);
         if (contentType === 'generator') {
-          return new StreamResponse(routeContent as AsyncGenerator, { headers: Object.fromEntries(context.res.headers.entries()) });
+          return new StreamResponse(routeContent as AsyncGenerator, streamOptions);
         }
 
-        return routeContent;
+        if (routeContent instanceof ReadableStream) {
+          return new StreamResponse(routeContent, streamOptions);
+        }
+
+        if (routeContent === undefined || routeContent === null) {
+          return noContentResponse(context);
+        }
+
+        return routeContent as HS.RouteHandlerReturn;
       };
 
       // Run the route handler and any middleware
@@ -537,17 +560,28 @@ async function showErrorReponse(
 
 
 /**
- * Streaming HTML Response
+ * Streaming response: chunked transfer with Transfer-Encoding and Content-Encoding.
+ * Pass an async iterator (HTML chunks) or a ReadableStream; default Content-Type is HTML for iterators
+ * and application/octet-stream for readable streams. Optional headers override defaults.
  */
 export class StreamResponse extends Response {
-  constructor(iterator: AsyncIterator<unknown>, options: { status?: number; headers?: Record<string, string> } = {}) {
+  constructor(
+    body: AsyncIterator<unknown> | ReadableStream,
+    options: { status?: number; headers?: Record<string, string> } = {}
+  ) {
     super();
     const { status, headers, ...restOptions } = options;
-    const stream = createReadableStreamFromAsyncGenerator(iterator as AsyncGenerator);
+    const stream =
+      body instanceof ReadableStream
+        ? body
+        : createReadableStreamFromAsyncGenerator(body as AsyncGenerator);
+
+    const defaultContentType =
+      body instanceof ReadableStream ? 'application/octet-stream' : 'text/html; charset=UTF-8';
 
     const mergedHeaders = new Headers({
       'Transfer-Encoding': 'chunked',
-      'Content-Type': 'text/html; charset=UTF-8',
+      'Content-Type': defaultContentType,
       'Content-Encoding': 'Identity',
     });
     if (headers) {

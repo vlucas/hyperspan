@@ -100,7 +100,21 @@ export namespace Hyperspan {
       disableStreaming?: (context: Hyperspan.Context) => boolean;
     };
   };
-  export type RouteHandler = (context: Hyperspan.Context) => unknown;
+
+  export type RouteHandlerReturn =
+    | Response
+    | HSHtml
+    | string
+    | ReadableStream
+    | AsyncIterable<unknown>
+    | Iterable<unknown>
+    | undefined
+    | null
+    | void;
+
+  export type RouteHandler = (
+    context: Hyperspan.Context
+  ) => RouteHandlerReturn | Promise<RouteHandlerReturn>;
   export type RouteHandlerOptions = {
     middleware?: Hyperspan.MiddlewareFunction[];
   }
