@@ -125,7 +125,7 @@
       "name": "hyperspan-app",
       "version": "1.0.0",
       "dependencies": {
-        "@hyperspan/framework": "^1.0.15",
+        "@hyperspan/framework": "^1.0.18",
         "@hyperspan/html": "^1.0.2",
         "@hyperspan/plugin-preact": "^1.0.3",
         "@hyperspan/plugin-svelte": "^1.0.1",
@@ -316,8 +316,6 @@
     "zimmerframe": ["zimmerframe@1.1.4", "", {}, "sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ=="],
 
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
-
-    "example-todo-app/@hyperspan/framework": ["@hyperspan/framework@1.0.18", "", { "dependencies": { "@hyperspan/html": "^1.0.1", "debug": "^4.4.3", "isbot": "^5.1.32", "zod": "^4.1.12" } }, "sha512-wJk9/H9ZnFNQx1h9HNleHxm2bsBI0PY5O/q+KDmII3yDRk+5XrPl21jyfygJD0ehDMO1rnytu7bs2cuP51+rdw=="],
 
     "example-todo-app/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
 
