@@ -24,9 +24,25 @@
         "@types/node": "^24.10.13",
       },
     },
+    "packages/example-todo-app": {
+      "name": "example-todo-app",
+      "version": "1.0.0",
+      "dependencies": {
+        "@hyperspan/framework": "^1.0.18",
+        "@hyperspan/html": "^1.0.2",
+        "hyperspan": "^1.0.9",
+        "tailwindcss": "^4.2.2",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.11",
+        "@types/node": "^25.5.0",
+        "prettier": "^3.8.1",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/framework": {
       "name": "@hyperspan/framework",
-      "version": "1.0.16",
+      "version": "1.0.18",
       "dependencies": {
         "@hyperspan/html": "^1.0.1",
         "debug": "^4.4.3",
@@ -111,9 +127,9 @@
       "dependencies": {
         "@hyperspan/framework": "^1.0.15",
         "@hyperspan/html": "^1.0.2",
-        "@hyperspan/plugin-preact": "^1.0.2",
-        "@hyperspan/plugin-svelte": "^1.0.0",
-        "@hyperspan/plugin-vue": "^1.0.0",
+        "@hyperspan/plugin-preact": "^1.0.3",
+        "@hyperspan/plugin-svelte": "^1.0.1",
+        "@hyperspan/plugin-vue": "^1.0.2",
         "@tailwindcss/typography": "^0.5.19",
         "hyperspan": "^1.0.9",
         "preact": "^10.29.0",
@@ -253,6 +269,8 @@
 
     "estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
+    "example-todo-app": ["example-todo-app@workspace:packages/example-todo-app"],
+
     "hyperspan": ["hyperspan@workspace:packages/cli"],
 
     "hyperspan-app": ["hyperspan-app@workspace:packages/starter-template"],
@@ -299,7 +317,13 @@
 
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
+    "example-todo-app/@hyperspan/framework": ["@hyperspan/framework@1.0.18", "", { "dependencies": { "@hyperspan/html": "^1.0.1", "debug": "^4.4.3", "isbot": "^5.1.32", "zod": "^4.1.12" } }, "sha512-wJk9/H9ZnFNQx1h9HNleHxm2bsBI0PY5O/q+KDmII3yDRk+5XrPl21jyfygJD0ehDMO1rnytu7bs2cuP51+rdw=="],
+
+    "example-todo-app/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
+
     "hyperspan-app/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
+
+    "example-todo-app/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "hyperspan-app/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
   }
