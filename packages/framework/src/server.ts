@@ -1,11 +1,12 @@
 import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
-import { parsePath, removeUndefined } from './utils';
+import { assetHash, parsePath, removeUndefined } from './utils';
 import { Cookies } from './cookies';
-
+import { buildClientJS } from './client/js';
 import type { Hyperspan as HS } from './types';
 
+const livePartialJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-live-partials.client'));
 export const IS_PROD = process.env.NODE_ENV === 'production';
 
 export class HTTPResponseException extends Error {
@@ -380,6 +381,29 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
       route._config.path = path;
       _routes.push(route);
       return route;
+    },
+  };
+
+  return api;
+}
+
+/**
+ * Partial route can refresh automatically when URL params change
+ */
+export function createLivePartial(options: {
+  name: string;
+}, render: (context: HS.Context) => HS.ActionFormResponse): HS.LivePartial {
+  const api: HS.LivePartial = {
+    _kind: 'hsLivePartial',
+    _name: options.name,
+    _path: () => `/__hs/lp/${assetHash(options.name)}`,
+    render: (context) => {
+      return html`
+        <hs-live-partial name="${options.name}" path="${api._path()}">
+          ${render(context)}
+        </hs-live-partial>
+        ${livePartialJS.renderScriptTag()}
+      `;
     },
   };
 

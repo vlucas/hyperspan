@@ -158,6 +158,17 @@ export namespace Hyperspan {
     fetch: (request: Request) => Promise<Response>;
   };
 
+  export type LivePartialProps = {
+    name: string;
+    render: (context: Hyperspan.Context) => Hyperspan.ActionFormResponse;
+  }
+  export interface LivePartial {
+    _kind: 'hsLivePartial';
+    _name: string;
+    _path(): string;
+    render: (context: Hyperspan.Context) => Hyperspan.ActionFormResponse;
+  }
+
   /**
    * Action = Form + route handler
    */
