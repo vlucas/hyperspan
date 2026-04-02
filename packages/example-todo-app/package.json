@@ -1,0 +1,22 @@
+{
+  "name": "example-todo-app",
+  "description": "Hyperspan.dev example todo app",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "hyperspan-dev dev",
+    "start": "hyperspan start",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.11",
+    "@types/node": "^25.5.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@hyperspan/framework": "^1.0.15",
+    "@hyperspan/html": "^1.0.2",
+    "hyperspan": "^1.0.9",
+    "tailwindcss": "^4.2.2"
+  }
+}
