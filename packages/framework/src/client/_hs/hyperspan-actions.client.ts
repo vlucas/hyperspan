@@ -77,6 +77,27 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     submitBtn.setAttribute('disabled', 'disabled');
   }
 
+  function applyResponseHtml(html: string) {
+    const isFullDocument = html.includes('<html');
+    if (isFullDocument) {
+      html = html.replace(/^[\s\uFEFF]*<!DOCTYPE[^>]*>/i, '');
+    }
+    const target = isFullDocument ? window.document : hsActionTag || form;
+    const options = isFullDocument ? undefined : { morphStyle: 'innerHTML' };
+
+    Idiomorph.morph(target, html, options);
+
+    if (!isFullDocument) {
+      const outerElement = target.querySelector('hs-action');
+      if (outerElement) {
+        outerElement.replaceWith(...outerElement.childNodes);
+      }
+    }
+
+    opts.afterResponse && opts.afterResponse();
+    lazyLoadScripts();
+  }
+
   fetch(formUrl, { body: formData, method, headers })
     .then((res: Response) => {
       // Look for special header that indicates a redirect.
@@ -84,6 +105,17 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
       if (res.headers.has('X-Redirect-Location')) {
         const newUrl = res.headers.get('X-Redirect-Location');
         if (newUrl) {
+          const resolved = new URL(newUrl, window.location.href);
+
+          // If the new URL is the same as the current URL, we can just fetch the new HTML and apply it
+          if (resolved.pathname === window.location.pathname) {
+            return fetch(resolved.href, {
+              headers: { Accept: 'text/html' },
+            })
+              .then((r) => r.text());
+          }
+
+          // If the new URL is different, we need to redirect the user to the new URL
           window.location.assign(newUrl);
         }
         return '';
@@ -97,17 +129,9 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
         return;
       }
 
-      const target = content.includes('<html') ? window.document.body : hsActionTag || form;
-
-      Idiomorph.morph(target, content, { morphStyle: 'innerHTML' });
-
-      // Check for nested hs-action elements and remove them if present
-      const outerElement = target.querySelector('hs-action');
-      if (outerElement) {
-        outerElement.replaceWith(...outerElement.childNodes);
-      }
-
-      opts.afterResponse && opts.afterResponse();
-      lazyLoadScripts();
+      applyResponseHtml(content);
+    })
+    .catch((error) => {
+      console.error('[Hyperspan] Error submitting form action:', error);
     });
 }

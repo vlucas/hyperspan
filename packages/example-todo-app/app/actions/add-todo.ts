@@ -16,7 +16,7 @@ export default createAction({ name: 'add-todo', schema })
           name="title"
           value="${data?.title || ''}"
           placeholder="What needs to be done?"
-          class="flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          class="flex-1 border border-slate-300 bg-white placeholder:text-slate-400 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           autofocus
         />
         ${error ? html`<p class="text-red-500 text-xs mt-1">${error.message}</p>` : ''}
