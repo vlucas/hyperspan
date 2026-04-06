@@ -3,8 +3,14 @@ import { join } from 'node:path';
 import debug from 'debug';
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import type { Server } from 'bun';
 
 const log = debug('hyperspan:cli');
+
+/** https://bun.com/docs/runtime/http/server#server-requestip-request */
+function clientAddressString(request: Request, bunServer: Server): string {
+  return bunServer.requestIP(request)?.address ?? '';
+}
 
 /**
  * Use Bun server. We don't have to do any path parsing here because Bun has its own path parsing logic with param passing in req.params.
@@ -30,8 +36,8 @@ export function startBunServer(server: HS.Server) {
     }
 
     // Add main route
-    routes[path] = (request: Request) => {
-      return route.fetch(request);
+    routes[path] = (request: Request, bunServer: Server) => {
+      return route.fetch(request, { ip: clientAddressString(request, bunServer) });
     }
 
     // Add trailing slash route to redirect to the main route if the main route doesn't have a trailing slash
@@ -50,7 +56,7 @@ export function startBunServer(server: HS.Server) {
   const httpServer = Bun.serve({
     development: process.env.NODE_ENV === 'development',
     routes,
-    fetch: async (request: Request) => {
+    fetch: async (request: Request, bunServer: Server) => {
       const url = new URL(request.url);
 
       // Serve static files from the public directory
@@ -62,7 +68,9 @@ export function startBunServer(server: HS.Server) {
       }
 
       log(`Serving 404: ${url.pathname}`);
-      return createContext(request).res.notFound();
+      return createContext(request, undefined, {
+        ip: clientAddressString(request, bunServer),
+      }).res.notFound();
     },
   });
 

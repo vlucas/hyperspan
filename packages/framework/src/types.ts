@@ -53,6 +53,10 @@ export namespace Hyperspan {
     delete: (name: string) => void;
   }
 
+  export type RouteFetchOptions = {
+    ip?: string;
+  };
+
   export type HSRequest = {
     url: URL;
     raw: Request;
@@ -60,6 +64,7 @@ export namespace Hyperspan {
     headers: Headers; // Case-insensitive
     query: URLSearchParams;
     cookies: Hyperspan.Cookies;
+    ip: string;
     text: () => Promise<string>;
     json<T = unknown>(): Promise<T>;
     formData(): Promise<FormData>;
@@ -169,7 +174,7 @@ export namespace Hyperspan {
     errorHandler: (handler: Hyperspan.ErrorHandler) => Hyperspan.Route;
     use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Hyperspan.Route;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Hyperspan.Route;
-    fetch: (request: Request) => Promise<Response>;
+    fetch: (request: Request, options?: Hyperspan.RouteFetchOptions) => Promise<Response>;
   };
 
   /**
@@ -199,7 +204,7 @@ export namespace Hyperspan {
     errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
     use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
     middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
-    fetch: (request: Request) => Promise<Response>;
+    fetch: (request: Request, options?: Hyperspan.RouteFetchOptions) => Promise<Response>;
   }
 
   /**
