@@ -44,7 +44,8 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
 /**
  * Creates a context object for a request
  */
-export function createContext(req: Request, route?: HS.Route): HS.Context {
+export function createContext(req: Request, route?: HS.Route, options?: HS.RouteFetchOptions): HS.Context {
+  const clientIp = options?.ip ?? '';
   const url = new URL(req.url);
   const query = new URLSearchParams(url.search);
   const method = req.method.toUpperCase();
@@ -92,6 +93,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       headers,
       query,
       cookies: new Cookies(req),
+      ip: clientIp,
       async text() { return req.clone().text() },
       async json<T = unknown>() { return await req.clone().json() as T },
       async formData<T = unknown>() { return await req.clone().formData() as T },
@@ -240,8 +242,8 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
     /**
      * Fetch - handle a direct HTTP request
      */
-    async fetch(request: Request) {
-      const context = createContext(request, api);
+    async fetch(request: Request, fetchOptions?: HS.RouteFetchOptions) {
+      const context = createContext(request, api, fetchOptions);
       const method = context.req.method as HS.MiddlewareMethod;
       const globalMiddleware = api._middleware['*'] || [];
       const methodMiddleware = api._middleware[method] || [];

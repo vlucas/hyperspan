@@ -140,6 +140,18 @@ test('returns 405 when route path matches but HTTP method does not', async () =>
   expect(text).toContain('Method not allowed');
 });
 
+test('createContext() req.ip reflects RouteFetchOptions', () => {
+  const request = new Request('http://localhost:3000/');
+  expect(createContext(request).req.ip).toBe('');
+  expect(createContext(request, undefined, { ip: '203.0.113.1' }).req.ip).toBe('203.0.113.1');
+});
+
+test('route.fetch forwards ip via RouteFetchOptions', async () => {
+  const route = createRoute().get((c: HS.Context) => c.res.text(c.req.ip));
+  const response = await route.fetch(new Request('http://localhost:3000/'), { ip: '198.51.100.2' });
+  expect(await response.text()).toBe('198.51.100.2');
+});
+
 test('createContext() can get and set cookies', () => {
   // Create a request with cookies in the Cookie header
   const request = new Request('http://localhost:3000/', {
