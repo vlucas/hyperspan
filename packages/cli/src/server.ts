@@ -75,6 +75,10 @@ export async function addDirectoryAsRoutes(
   const buildDir = join(CWD, '.build');
   const cssPublicDir = join(CWD, server._config.publicDir, CSS_PUBLIC_PATH);
 
+  // Read local package.json to get the dependencies, so we can exclude them from the build for CSS below.
+  const packageJson = await Bun.file(join(CWD, 'package.json')).json();
+  const dependencies = packageJson.dependencies;
+
   log(`Scanning directory for routes: ${directoryPath}`);
 
   try {
@@ -137,7 +141,7 @@ export async function addDirectoryAsRoutes(
           target: 'node',
           // Only extract CSS — don't bundle framework packages or component files.
           // Under bun --watch, bundling @hyperspan/* causes EISDIR path collisions.
-          external: ['@hyperspan/*', '*.vue', '*.svelte', '*.tsx', '*.jsx'],
+          external: [...Object.keys(dependencies), '@hyperspan/*', '*.vue', '*.svelte', '*.tsx', '*.jsx', '*.ts', '*.js'],
         });
 
         // Move CSS files to the public directory
