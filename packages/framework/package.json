@@ -40,6 +40,14 @@
     "./actions": {
       "types": "./src/actions.ts",
       "default": "./src/actions.ts"
+    },
+    "./ssr/install-server-dom-mock": {
+      "types": "./src/ssr/install-server-dom-mock.ts",
+      "default": "./src/ssr/install-server-dom-mock.ts"
+    },
+    "./ssr/mock-dom": {
+      "types": "./src/ssr/mock-dom.ts",
+      "default": "./src/ssr/mock-dom.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",

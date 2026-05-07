@@ -1,7 +1,7 @@
 import { JS_IMPORT_MAP, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { assetHash } from '@hyperspan/framework/utils';
 import { IS_PROD } from '@hyperspan/framework/server';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
 import { h } from 'preact';
@@ -9,6 +9,8 @@ import { render as preactRenderToString } from 'preact-render-to-string';
 import debug from 'debug';
 
 const log = debug('hyperspan:plugin-preact');
+
+const CWD = process.cwd();
 
 /** Dev: stable `[name].js` via Bun default. Prod: hashed filenames for caching. */
 const ISLAND_JS_NAMING = IS_PROD ? '[dir]/[name]-[hash].[ext]' : undefined;
@@ -71,13 +73,14 @@ const PREACT_ISLAND_CACHE = new Map<string, PreactIslandCacheEntry>();
  */
 async function copyPreactToPublicFolder(config: HS.Config) {
   const currentNodeEnv = process.env.NODE_ENV || 'production';
-  const sourceFile = resolve(__dirname, './preact-client.ts');
+  const sourceFile = resolve(import.meta.dir, './preact-client.ts');
+  const outdir = resolve(CWD, config.publicDir, JS_ISLAND_PUBLIC_PATH.replace(/^\//, ''));
 
   // Preact client JS is always production mode
   process.env.NODE_ENV = 'production';
   const result = await Bun.build({
     entrypoints: [sourceFile],
-    outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
+    outdir,
     naming: ISLAND_JS_NAMING,
     minify: true,
     format: 'esm',
@@ -140,9 +143,10 @@ export function preactPlugin(): HS.Plugin {
             log('tsx file not cached, building...', args.path);
             // We need to build the file to ensure we can ship it to the client with dependencies
             // Ironic, right? Calling Bun.build() inside of a plugin that runs on Bun.build()?
+            const islandOutdir = resolve(CWD, config.publicDir, JS_ISLAND_PUBLIC_PATH.replace(/^\//, ''));
             const result = await Bun.build({
               entrypoints: [args.path],
-              outdir: join('./', config.publicDir, JS_ISLAND_PUBLIC_PATH),
+              outdir: islandOutdir,
               naming: ISLAND_JS_NAMING,
               external: Array.from(JS_IMPORT_MAP.keys()),
               minify: true,
