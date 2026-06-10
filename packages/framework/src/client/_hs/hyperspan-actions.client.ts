@@ -99,7 +99,7 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
   }
 
   fetch(formUrl, { body: formData, method, headers })
-    .then((res: Response) => {
+    .then(async (res: Response) => {
       // Look for special header that indicates a redirect.
       // fetch() automatically follows 3xx redirects, so we need to handle this manually to redirect the user to the full page
       if (res.headers.has('X-Redirect-Location')) {
@@ -109,21 +109,20 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
 
           // If the new URL is the same as the current URL, we can just fetch the new HTML and apply it
           if (resolved.pathname === window.location.pathname) {
-            return fetch(resolved.href, {
+            const pageRes = await fetch(resolved.href, {
               headers: { Accept: 'text/html' },
-            })
-              .then((r) => r.text());
+            });
+            await consumeStreamingHtmlResponse(pageRes, applyResponseHtml);
+            return;
           }
 
           // If the new URL is different, we need to redirect the user to the new URL
           window.location.assign(newUrl);
         }
-        return '';
+        return;
       }
 
-      return res.text();
-    })
-    .then((content: string) => {
+      const content = await res.text();
       // No content = DO NOTHING (redirect or something else happened)
       if (!content) {
         return;
@@ -134,4 +133,94 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     .catch((error) => {
       console.error('[Hyperspan] Error submitting form action:', error);
     });
+}
+
+/** Streaming async chunks use template ids ending in `_content`. */
+const STREAM_CHUNK_MARKER = /<template id="[^"]+_content">/;
+
+function splitInitialStreamHtml(html: string): { initial: string; streamTail: string | null } {
+  const match = STREAM_CHUNK_MARKER.exec(html);
+  if (!match || match.index === 0) {
+    return { initial: html, streamTail: null };
+  }
+  return {
+    initial: html.slice(0, match.index),
+    streamTail: html.slice(match.index),
+  };
+}
+
+/** Append streamed HTML to body and run any inline scripts (e.g. window._hsc.push). */
+function appendHtmlToBody(html: string) {
+  if (!html) {
+    return;
+  }
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const scripts: HTMLScriptElement[] = [];
+  template.content.querySelectorAll('script').forEach((script) => {
+    scripts.push(script);
+    script.remove();
+  });
+  document.body.appendChild(template.content);
+  for (const script of scripts) {
+    const executable = document.createElement('script');
+    if (script.src) {
+      executable.src = script.src;
+    } else {
+      executable.textContent = script.textContent;
+    }
+    document.body.appendChild(executable);
+  }
+}
+
+/**
+ * Read a (possibly streaming) HTML response: Idiomorph the initial page HTML, then append
+ * later stream chunks to document.body so streaming scripts run and placeholders resolve.
+ */
+async function consumeStreamingHtmlResponse(
+  res: Response,
+  applyInitialHtml: (html: string) => void
+) {
+  const body = res.body;
+  if (!body) {
+    const text = await res.text();
+    if (text) {
+      applyInitialHtml(text);
+    }
+    return;
+  }
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let isFirstChunk = true;
+
+  function processChunk(html: string) {
+    if (!html) {
+      return;
+    }
+
+    if (isFirstChunk) {
+      isFirstChunk = false;
+      const { initial, streamTail } = splitInitialStreamHtml(html);
+      if (initial) {
+        applyInitialHtml(initial);
+      }
+      if (streamTail) {
+        appendHtmlToBody(streamTail);
+      }
+      return;
+    }
+
+    appendHtmlToBody(html);
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      processChunk(decoder.decode());
+      break;
+    }
+    processChunk(decoder.decode(value, { stream: true }));
+  }
 }
