@@ -65,6 +65,40 @@ describe('formDataToJSON', () => {
       colors: ['red', 'green', 'blue'],
     });
   });
+
+  test('formDataToJSON handles array of objects with numeric keys', () => {
+    const formData = new FormData();
+    formData.append('contact[0][name]', 'John');
+    formData.append('contact[0][email]', 'john@example.com');
+    formData.append('contact[1][name]', 'Jane');
+    formData.append('contact[1][email]', 'jane@example.com');
+
+    const result = formDataToJSON(formData);
+
+    expect(result).toEqual({
+      contact: [
+        { name: 'John', email: 'john@example.com' },
+        { name: 'Jane', email: 'jane@example.com' },
+      ],
+    } as any);
+  });
+
+  test('formDataToJSON keeps object when keys are mixed numeric and text', () => {
+    const formData = new FormData();
+    formData.append('contact[0][name]', 'John');
+    formData.append('contact[0][email]', 'john@example.com');
+    formData.append('contact[label]', 'Primary');
+
+    const result = formDataToJSON(formData);
+
+    // Not ALL keys are numeric ("label"), so it must stay an object - not an array
+    expect(result).toEqual({
+      contact: {
+        '0': { name: 'John', email: 'john@example.com' },
+        label: 'Primary',
+      },
+    } as any);
+  });
 });
 
 describe('parsePath', () => {

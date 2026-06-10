@@ -131,11 +131,38 @@ export function formDataToJSON(formData: FormData | URLSearchParams): Record<str
     }
   };
 
+  /**
+   * Recursively converts objects whose keys are ALL numeric (e.g. "contact[0][name]",
+   * "contact[1][name]") into arrays of objects. Objects with any non-numeric key are
+   * left as-is.
+   */
+  const arrayify = (value: any): any => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return value;
+    }
+
+    const keys = Object.keys(value);
+    const allNumeric = keys.length > 0 && keys.every((key) => /^\d+$/.test(key));
+
+    if (allNumeric) {
+      const array: any[] = [];
+      for (const key of keys.sort((a, b) => Number(a) - Number(b))) {
+        array[Number(key)] = arrayify(value[key]);
+      }
+      return array;
+    }
+
+    for (const key of keys) {
+      value[key] = arrayify(value[key]);
+    }
+    return value;
+  };
+
   for (const pair of formData.entries()) {
     assign(parseKey(pair[0]), pair[1], object);
   }
 
-  return object;
+  return arrayify(object);
 }
 
 /**
