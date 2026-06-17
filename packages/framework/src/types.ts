@@ -190,14 +190,14 @@ export namespace Hyperspan {
     c: Context, props: ActionFormProps<S>
   ) => ActionFormResponse;
   // Form handler
-  export type ActionFormHandlerResponse = ActionFormResponse | Response | Promise<Response>;
+  export type ActionFormHandlerReturn = RouteHandlerReturn;
   export type ActionFormHandlerProps<S extends z.ZodType | undefined = undefined> = {
     data: InferActionData<S>;
     error?: ZodValidationError | Error;
   };
   export type ActionFormHandler<S extends z.ZodType | undefined = undefined> = (
     c: Context, props: ActionFormHandlerProps<S>
-  ) => ActionFormHandlerResponse;
+  ) => ActionFormHandlerReturn | Promise<ActionFormHandlerReturn>;
   // Action API
   export interface Action<S extends z.ZodType | undefined = undefined> {
     _kind: 'hsAction';

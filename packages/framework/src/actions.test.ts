@@ -71,6 +71,34 @@ describe('createAction', () => {
     expect(responseText).toContain('<p>Hello, John Doe!</p>');
   });
 
+  test('returns HSHtml directly from POST handler', async () => {
+    const action = createAction({
+      name: 'test',
+    }).form((c) => {
+      return html`
+          <form>
+            <input type="text" name="name" />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+    }).post(async (c, { data }) => {
+      return html`<p>Hello, ${data?.name}!</p>`;
+    });
+
+    const formData = new FormData();
+    formData.append('name', 'Jane Doe');
+
+    const request = new Request(`http://localhost:3000${action._path()}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const response = await action.fetch(request);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(200);
+    const responseText = await response.text();
+    expect(responseText).toContain('<p>Hello, Jane Doe!</p>');
+  });
+
   test('errors thrown on POST handler provided by user are caught and rendered', async () => {
     const action = createAction({
       name: 'test',
