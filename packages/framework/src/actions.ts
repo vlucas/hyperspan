@@ -1,6 +1,6 @@
 import { html } from '@hyperspan/html';
 import { createRoute, HTTPResponseException, returnHTMLResponse } from './server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
 import { buildClientJS } from './client/js';
@@ -23,12 +23,20 @@ const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hy
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export function createAction<T extends z.ZodObject<any, any>>(params: { name: string; schema?: T }): HS.Action<T> {
+export function createAction<S extends z.ZodType>(
+  params: { name: string; schema: S }
+): HS.Action<S>;
+export function createAction(
+  params: { name: string; schema?: undefined }
+): HS.Action<undefined>;
+export function createAction<S extends z.ZodType>(
+  params: { name: string; schema?: S }
+): HS.Action<S | undefined> {
   const { name, schema } = params;
   const path = `/__actions/${assetHash(name)}`;
 
-  let _handler: Parameters<HS.Action<T>['post']>[0] | null = null;
-  let _errorHandler: Parameters<HS.Action<T>['errorHandler']>[0] | null = null;
+  let _handler: Parameters<HS.Action<S | undefined>['post']>[0] | null = null;
+  let _errorHandler: Parameters<HS.Action<S | undefined>['errorHandler']>[0] | null = null;
 
   const route = createRoute({ path, name })
     .get((c: HS.Context) => api.render(c))
@@ -37,7 +45,7 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
         throw new Error('Action POST handler not set! Every action must have a POST handler.');
       }
 
-      const data = c.vars.body as z.infer<T> || formDataToJSON(await c.req.formData()) || {};
+      const data = c.vars.body as HS.InferActionData<S> || formDataToJSON(await c.req.formData()) || {};
       log('POST handler', { data });
       const response = await _handler(c, { data });
       log('POST handler response', { response });
@@ -57,7 +65,7 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
      * Custom error handler for the action since validateBody() throws a HTTPResponseException
      */
     .errorHandler(async (c: HS.Context, err: HTTPResponseException) => {
-      const data = c.vars.body as z.infer<T> || formDataToJSON(await c.req.formData()) || {};
+      const data = c.vars.body as HS.InferActionData<S> || formDataToJSON(await c.req.formData()) || {};
       const error = err._error as ZodValidationError || err;
 
       // Set the status to 400 if it's a ZodValidationError, otherwise 500 (Error thrown by user POST handler)
@@ -73,7 +81,7 @@ export function createAction<T extends z.ZodObject<any, any>>(params: { name: st
   // Set the name of the action for the route
   route._config.name = name;
 
-  const api: HS.Action<T> = {
+  const api: HS.Action<S | undefined> = {
     _kind: 'hsAction',
     _config: route._config,
     _path() {

@@ -1,8 +1,8 @@
 import { formDataToJSON } from './utils';
-import { z, flattenError, prettifyError } from 'zod/v4';
+import { z, flattenError, prettifyError } from 'zod';
 import { HTTPResponseException } from './server';
 
-import type { ZodAny, ZodObject, ZodError } from 'zod/v4';
+import type { ZodAny, ZodObject, ZodError } from 'zod';
 import type { Hyperspan as HS } from './types';
 
 export type TValidationType = 'json' | 'form' | 'urlencoded';

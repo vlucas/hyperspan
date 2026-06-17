@@ -1,6 +1,6 @@
 import { createAction } from '@hyperspan/framework/actions';
 import { html } from '@hyperspan/html';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { addTodo } from '~/src/lib/db';
 
 const schema = z.object({

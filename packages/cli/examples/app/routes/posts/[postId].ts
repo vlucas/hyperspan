@@ -1,6 +1,6 @@
 import { createRoute } from '@hyperspan/framework';
 import { html } from '@hyperspan/html';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 import { validateBody } from '@hyperspan/framework/middleware/zod';
 
 export default createRoute().get(async (c) => {

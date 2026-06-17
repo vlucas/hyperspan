@@ -2,7 +2,7 @@ import { test, expect, describe } from 'bun:test';
 import { createAction } from './actions';
 import { html, render, type HSHtml } from '@hyperspan/html';
 import { createContext } from './server';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 
 describe('createAction', () => {
   test('creates an action with a simple form and no schema', async () => {

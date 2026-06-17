@@ -1,5 +1,5 @@
 import { HSHtml } from '@hyperspan/html';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 
 /**
  * Hyperspan Types
@@ -175,30 +175,41 @@ export namespace Hyperspan {
   /**
    * Action = Form + route handler
    */
+  /** Raw form field values when an action has no schema */
+  export type ActionFormValues = Record<string, string | string[]>;
+  /** Infer validated action data from an optional schema */
+  export type InferActionData<S extends z.ZodType | undefined> =
+    S extends z.ZodType ? z.output<S> : ActionFormValues;
   // Form renderer
   export type ActionFormResponse = HSHtml | void | null | Promise<HSHtml | void | null>;
-  export type ActionFormProps<T extends z.ZodTypeAny> = { data?: Partial<z.infer<T>>; error?: ZodValidationError };
-  export type ActionForm<T extends z.ZodTypeAny> = (
-    c: Context, props: ActionFormProps<T>
+  export type ActionFormProps<S extends z.ZodType | undefined = undefined> = {
+    data?: Partial<InferActionData<S>>;
+    error?: ZodValidationError;
+  };
+  export type ActionForm<S extends z.ZodType | undefined = undefined> = (
+    c: Context, props: ActionFormProps<S>
   ) => ActionFormResponse;
   // Form handler
   export type ActionFormHandlerResponse = ActionFormResponse | Response | Promise<Response>;
-  export type ActionFormHandlerProps<T extends z.ZodTypeAny> = { data: z.infer<T>; error?: ZodValidationError | Error };
-  export type ActionFormHandler<T extends z.ZodTypeAny> = (
-    c: Context, props: ActionFormHandlerProps<T>
+  export type ActionFormHandlerProps<S extends z.ZodType | undefined = undefined> = {
+    data: InferActionData<S>;
+    error?: ZodValidationError | Error;
+  };
+  export type ActionFormHandler<S extends z.ZodType | undefined = undefined> = (
+    c: Context, props: ActionFormHandlerProps<S>
   ) => ActionFormHandlerResponse;
   // Action API
-  export interface Action<T extends z.ZodTypeAny> {
+  export interface Action<S extends z.ZodType | undefined = undefined> {
     _kind: 'hsAction';
     _config: Partial<Hyperspan.RouteConfig>;
     _path(): string;
-    _form: null | ActionForm<T>;
-    form(form: ActionForm<T>): Action<T>;
-    render: (c: Context, props?: ActionFormProps<T>) => ActionFormResponse;
-    post: (handler: ActionFormHandler<T>) => Action<T>;
-    errorHandler: (handler: ActionFormHandler<T>) => Action<T>;
-    use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
-    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Action<T>;
+    _form: null | ActionForm<S>;
+    form(form: ActionForm<S>): Action<S>;
+    render: (c: Context, props?: ActionFormProps<S>) => ActionFormResponse;
+    post: (handler: ActionFormHandler<S>) => Action<S>;
+    errorHandler: (handler: ActionFormHandler<S>) => Action<S>;
+    use: (middleware: Hyperspan.MiddlewareFunction, opts?: Hyperspan.MiddlewareMethodOptions) => Action<S>;
+    middleware: (middleware: Array<Hyperspan.MiddlewareFunction>, opts?: Hyperspan.MiddlewareMethodOptions) => Action<S>;
     fetch: (request: Request) => Promise<Response>;
   }
 
