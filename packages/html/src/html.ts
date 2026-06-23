@@ -90,8 +90,8 @@ function _renderValue(
       return (value as any[])
         .map((v) => _renderValue(v, { id, asyncContent: opts.asyncContent }))
         .join('');
-    case 'object':
-      id = `async_loading_${htmlId++}`;
+    case 'object': {
+      const slotId = `async_loading_${htmlId++}`;
       // @ts-ignore - this is "raw HTML" object - do not escape
       if (value?._kind === 'html_safe') {
         // @ts-ignore
@@ -101,11 +101,11 @@ function _renderValue(
       // @ts-ignore
       if (typeof value.renderAsync === 'function') {
         opts.asyncContent.push({
-          id,
+          id: slotId,
           handled: false,
           // @ts-ignore
           promise: value.renderAsync().then((result: unknown) => ({
-            id,
+            id: slotId,
             value: result,
             asyncContent: opts.asyncContent,
           })),
@@ -115,21 +115,23 @@ function _renderValue(
       // @ts-ignore
       if (typeof value.render === 'function') {
         // @ts-ignore
-        return render(_htmlPlaceholder(id, value.render()));
+        return render(_htmlPlaceholder(slotId, value.render()));
       }
       return JSON.stringify(value);
-    case 'promise':
-      id = `async_loading_${htmlId++}`;
+    }
+    case 'promise': {
+      const slotId = `async_loading_${htmlId++}`;
       opts.asyncContent.push({
-        id,
+        id: slotId,
         handled: false,
         promise: (value as Promise<any>).then((result: unknown) => ({
-          id,
+          id: slotId,
           value: result,
           asyncContent: opts.asyncContent,
         })),
       });
-      return render(_htmlPlaceholder(id));
+      return render(_htmlPlaceholder(slotId));
+    }
     case 'generator':
       throw new Error('Generators are not supported as a template value at this time. Sorry :(');
   }
