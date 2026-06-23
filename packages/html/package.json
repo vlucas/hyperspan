@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/html",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Hyperspan HTML Templates",
   "main": "dist/html.js",
   "types": "src/html.ts",
@@ -24,6 +24,7 @@
     "build": "bun ./build.ts",
     "clean": "rm -rf dist",
     "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "prepack": "bun run clean && bun run build"
   },
   "repository": {
