@@ -107,8 +107,12 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
         if (newUrl) {
           const resolved = new URL(newUrl, window.location.href);
 
-          // If the new URL is the same as the current URL, we can just fetch the new HTML and apply it
-          if (resolved.pathname === window.location.pathname) {
+          // Same-origin + same path: fetch updated HTML and morph in place. Cross-origin redirects
+          // must use full navigation (CORS and Idiomorph are not safe across domains).
+          if (
+            resolved.origin === window.location.origin &&
+            resolved.pathname === window.location.pathname
+          ) {
             const pageRes = await fetch(resolved.href, {
               headers: { Accept: 'text/html' },
             });
