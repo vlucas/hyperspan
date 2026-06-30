@@ -49,7 +49,10 @@ program
     // Developer mode (extra logging, etc.)
     if (IS_DEV_MODE) {
       console.log('[Hyperspan] Developer mode enabled 🛠️');
-      process.env.NODE_ENV = 'development';
+      const nodeEnv = process.env.NODE_ENV;
+      if (!nodeEnv || nodeEnv === 'production') {
+        process.env.NODE_ENV = 'development';
+      }
     }
 
     // Ensure we are in a hyperspan project
