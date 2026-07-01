@@ -31,7 +31,7 @@ describe('installMockDom', () => {
   });
 
   test('when a mock document is installed, it is annotated with MOCK_DOM_MARK', () => {
-    const doc = globalThis.document as Record<string, unknown> | undefined;
+    const doc = globalThis.document as unknown as Record<string, unknown> | undefined;
     if (!doc?.[MOCK_DOM_MARK]) return;
     expect(doc[MOCK_DOM_MARK]).toBe(true);
   });
