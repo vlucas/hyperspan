@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/hooks/post-agent-typecheck-format.sh",
+        "timeout": 120
+      }
+    ]
+  }
+}
