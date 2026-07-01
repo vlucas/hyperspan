@@ -2,7 +2,9 @@
 export const MOCK_DOM_MARK = '__hyperspan_mock_dom';
 
 function markedMockDocument(d: unknown): boolean {
-  return Boolean(d && typeof d === 'object' && (d as Record<string, unknown>)[MOCK_DOM_MARK] === true);
+  return Boolean(
+    d && typeof d === 'object' && (d as Record<string, unknown>)[MOCK_DOM_MARK] === true
+  );
 }
 
 /** Minimal element-like node for the mock DOM; not a spec-compliant implementation */
@@ -35,7 +37,7 @@ export function stubElement(tag: string): any {
     appendChild(child: any) {
       children.push(child);
       child.parentNode = node as unknown as ParentNode;
-      child.parentElement = node as unknown as ParentNode & Element | null;
+      child.parentElement = node as unknown as (ParentNode & Element) | null;
       return child;
     },
     insertBefore(child: unknown, ref: unknown | null) {
@@ -43,8 +45,10 @@ export function stubElement(tag: string): any {
       const refIx = ref == null ? -1 : ch.indexOf(ref);
       if (refIx < 0) children.push(child);
       else children.splice(refIx, 0, child);
-      (child as Record<string, unknown>).parentNode = node as ParentNode as unknown as ParentNode;
-      (child as Record<string, unknown>).parentElement = node as ParentNode & Element | null as unknown as Element | null;
+      (child as Record<string, unknown>).parentNode = node as unknown as ParentNode;
+      (child as Record<string, unknown>).parentElement = node as unknown as
+        | (ParentNode & Element)
+        | null;
       return child as ChildNode as unknown as HTMLElement;
     },
     removeChild(child: unknown): unknown {
@@ -126,7 +130,8 @@ function memoryStorage(): Storage {
  */
 export function installMockDom(): boolean {
   const env = typeof process !== 'undefined' ? process.env : {};
-  const disabled = env.HYPERSPAN_DISABLE_MOCK_DOM === '1' || env.HYPERSPAN_DISABLE_MOCK_DOM === 'true';
+  const disabled =
+    env.HYPERSPAN_DISABLE_MOCK_DOM === '1' || env.HYPERSPAN_DISABLE_MOCK_DOM === 'true';
   if (disabled) return false;
 
   const g = globalThis as unknown as Record<string, unknown>;
@@ -218,9 +223,7 @@ export function installMockDom(): boolean {
         setProperty() {},
       }) as unknown as CSSStyleDeclaration,
     requestIdleCallback(cb: IdleRequestCallback) {
-      queueMicrotask(() =>
-        cb({ didTimeout: false, timeRemaining: () => Number.MAX_SAFE_INTEGER }),
-      );
+      queueMicrotask(() => cb({ didTimeout: false, timeRemaining: () => Number.MAX_SAFE_INTEGER }));
       return 1;
     },
     cancelIdleCallback() {},
@@ -348,7 +351,7 @@ export function installMockDom(): boolean {
   g.document = documentStub as unknown as Document;
 
   try {
-    (globalThis as any).navigator = navigatorStub as Navigator;
+    (globalThis as any).navigator = navigatorStub as unknown as Navigator;
   } catch {
     /* empty */
   }

@@ -1,5 +1,13 @@
 import './ssr/install-server-dom-mock';
-import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from '@hyperspan/html';
+import {
+  HSHtml,
+  html,
+  isHSHtml,
+  renderStream,
+  renderAsync,
+  render,
+  _typeOf,
+} from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
 import { parsePath, removeUndefined } from './utils';
@@ -8,6 +16,22 @@ import { Cookies } from './cookies';
 import type { Hyperspan as HS } from './types';
 
 export const IS_PROD = process.env.NODE_ENV === 'production';
+
+/**
+ * Default streaming disable detection (bots receive fully rendered HTML).
+ */
+export function hyperspanDisableStreaming(context: HS.Context): boolean {
+  return isbot(context.req.raw.headers.get('user-agent') ?? '');
+}
+
+const disableStreamingOptions = { hyperspanDisableStreaming };
+
+function shouldDisableStreaming(
+  disableStreaming: HS.DisableStreamingFn | undefined,
+  context: HS.Context
+): boolean {
+  return disableStreaming?.(context, disableStreamingOptions) ?? false;
+}
 
 export class HTTPResponseException extends Error {
   public _error?: Error;
@@ -28,8 +52,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
     publicDir: './public',
     plugins: [],
     responseOptions: {
-      // Disable streaming for bots by default
-      disableStreaming: (c) => isbot(c.req.raw.headers.get('user-agent') ?? ''),
+      disableStreaming: hyperspanDisableStreaming,
     },
   };
   return {
@@ -51,11 +74,15 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const method = req.method.toUpperCase();
   const headers = new Headers(req.headers);
   const path = route?._path() || '/';
-  // @ts-ignore - Bun will put 'params' on the Request object even though it's not standardized
-  const params: HS.RouteParamsParser<path> & Record<string, string | undefined> = Object.assign({}, req?.params || {}, removeUndefined(route?._config.params || {}));
+  const requestParams = (req as Request & { params?: Record<string, string | undefined> }).params;
+  const params: Record<string, string | undefined> = Object.assign(
+    {},
+    requestParams || {},
+    removeUndefined(route?._config.params || {})
+  );
 
   // Replace catch-all param with the value from the URL path
-  const catchAllParam = Object.keys(params).find(key => key.startsWith('...'));
+  const catchAllParam = Object.keys(params).find((key) => key.startsWith('...'));
   if (catchAllParam && path.includes('/*')) {
     const catchAllValue = url.pathname.split(path.replace('/*', '/')).pop();
     params[catchAllParam.replace('...', '')] = catchAllValue;
@@ -84,7 +111,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       name: route?._config.name || undefined,
       path,
       params: params,
-      cssImports: route ? route._config.cssImports ?? [] : [],
+      cssImports: route ? (route._config.cssImports ?? []) : [],
     },
     req: {
       raw: req,
@@ -93,21 +120,50 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       headers,
       query,
       cookies: new Cookies(req),
-      async text() { return req.clone().text() },
-      async json<T = unknown>() { return await req.clone().json() as T },
-      async formData<T = unknown>() { return await req.clone().formData() as T },
-      async urlencoded() { return new URLSearchParams(await req.clone().text()) },
+      async text() {
+        return req.clone().text();
+      },
+      async json<T = unknown>() {
+        return (await req.clone().json()) as T;
+      },
+      async formData<T = unknown>() {
+        return (await req.clone().formData()) as T;
+      },
+      async urlencoded() {
+        return new URLSearchParams(await req.clone().text());
+      },
     },
     res: {
       cookies: new Cookies(req, headers),
       headers,
       status,
-      html: (html: string, options?: ResponseInit) => merge(new Response(html, { ...options, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers } })),
-      json: (json: any, options?: ResponseInit) => merge(new Response(JSON.stringify(json), { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })),
-      text: (text: string, options?: ResponseInit) => merge(new Response(text, { ...options, headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers } })),
-      redirect: (url: string, options?: ResponseInit) => merge(new Response(null, { status: 302, headers: { Location: url, ...options?.headers } })),
-      error: (error: Error, options?: ResponseInit) => merge(new Response(error.message, { status: 500, ...options })),
-      notFound: (options?: ResponseInit) => merge(new Response('Not Found', { status: 404, ...options })),
+      html: (html: string, options?: ResponseInit) =>
+        merge(
+          new Response(html, {
+            ...options,
+            headers: { 'Content-Type': 'text/html; charset=UTF-8', ...options?.headers },
+          })
+        ),
+      json: (json: any, options?: ResponseInit) =>
+        merge(
+          new Response(JSON.stringify(json), {
+            ...options,
+            headers: { 'Content-Type': 'application/json', ...options?.headers },
+          })
+        ),
+      text: (text: string, options?: ResponseInit) =>
+        merge(
+          new Response(text, {
+            ...options,
+            headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...options?.headers },
+          })
+        ),
+      redirect: (url: string, options?: ResponseInit) =>
+        merge(new Response(null, { status: 302, headers: { Location: url, ...options?.headers } })),
+      error: (error: Error, options?: ResponseInit) =>
+        merge(new Response(error.message, { status: 500, ...options })),
+      notFound: (options?: ResponseInit) =>
+        merge(new Response('Not Found', { status: 404, ...options })),
       merge,
     },
   };
@@ -137,7 +193,16 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
   const api: HS.Route = {
     _kind: 'hsRoute',
     _config: config,
-    _middleware: { GET: [], POST: [], PUT: [], PATCH: [], DELETE: [], HEAD: [], OPTIONS: [], '*': [] },
+    _middleware: {
+      GET: [],
+      POST: [],
+      PUT: [],
+      PATCH: [],
+      DELETE: [],
+      HEAD: [],
+      OPTIONS: [],
+      '*': [],
+    },
     _methods: () => Object.keys(_handlers),
     _path() {
       if (this._config.path) {
@@ -215,7 +280,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     use(middleware: HS.MiddlewareFunction, opts: HS.MiddlewareMethodOptions = {}) {
       if (opts?.methods) {
-        opts.methods.forEach(method => {
+        opts.methods.forEach((method) => {
           api._middleware[method].push(middleware);
         });
       } else {
@@ -229,7 +294,7 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
      */
     middleware(middleware: Array<HS.MiddlewareFunction>, opts: HS.MiddlewareMethodOptions = {}) {
       if (opts?.methods) {
-        opts.methods.forEach(method => {
+        opts.methods.forEach((method) => {
           api._middleware[method] = middleware;
         });
       } else {
@@ -252,25 +317,24 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
         if (method === 'OPTIONS' && !_handlers['OPTIONS']) {
           return context.res.html(
             render(html`
-                <!DOCTYPE html>
-                <html lang="en"></html>
-              `),
+              <!DOCTYPE html>
+              <html lang="en"></html>
+            `),
             {
               status: 200,
               headers: {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': [
-                  'HEAD',
-                  'OPTIONS',
-                  ...Object.keys(_handlers),
-                ].join(', '),
+                'Access-Control-Allow-Methods': ['HEAD', 'OPTIONS', ...Object.keys(_handlers)].join(
+                  ', '
+                ),
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
               },
             }
           );
         }
 
-        const handler = (method === 'HEAD' ? _handlers['GET'] : _handlers[method]) ?? _handlers['*'];
+        const handler =
+          (method === 'HEAD' ? _handlers['GET'] : _handlers[method]) ?? _handlers['*'];
 
         if (!handler) {
           return context.res.error(new Error('Method not allowed'), { status: 405 });
@@ -296,7 +360,10 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
 
         if (isHTMLContent(routeContent)) {
           // Merge server and route-specific response options
-          const responseOptions = { ...(api._serverConfig?.responseOptions ?? {}), ...(api._config?.responseOptions ?? {}) };
+          const responseOptions = {
+            ...(api._serverConfig?.responseOptions ?? {}),
+            ...(api._config?.responseOptions ?? {}),
+          };
           return returnHTMLResponse(context, () => routeContent, responseOptions);
         }
 
@@ -324,11 +391,22 @@ export function createRoute(config: Partial<HS.RouteConfig> = {}): HS.Route {
       // Run the route handler and any middleware
       // If an error occurs, run the error handler if it exists
       try {
-        return await executeMiddleware(context, [...globalMiddleware, ...methodMiddleware, methodHandler]);
+        return await executeMiddleware(context, [
+          ...globalMiddleware,
+          ...methodMiddleware,
+          methodHandler,
+        ]);
       } catch (e) {
         if (_errorHandler !== undefined) {
-          const responseOptions = { ...(api._serverConfig?.responseOptions ?? {}), ...(api._config?.responseOptions ?? {}) };
-          return returnHTMLResponse(context, () => (_errorHandler as HS.ErrorHandler)(context, e as Error), responseOptions);
+          const responseOptions = {
+            ...(api._serverConfig?.responseOptions ?? {}),
+            ...(api._config?.responseOptions ?? {}),
+          };
+          return returnHTMLResponse(
+            context,
+            () => (_errorHandler as HS.ErrorHandler)(context, e as Error),
+            responseOptions
+          );
         }
         throw e;
       }
@@ -346,16 +424,25 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
 
   // Load plugins, if any
   if (config.plugins && config.plugins.length > 0) {
-    await Promise.all(config.plugins.map(plugin => plugin(config)));
+    await Promise.all(config.plugins.map((plugin) => plugin(config)));
   }
 
   const api: HS.Server = {
     _config: config,
     _routes: _routes,
-    _middleware: { GET: [], POST: [], PUT: [], PATCH: [], DELETE: [], HEAD: [], OPTIONS: [], '*': [] },
+    _middleware: {
+      GET: [],
+      POST: [],
+      PUT: [],
+      PATCH: [],
+      DELETE: [],
+      HEAD: [],
+      OPTIONS: [],
+      '*': [],
+    },
     use(middleware: HS.MiddlewareFunction, opts?: HS.MiddlewareMethodOptions) {
       if (opts?.methods) {
-        opts.methods.forEach(method => {
+        opts.methods.forEach((method) => {
           api._middleware[method].push(middleware);
         });
       } else {
@@ -414,7 +501,8 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
  * Checks if a response is HTML content
  */
 function isHTMLContent(response: unknown): response is Response {
-  const hasHTMLContentType = response instanceof Response && response.headers.get('Content-Type') === 'text/html';
+  const hasHTMLContentType =
+    response instanceof Response && response.headers.get('Content-Type') === 'text/html';
   const isHTMLTemplate = isHSHtml(response);
   const isHTMLString = typeof response === 'string' && response.trim().startsWith('<');
 
@@ -427,7 +515,11 @@ function isHTMLContent(response: unknown): response is Response {
 export async function returnHTMLResponse(
   context: HS.Context,
   handlerFn: () => unknown,
-  responseOptions?: { status?: number; headers?: Record<string, string>; disableStreaming?: (context: HS.Context) => boolean }
+  responseOptions?: {
+    status?: number;
+    headers?: Record<string, string>;
+    disableStreaming?: HS.DisableStreamingFn;
+  }
 ): Promise<Response> {
   try {
     const routeContent = await handlerFn();
@@ -439,7 +531,7 @@ export async function returnHTMLResponse(
 
     // Render HSHtml if returned from route handler
     if (isHSHtml(routeContent)) {
-      const disableStreaming = responseOptions?.disableStreaming?.(context) ?? false;
+      const disableStreaming = shouldDisableStreaming(responseOptions?.disableStreaming, context);
 
       // Stream only if enabled and there is async content to stream
       if (!disableStreaming && (routeContent as HSHtml).asyncContent?.length > 0) {
@@ -447,13 +539,13 @@ export async function returnHTMLResponse(
           renderStream(routeContent as HSHtml, {
             renderChunk: (chunk) => {
               return html`
-              <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>
-              <script>
-                window._hsc = window._hsc || [];
-                window._hsc.push({id: "${chunk.id}" });
-              </script>
-            `;
-            }
+                <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>
+                <script>
+                  window._hsc = window._hsc || [];
+                  window._hsc.push({ id: '${chunk.id}' });
+                </script>
+              `;
+            },
           }),
           responseOptions
         ) as Response;
@@ -558,7 +650,6 @@ async function showErrorReponse(
 
   return context.res.html(output, Object.assign({ status }, responseOptions));
 }
-
 
 /**
  * Streaming response: chunked transfer with Transfer-Encoding and Content-Encoding.

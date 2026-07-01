@@ -8,7 +8,9 @@ import { validateBody, ZodValidationError } from './middleware';
 import { debug } from 'debug';
 
 const log = debug('hyperspan:actions');
-const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hyperspan-actions.client'));
+const actionsClientJS = await buildClientJS(
+  import.meta.resolve('./client/_hs/hyperspan-actions.client')
+);
 
 /**
  * Actions = Form + route handler
@@ -23,59 +25,76 @@ const actionsClientJS = await buildClientJS(import.meta.resolve('./client/_hs/hy
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export function createAction<S extends z.ZodType>(
-  params: { name: string; schema: S }
-): HS.Action<S>;
-export function createAction(
-  params: { name: string; schema?: undefined }
-): HS.Action<undefined>;
-export function createAction<S extends z.ZodType>(
-  params: { name: string; schema?: S }
-): HS.Action<S | undefined> {
+export function createAction<S extends z.ZodType>(params: {
+  name: string;
+  schema: S;
+}): HS.Action<S>;
+export function createAction(params: { name: string; schema?: undefined }): HS.Action<undefined>;
+export function createAction<S extends z.ZodType>(params: {
+  name: string;
+  schema?: S;
+}): HS.Action<S | undefined> {
   const { name, schema } = params;
   const path = `/__actions/${assetHash(name)}`;
 
   let _handler: Parameters<HS.Action<S | undefined>['post']>[0] | null = null;
   let _errorHandler: Parameters<HS.Action<S | undefined>['errorHandler']>[0] | null = null;
 
+  function actionResponseOptions(status?: number) {
+    return {
+      ...(route._serverConfig?.responseOptions ?? {}),
+      ...(route._config?.responseOptions ?? {}),
+      ...(status !== undefined ? { status } : {}),
+    };
+  }
+
   const route = createRoute({ path, name })
     .get((c: HS.Context) => api.render(c))
-    .post(async (c: HS.Context) => {
-      if (!_handler) {
-        throw new Error('Action POST handler not set! Every action must have a POST handler.');
-      }
-
-      const data = c.vars.body as HS.InferActionData<S> || formDataToJSON(await c.req.formData()) || {};
-      log('POST handler', { data });
-      const response = await _handler(c, { data });
-      log('POST handler response', { response });
-
-      if (response instanceof Response) {
-        // Replace redirects with special header because fetch() automatically follows redirects
-        // and we want to redirect the user to the actual full page instead
-        if ([301, 302, 307, 308].includes(response.status)) {
-          response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
-          response.headers.delete('Location');
+    .post(
+      async (c: HS.Context) => {
+        if (!_handler) {
+          throw new Error('Action POST handler not set! Every action must have a POST handler.');
         }
-      }
 
-      return response;
-    }, { middleware: schema ? [validateBody(schema)] : [] })
+        const data =
+          (c.vars.body as HS.InferActionData<S>) || formDataToJSON(await c.req.formData()) || {};
+        log('POST handler', { data });
+        const response = await _handler(c, { data });
+        log('POST handler response', { response });
+
+        if (response instanceof Response) {
+          // Replace redirects with special header because fetch() automatically follows redirects
+          // and we want to redirect the user to the actual full page instead
+          if ([301, 302, 307, 308].includes(response.status)) {
+            response.headers.set('X-Redirect-Location', response.headers.get('Location') || '/');
+            response.headers.delete('Location');
+          }
+        }
+
+        return response;
+      },
+      { middleware: schema ? [validateBody(schema as unknown as z.ZodObject | z.ZodAny)] : [] }
+    )
     /**
      * Custom error handler for the action since validateBody() throws a HTTPResponseException
      */
     .errorHandler(async (c: HS.Context, err: HTTPResponseException) => {
-      const data = c.vars.body as HS.InferActionData<S> || formDataToJSON(await c.req.formData()) || {};
-      const error = err._error as ZodValidationError || err;
+      const data =
+        (c.vars.body as HS.InferActionData<S>) || formDataToJSON(await c.req.formData()) || {};
+      const error = (err._error as ZodValidationError) || err;
 
       // Set the status to 400 if it's a ZodValidationError, otherwise 500 (Error thrown by user POST handler)
       c.res.status = err._error ? 400 : 500;
 
       log('errorHandler', { data, error });
 
-      return await returnHTMLResponse(c, () => {
-        return _errorHandler ? _errorHandler(c, { data, error }) : api.render(c, { data, error });
-      }, { status: 400 });
+      return await returnHTMLResponse(
+        c,
+        () => {
+          return _errorHandler ? _errorHandler(c, { data, error }) : api.render(c, { data, error });
+        },
+        actionResponseOptions(c.res.status ?? 400)
+      );
     });
 
   // Set the name of the action for the route
@@ -84,6 +103,12 @@ export function createAction<S extends z.ZodType>(
   const api: HS.Action<S | undefined> = {
     _kind: 'hsAction',
     _config: route._config,
+    get _serverConfig() {
+      return route._serverConfig;
+    },
+    set _serverConfig(config: HS.Config | undefined) {
+      route._serverConfig = config;
+    },
     _path() {
       return path;
     },
@@ -111,7 +136,10 @@ export function createAction<S extends z.ZodType>(
      */
     render(c, props) {
       const formContent = api._form ? api._form(c, props || {}) : null;
-      return formContent ? html`<hs-action url="${this._path()}">${formContent}</hs-action>${actionsClientJS.renderScriptTag()}` : null;
+      return formContent
+        ? html`<hs-action url="${this._path()}">${formContent}</hs-action
+            >${actionsClientJS.renderScriptTag()}`
+        : null;
     },
     errorHandler(handler) {
       _errorHandler = handler;
