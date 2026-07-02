@@ -94,6 +94,8 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
       }
     }
 
+    activateScriptsIn(isFullDocument ? document.body : (target as ParentNode));
+
     opts.afterResponse && opts.afterResponse();
     lazyLoadScripts();
   }
@@ -126,13 +128,7 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
         return;
       }
 
-      const content = await res.text();
-      // No content = DO NOTHING (redirect or something else happened)
-      if (!content) {
-        return;
-      }
-
-      applyResponseHtml(content);
+      await consumeStreamingHtmlResponse(res, applyResponseHtml);
     })
     .catch((error) => {
       console.error('[Hyperspan] Error submitting form action:', error);
@@ -153,28 +149,60 @@ function splitInitialStreamHtml(html: string): { initial: string; streamTail: st
   };
 }
 
-/** Append streamed HTML to body and run any inline scripts (e.g. window._hsc.push). */
+/** Clone a script node so the browser will execute it (preserves module type). */
+function cloneScriptForExecution(script: HTMLScriptElement): HTMLScriptElement {
+  const executable = document.createElement('script');
+  if (script.src) {
+    executable.src = script.src;
+  } else if (script.textContent) {
+    executable.textContent = script.textContent;
+  }
+  if (script.type) {
+    executable.type = script.type;
+  }
+  for (const attr of script.getAttributeNames()) {
+    if (attr === 'src' || attr === 'type') {
+      continue;
+    }
+    executable.setAttribute(attr, script.getAttribute(attr) || '');
+  }
+  return executable;
+}
+
+/** Run scripts inserted by Idiomorph (innerHTML/morph does not execute them). */
+function activateScriptsIn(root: ParentNode) {
+  root.querySelectorAll('script').forEach((script) => {
+    if (script.closest('template[id$="_content"]')) {
+      return;
+    }
+    script.replaceWith(cloneScriptForExecution(script));
+  });
+}
+
+/** Append streamed HTML to body and run top-level chunk scripts (e.g. window._hsc.push). */
 function appendHtmlToBody(html: string) {
   if (!html) {
     return;
   }
 
-  const template = document.createElement('template');
-  template.innerHTML = html;
+  const container = document.createElement('template');
+  container.innerHTML = html;
   const scripts: HTMLScriptElement[] = [];
-  template.content.querySelectorAll('script').forEach((script) => {
-    scripts.push(script);
-    script.remove();
-  });
-  document.body.appendChild(template.content);
-  for (const script of scripts) {
-    const executable = document.createElement('script');
-    if (script.src) {
-      executable.src = script.src;
-    } else {
-      executable.textContent = script.textContent;
+
+  for (const node of Array.from(container.content.childNodes)) {
+    if (node.nodeName === 'SCRIPT') {
+      scripts.push(node as HTMLScriptElement);
     }
-    document.body.appendChild(executable);
+  }
+
+  for (const script of scripts) {
+    script.remove();
+  }
+
+  document.body.appendChild(container.content);
+
+  for (const script of scripts) {
+    document.body.appendChild(cloneScriptForExecution(script));
   }
 }
 
