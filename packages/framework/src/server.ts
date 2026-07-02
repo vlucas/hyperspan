@@ -538,12 +538,14 @@ export async function returnHTMLResponse(
         return new StreamResponse(
           renderStream(routeContent as HSHtml, {
             renderChunk: (chunk) => {
+              // Trailing <!--/hs:chunk--> marks the end of a streaming chunk boundary.
               return html`
                 <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>
                 <script>
                   window._hsc = window._hsc || [];
                   window._hsc.push({ id: '${chunk.id}' });
                 </script>
+                <!--/hs:chunk-->
               `;
             },
           }),

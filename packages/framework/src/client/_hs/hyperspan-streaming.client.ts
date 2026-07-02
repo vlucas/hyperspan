@@ -33,7 +33,12 @@ async function waitForContent(
 function renderStreamChunk(chunk: { id: string }) {
   const slotId = chunk.id;
   const slotEl = document.getElementById(slotId);
-  const templateEl = document.getElementById(`${slotId}_content`) as HTMLTemplateElement;
+  const templateEl = document.getElementById(`${slotId}_content`) as HTMLTemplateElement | null;
+
+  // Content template is gone (e.g. this chunk was already rendered and re-queued). Nothing to do.
+  if (!templateEl) {
+    return;
+  }
 
   if (slotEl) {
     // Content AND slot are present - let's insert the content into the slot
@@ -72,6 +77,8 @@ declare global {
       push: (e: { id: string }) => void;
       forEach: (callback: (e: { id: string }) => void) => void;
     };
+    _hscInit?: boolean;
+    _hscLoading?: boolean;
   }
 }
 

@@ -138,16 +138,8 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
 /** Streaming async chunks use template ids ending in `_content`. */
 const STREAM_CHUNK_MARKER = /<template id="[^"]+_content">/;
 
-function splitInitialStreamHtml(html: string): { initial: string; streamTail: string | null } {
-  const match = STREAM_CHUNK_MARKER.exec(html);
-  if (!match || match.index === 0) {
-    return { initial: html, streamTail: null };
-  }
-  return {
-    initial: html.slice(0, match.index),
-    streamTail: html.slice(match.index),
-  };
-}
+/** Marks the end of a streaming chunk boundary. */
+const CHUNK_END = '<!--/hs:chunk-->';
 
 /** Clone a script node so the browser will execute it (preserves module type). */
 function cloneScriptForExecution(script: HTMLScriptElement): HTMLScriptElement {
@@ -207,8 +199,18 @@ function appendHtmlToBody(html: string) {
 }
 
 /**
- * Read a (possibly streaming) HTML response: Idiomorph the initial page HTML, then append
- * later stream chunks to document.body so streaming scripts run and placeholders resolve.
+ * Read a (possibly streaming) HTML response. The stream is shaped as:
+ *   [full initial page HTML, including <slot> placeholders]
+ *   <template id="X_content">…<!--end--></template><script>…_hsc.push({id:'X'})…</script>
+ *   …one <template>/<script> pair per async chunk…
+ *
+ * Network reads do NOT align with these logical boundaries, so we buffer instead of assuming
+ * the whole initial page (or a whole chunk) arrives in a single read:
+ *   1. Accumulate until the first stream-chunk <template> marker appears (or the stream ends),
+ *      then Idiomorph the everything-before-it as the initial page HTML - exactly once.
+ *   2. After that, append only COMPLETE chunks (each terminated by the server's <!--/hs:chunk-->
+ *      delimiter) to document.body so their scripts run and placeholders resolve. Any partial
+ *      trailing chunk stays buffered until the rest of it arrives.
  */
 async function consumeStreamingHtmlResponse(
   res: Response,
@@ -225,34 +227,59 @@ async function consumeStreamingHtmlResponse(
 
   const reader = body.getReader();
   const decoder = new TextDecoder();
-  let isFirstChunk = true;
+  let buffer = '';
+  let initialApplied = false;
 
-  function processChunk(html: string) {
-    if (!html) {
-      return;
+  function pump(isFinal: boolean) {
+    // Phase 1: split off and morph the initial page HTML (everything before the first chunk).
+    if (!initialApplied) {
+      const match = STREAM_CHUNK_MARKER.exec(buffer);
+      if (match) {
+        const initial = buffer.slice(0, match.index);
+        buffer = buffer.slice(match.index);
+        initialApplied = true;
+        if (initial) {
+          applyInitialHtml(initial);
+        }
+      } else if (isFinal) {
+        // No stream chunks at all - the whole response is the page HTML.
+        initialApplied = true;
+        if (buffer) {
+          applyInitialHtml(buffer);
+        }
+        buffer = '';
+        return;
+      } else {
+        // Marker not here yet; keep buffering the (possibly large) initial HTML.
+        return;
+      }
     }
 
-    if (isFirstChunk) {
-      isFirstChunk = false;
-      const { initial, streamTail } = splitInitialStreamHtml(html);
-      if (initial) {
-        applyInitialHtml(initial);
-      }
-      if (streamTail) {
-        appendHtmlToBody(streamTail);
+    // Phase 2: flush complete chunks; hold back any partial trailing chunk.
+    if (isFinal) {
+      if (buffer) {
+        appendHtmlToBody(buffer);
+        buffer = '';
       }
       return;
     }
-
-    appendHtmlToBody(html);
+    const lastEnd = buffer.lastIndexOf(CHUNK_END);
+    if (lastEnd === -1) {
+      return;
+    }
+    const flushEnd = lastEnd + CHUNK_END.length;
+    appendHtmlToBody(buffer.slice(0, flushEnd));
+    buffer = buffer.slice(flushEnd);
   }
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
-      processChunk(decoder.decode());
+      buffer += decoder.decode();
+      pump(true);
       break;
     }
-    processChunk(decoder.decode(value, { stream: true }));
+    buffer += decoder.decode(value, { stream: true });
+    pump(false);
   }
 }
