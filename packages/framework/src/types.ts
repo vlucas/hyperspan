@@ -300,6 +300,37 @@ export namespace Hyperspan {
   }
 
   /**
+   * Client-side action lifecycle events (dispatched from `<hs-action>`, bubbles to document).
+   *
+   * - `hs:action:before-swap` — before HTML morph (cancelable). Close modals here.
+   * - `hs:action:after-swap` — after HTML morph.
+   * - `hs:action:before-navigate` — before redirect soft/hard navigation (cancelable).
+   *   Set `detail.hard = true` for a full page load, or `false` to fetch+morph in place.
+   */
+  export type ActionEventName =
+    | 'hs:action:before-swap'
+    | 'hs:action:after-swap'
+    | 'hs:action:before-navigate';
+
+  export type ActionSwapDetail = {
+    form: HTMLFormElement;
+    action: Element | null;
+    html: string;
+    fullDocument: boolean;
+  };
+
+  export type ActionNavigateDetail = {
+    form: HTMLFormElement;
+    action: Element | null;
+    url: string;
+    /**
+     * Mutable. Default is soft (false) for same-origin+same-path redirects, hard (true) otherwise.
+     * Set to `true` for `window.location.assign`, or `false` to fetch + morph in place.
+     */
+    hard: boolean;
+  };
+
+  /**
    * Client JS Module = ESM Module + Public Path + Render Script Tag
    */
   export type ClientJSBuildResult = {
@@ -322,5 +353,18 @@ export namespace Hyperspan {
   export interface ZodValidationError extends Error {
     fieldErrors: Record<string, string[] | undefined>;
     formErrors: unknown[];
+  }
+}
+
+declare global {
+  interface DocumentEventMap {
+    'hs:action:before-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
+    'hs:action:after-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
+    'hs:action:before-navigate': CustomEvent<Hyperspan.ActionNavigateDetail>;
+  }
+  interface HTMLElementEventMap {
+    'hs:action:before-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
+    'hs:action:after-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
+    'hs:action:before-navigate': CustomEvent<Hyperspan.ActionNavigateDetail>;
   }
 }

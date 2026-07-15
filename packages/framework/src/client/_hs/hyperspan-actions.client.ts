@@ -1,5 +1,26 @@
 import { Idiomorph } from './idiomorph';
 import { lazyLoadScripts } from './hyperspan-scripts.client';
+import type { Hyperspan as HS } from '../../types';
+
+const HS_ACTION_BEFORE_SWAP: HS.ActionEventName = 'hs:action:before-swap';
+const HS_ACTION_AFTER_SWAP: HS.ActionEventName = 'hs:action:after-swap';
+const HS_ACTION_BEFORE_NAVIGATE: HS.ActionEventName = 'hs:action:before-navigate';
+
+function dispatchActionEvent<T>(
+  target: EventTarget,
+  name: HS.ActionEventName,
+  detail: T,
+  cancelable = false
+): boolean {
+  return target.dispatchEvent(
+    new CustomEvent(name, {
+      detail,
+      bubbles: true,
+      cancelable,
+      composed: true,
+    })
+  );
+}
 
 const actionFormObserver = new MutationObserver((list) => {
   list.forEach((mutation) => {
@@ -72,6 +93,7 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
   }
 
   const hsActionTag = form.closest('hs-action');
+  const eventTarget: EventTarget = hsActionTag || document;
   const submitBtn = form.querySelector('button[type=submit],input[type=submit]');
   if (submitBtn) {
     submitBtn.setAttribute('disabled', 'disabled');
@@ -82,6 +104,18 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     if (isFullDocument) {
       html = html.replace(/^[\s\uFEFF]*<!DOCTYPE[^>]*>/i, '');
     }
+
+    const swapDetail: HS.ActionSwapDetail = {
+      form,
+      action: hsActionTag,
+      html,
+      fullDocument: isFullDocument,
+    };
+
+    if (!dispatchActionEvent(eventTarget, HS_ACTION_BEFORE_SWAP, swapDetail, true)) {
+      return;
+    }
+
     const target = isFullDocument ? window.document : hsActionTag || form;
     const options = isFullDocument ? undefined : { morphStyle: 'innerHTML' };
 
@@ -96,8 +130,40 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
 
     activateScriptsIn(isFullDocument ? document.body : (target as ParentNode));
 
+    dispatchActionEvent(eventTarget, HS_ACTION_AFTER_SWAP, swapDetail);
+
     opts.afterResponse && opts.afterResponse();
     lazyLoadScripts();
+  }
+
+  async function navigateTo(url: string, preferHard: boolean) {
+    const navigateDetail: HS.ActionNavigateDetail = {
+      form,
+      action: hsActionTag,
+      url,
+      hard: preferHard,
+    };
+
+    if (!dispatchActionEvent(eventTarget, HS_ACTION_BEFORE_NAVIGATE, navigateDetail, true)) {
+      return;
+    }
+
+    if (navigateDetail.hard) {
+      window.location.assign(navigateDetail.url);
+      return;
+    }
+
+    // Soft morph requires same-origin (CORS / Idiomorph are not safe across domains).
+    const resolved = new URL(navigateDetail.url, window.location.href);
+    if (resolved.origin !== window.location.origin) {
+      window.location.assign(navigateDetail.url);
+      return;
+    }
+
+    const pageRes = await fetch(navigateDetail.url, {
+      headers: { Accept: 'text/html' },
+    });
+    await consumeStreamingHtmlResponse(pageRes, applyResponseHtml);
   }
 
   fetch(formUrl, { body: formData, method, headers })
@@ -109,21 +175,13 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
         if (newUrl) {
           const resolved = new URL(newUrl, window.location.href);
 
-          // Same-origin + same path: fetch updated HTML and morph in place. Cross-origin redirects
-          // must use full navigation (CORS and Idiomorph are not safe across domains).
-          if (
-            resolved.origin === window.location.origin &&
-            resolved.pathname === window.location.pathname
-          ) {
-            const pageRes = await fetch(resolved.href, {
-              headers: { Accept: 'text/html' },
-            });
-            await consumeStreamingHtmlResponse(pageRes, applyResponseHtml);
-            return;
-          }
+          // Default: same-origin + same path → soft morph; anything else → hard navigation.
+          // Listeners can flip detail.hard on hs:action:before-navigate to override.
+          const preferHard =
+            resolved.origin !== window.location.origin ||
+            resolved.pathname !== window.location.pathname;
 
-          // If the new URL is different, we need to redirect the user to the new URL
-          window.location.assign(newUrl);
+          await navigateTo(newUrl, preferHard);
         }
         return;
       }
