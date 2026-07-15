@@ -302,26 +302,45 @@ export namespace Hyperspan {
   /**
    * Client-side action lifecycle events (dispatched from `<hs-action>`, bubbles to document).
    *
+   * - `hs:action:before-fetch` — before the action request starts (cancelable).
+   * - `hs:action:after-fetch` — after the action request finishes (success or error).
    * - `hs:action:before-swap` — before HTML morph (cancelable). Close modals here.
    * - `hs:action:after-swap` — after HTML morph.
    * - `hs:action:before-navigate` — before redirect soft/hard navigation (cancelable).
    *   Set `detail.hard = true` for a full page load, or `false` to fetch+morph in place.
    */
   export type ActionEventName =
+    | 'hs:action:before-fetch'
+    | 'hs:action:after-fetch'
     | 'hs:action:before-swap'
     | 'hs:action:after-swap'
     | 'hs:action:before-navigate';
 
+  export type ActionFetchDetail = {
+    form: HTMLFormElement;
+    /** The current `<hs-action>` element, if present. */
+    action: HTMLElement | null;
+    url: string;
+    method: string;
+    /**
+     * Mutable. When `true` (default), appends `<hs-action-loading>` inside `<hs-action>` for the
+     * duration of the request. Set to `false` in `hs:action:before-fetch` to skip it.
+     */
+    loadingElement: boolean;
+  };
+
   export type ActionSwapDetail = {
     form: HTMLFormElement;
-    action: Element | null;
+    /** The current `<hs-action>` element, if present. */
+    action: HTMLElement | null;
     html: string;
     fullDocument: boolean;
   };
 
   export type ActionNavigateDetail = {
     form: HTMLFormElement;
-    action: Element | null;
+    /** The current `<hs-action>` element, if present. */
+    action: HTMLElement | null;
     url: string;
     /**
      * Mutable. Default is soft (false) for same-origin+same-path redirects, hard (true) otherwise.
@@ -358,11 +377,15 @@ export namespace Hyperspan {
 
 declare global {
   interface DocumentEventMap {
+    'hs:action:before-fetch': CustomEvent<Hyperspan.ActionFetchDetail>;
+    'hs:action:after-fetch': CustomEvent<Hyperspan.ActionFetchDetail>;
     'hs:action:before-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
     'hs:action:after-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
     'hs:action:before-navigate': CustomEvent<Hyperspan.ActionNavigateDetail>;
   }
   interface HTMLElementEventMap {
+    'hs:action:before-fetch': CustomEvent<Hyperspan.ActionFetchDetail>;
+    'hs:action:after-fetch': CustomEvent<Hyperspan.ActionFetchDetail>;
     'hs:action:before-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
     'hs:action:after-swap': CustomEvent<Hyperspan.ActionSwapDetail>;
     'hs:action:before-navigate': CustomEvent<Hyperspan.ActionNavigateDetail>;

@@ -2,6 +2,8 @@ import { Idiomorph } from './idiomorph';
 import { lazyLoadScripts } from './hyperspan-scripts.client';
 import type { Hyperspan as HS } from '../../types';
 
+const HS_ACTION_BEFORE_FETCH: HS.ActionEventName = 'hs:action:before-fetch';
+const HS_ACTION_AFTER_FETCH: HS.ActionEventName = 'hs:action:after-fetch';
 const HS_ACTION_BEFORE_SWAP: HS.ActionEventName = 'hs:action:before-swap';
 const HS_ACTION_AFTER_SWAP: HS.ActionEventName = 'hs:action:after-swap';
 const HS_ACTION_BEFORE_NAVIGATE: HS.ActionEventName = 'hs:action:before-navigate';
@@ -20,6 +22,41 @@ function dispatchActionEvent<T>(
       composed: true,
     })
   );
+}
+
+/** No box by default (`display: contents`) — style `:has(hs-action-loading)` for loading UI. */
+function ensureActionLoadingStyles() {
+  if (document.getElementById('hs-action-loading-style')) {
+    return;
+  }
+  const style = document.createElement('style');
+  style.id = 'hs-action-loading-style';
+  style.textContent = 'hs-action-loading{display:contents}';
+  document.head.appendChild(style);
+}
+
+class HSActionLoading extends HTMLElement {
+  connectedCallback() {
+    ensureActionLoadingStyles();
+  }
+}
+
+if (!customElements.get('hs-action-loading')) {
+  customElements.define('hs-action-loading', HSActionLoading);
+}
+
+function setActionLoading(hsActionTag: HTMLElement | null, loading: boolean) {
+  if (!hsActionTag) {
+    return;
+  }
+  const existing = hsActionTag.querySelector('hs-action-loading');
+  if (loading) {
+    if (!existing) {
+      hsActionTag.appendChild(document.createElement('hs-action-loading'));
+    }
+  } else if (existing) {
+    existing.remove();
+  }
 }
 
 const actionFormObserver = new MutationObserver((list) => {
@@ -92,8 +129,24 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     }
   }
 
-  const hsActionTag = form.closest('hs-action');
+  const hsActionTag = form.closest('hs-action') as HTMLElement | null;
   const eventTarget: EventTarget = hsActionTag || document;
+  const fetchDetail: HS.ActionFetchDetail = {
+    form,
+    action: hsActionTag,
+    url: formUrl,
+    method,
+    loadingElement: true,
+  };
+
+  if (!dispatchActionEvent(eventTarget, HS_ACTION_BEFORE_FETCH, fetchDetail, true)) {
+    return;
+  }
+
+  if (fetchDetail.loadingElement) {
+    setActionLoading(hsActionTag, true);
+  }
+
   const submitBtn = form.querySelector('button[type=submit],input[type=submit]');
   if (submitBtn) {
     submitBtn.setAttribute('disabled', 'disabled');
@@ -190,6 +243,10 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     })
     .catch((error) => {
       console.error('[Hyperspan] Error submitting form action:', error);
+    })
+    .finally(() => {
+      setActionLoading(hsActionTag, false);
+      dispatchActionEvent(eventTarget, HS_ACTION_AFTER_FETCH, fetchDetail);
     });
 }
 
