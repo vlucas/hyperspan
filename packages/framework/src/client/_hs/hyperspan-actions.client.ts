@@ -194,14 +194,14 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
       form,
       action: hsActionTag,
       url,
-      hard: preferHard,
+      hardNavigate: preferHard,
     };
 
     if (!dispatchActionEvent(eventTarget, HS_ACTION_BEFORE_NAVIGATE, navigateDetail, true)) {
       return;
     }
 
-    if (navigateDetail.hard) {
+    if (navigateDetail.hardNavigate) {
       window.location.assign(navigateDetail.url);
       return;
     }
@@ -229,7 +229,7 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
           const resolved = new URL(newUrl, window.location.href);
 
           // Default: same-origin + same path → soft morph; anything else → hard navigation.
-          // Listeners can flip detail.hard on hs:action:before-navigate to override.
+          // Listeners can flip detail.hardNavigate on hs:action:before-navigate to override.
           const preferHard =
             resolved.origin !== window.location.origin ||
             resolved.pathname !== window.location.pathname;

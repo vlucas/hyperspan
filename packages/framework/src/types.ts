@@ -307,7 +307,7 @@ export namespace Hyperspan {
    * - `hs:action:before-swap` — before HTML morph (cancelable). Close modals here.
    * - `hs:action:after-swap` — after HTML morph.
    * - `hs:action:before-navigate` — before redirect soft/hard navigation (cancelable).
-   *   Set `detail.hard = true` for a full page load, or `false` to fetch+morph in place.
+   *   Set `detail.hardNavigate = true` for a full page load, or `false` to fetch+morph in place.
    */
   export type ActionEventName =
     | 'hs:action:before-fetch'
@@ -346,7 +346,7 @@ export namespace Hyperspan {
      * Mutable. Default is soft (false) for same-origin+same-path redirects, hard (true) otherwise.
      * Set to `true` for `window.location.assign`, or `false` to fetch + morph in place.
      */
-    hard: boolean;
+    hardNavigate: boolean;
   };
 
   /**
