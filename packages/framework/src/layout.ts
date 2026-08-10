@@ -1,19 +1,27 @@
 import { html } from '@hyperspan/html';
-import { JS_IMPORT_MAP, buildClientJS } from './client/js';
-import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from './client/css';
+import { CSS_PUBLIC_PATH } from './client/css';
+import { getImportMap, getRouteCss, getClientJSFromManifest } from './client/manifest';
 import type { Hyperspan as HS } from './types';
 
-const clientStreamingJS = await buildClientJS(
-  import.meta.resolve('./client/_hs/hyperspan-streaming.client')
-);
+function streamingClientPath(): string {
+  return getClientJSFromManifest('streaming').publicPath;
+}
 
 /**
  * Output the importmap for the client so we can use ESModules on the client to load JS files on demand
  */
 export function hyperspanScriptTags() {
+  const imports = getImportMap();
+  let streamingPath: string;
+  try {
+    streamingPath = streamingClientPath();
+  } catch {
+    streamingPath = '/_hs/js/hyperspan-streaming.client.js';
+  }
+
   return html`
     <script type="importmap">
-      {"imports": ${Object.fromEntries(JS_IMPORT_MAP)}}
+      {"imports": ${imports}}
     </script>
     <script id="hyperspan-streaming-script">
       // [Hyperspan] Streaming - Load the client streaming JS module only when the first chunk is loaded
@@ -25,7 +33,7 @@ export function hyperspanScriptTags() {
           if (!window._hscLoading) {
             window._hscLoading = true;
             const script = document.createElement('script');
-            script.src = '${clientStreamingJS.publicPath}';
+            script.src = '${streamingPath}';
             document.body.appendChild(script);
           }
         };
@@ -39,11 +47,28 @@ export function hyperspanScriptTags() {
  */
 export function hyperspanStyleTags(context: HS.Context) {
   const styleTags = [];
-  const cssImports = context.route.cssImports ?? CSS_ROUTE_MAP.get(context.route.path) ?? [];
+  const cssImports = context.route.cssImports?.length
+    ? context.route.cssImports
+    : getRouteCss(context.route.path);
 
   for (const cssFile of cssImports) {
-    styleTags.push(html` <link rel="stylesheet" href="${CSS_PUBLIC_PATH}/${cssFile}" /> `);
+    // Absolute Vite/dev URLs (e.g. /app/styles/globals.css) are used as-is;
+    // hashed build artifacts are served under /_hs/css/.
+    const href = cssFile.startsWith('/') ? cssFile : `${CSS_PUBLIC_PATH}/${cssFile}`;
+    styleTags.push(html` <link rel="stylesheet" href="${href}" /> `);
   }
 
   return styleTags;
+}
+
+/**
+ * Render the actions client script tag (used by createAction).
+ */
+export function hyperspanActionsScriptTag() {
+  try {
+    const actions = getClientJSFromManifest('actions');
+    return html`<script type="module" src="${actions.publicPath}"></script>`;
+  } catch {
+    return html`<script type="module" src="/_hs/js/hyperspan-actions.client.js"></script>`;
+  }
 }

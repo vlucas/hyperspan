@@ -119,11 +119,23 @@ export namespace Hyperspan {
     merge: (response: Response) => Promise<Response>;
   };
 
+  export type UrlDiff = {
+    pathname?: string | null;
+    searchParams?: Record<string, string | number | boolean | null | undefined> | null;
+    hash?: string | null;
+  };
+
+  export type UrlOptions = {
+    /** When true, start from pathname only (drop current query string and hash). */
+    clean?: boolean;
+  };
+
   export interface Context {
     vars: Record<string, any>;
     route: RouteConfig;
     req: HSRequest;
     res: HSResponse;
+    url: (diff?: UrlDiff, options?: UrlOptions) => string;
   }
 
   export type ClientIslandOptions = {

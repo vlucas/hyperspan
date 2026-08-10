@@ -1,4 +1,4 @@
-import { it, describe, expect } from 'bun:test';
+import { it, describe, expect } from 'vitest';
 import { html, render } from './html';
 
 describe('html templates', () => {

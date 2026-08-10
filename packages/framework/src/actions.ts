@@ -3,14 +3,11 @@ import { createRoute, HTTPResponseException, returnHTMLResponse } from './server
 import * as z from 'zod';
 import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
-import { buildClientJS } from './client/js';
+import { hyperspanActionsScriptTag } from './layout';
 import { validateBody, ZodValidationError } from './middleware';
-import { debug } from 'debug';
+import debug from 'debug';
 
 const log = debug('hyperspan:actions');
-const actionsClientJS = await buildClientJS(
-  import.meta.resolve('./client/_hs/hyperspan-actions.client')
-);
 
 /**
  * Actions = Form + route handler
@@ -138,7 +135,7 @@ export function createAction<S extends z.ZodType>(params: {
       const formContent = api._form ? api._form(c, props || {}) : null;
       return formContent
         ? html`<hs-action url="${this._path()}">${formContent}</hs-action
-            >${actionsClientJS.renderScriptTag()}`
+            >${hyperspanActionsScriptTag()}`
         : null;
     },
     errorHandler(handler) {

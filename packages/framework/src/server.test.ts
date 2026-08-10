@@ -1,4 +1,4 @@
-import { test, expect, describe } from 'bun:test';
+import { test, expect, describe } from 'vitest';
 import { createRoute, createServer, createContext } from './server';
 import { createAction } from './actions';
 import { html, placeholder } from '@hyperspan/html';
@@ -197,6 +197,17 @@ test('createContext() can get and set cookies', () => {
       expect(expiresDate.getTime()).toBeLessThanOrEqual(new Date(0).getTime());
     }
   }
+});
+
+test('createContext() url() returns a relative URL string', () => {
+  const request = new Request('http://localhost:3000/posts?sort=asc#top');
+  const context = createContext(request);
+
+  expect(typeof context.url()).toBe('string');
+  expect(context.url()).toBe('/posts?sort=asc#top');
+  expect(context.url({ searchParams: { page: 2 } })).toBe('/posts?sort=asc&page=2#top');
+  expect(context.url({ searchParams: { page: 2 } }, { clean: true })).toBe('/posts?page=2');
+  expect(context.req.url.search).toBe('?sort=asc');
 });
 
 test('createContext() merge() function preserves custom headers when using response methods', async () => {

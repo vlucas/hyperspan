@@ -1,28 +1,38 @@
 {
   "name": "hyperspan-app",
   "description": "Hyperspan.dev starter template",
-  "version": "1.0.0",
+  "version": "2.0.0-alpha.1",
+  "type": "module",
   "scripts": {
-    "dev": "PORT=3005 hyperspan-dev dev",
+    "dev": "hyperspan dev",
+    "build": "hyperspan build",
     "start": "hyperspan start",
-    "test": "bun test"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.11",
-    "@types/node": "^25.5.0",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.10.0",
     "@types/react": "^19.2.14",
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@hyperspan/framework": "^1.0.18",
-    "@hyperspan/html": "^1.0.2",
-    "@hyperspan/plugin-preact": "^1.0.3",
-    "@hyperspan/plugin-svelte": "^1.0.1",
-    "@hyperspan/plugin-vue": "^1.0.2",
+    "@hyperspan/framework": "^2.0.0-alpha.1",
+    "@hyperspan/html": "^2.0.0-alpha.1",
+    "@hyperspan/plugin-preact": "^2.0.0-alpha.1",
+    "@hyperspan/plugin-svelte": "^2.0.0-alpha.1",
+    "@hyperspan/plugin-vue": "^2.0.0-alpha.1",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.1",
     "@tailwindcss/typography": "^0.5.19",
-    "hyperspan": "^1.0.9",
+    "hyperspan": "^2.0.0-alpha.1",
     "preact": "^10.29.0",
-    "tailwindcss": "^4.2.2"
+    "svelte": "^5.39.0",
+    "tailwindcss": "^4.2.2",
+    "vue": "^3.5.22"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

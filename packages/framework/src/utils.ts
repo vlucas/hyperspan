@@ -1,20 +1,36 @@
-import { createHash, randomBytes } from "node:crypto";
+import type { Hyperspan as HS } from './types';
+
+/**
+ * FNV-1a 64-bit hash — portable sync hash for asset IDs (works on Node, Bun, Workers).
+ */
+function fnv1a64(input: string): string {
+  let hash = BigInt('0xcbf29ce484222325');
+  const prime = BigInt('0x100000001b3');
+  const mask = BigInt('0xffffffffffffffff');
+  for (let i = 0; i < input.length; i++) {
+    hash ^= BigInt(input.charCodeAt(i));
+    hash = (hash * prime) & mask;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
 
 export function assetHash(content: string): string {
-  return createHash('md5').update(content).digest('hex');
+  return fnv1a64(content);
 }
 
 export function randomHash(): string {
-  return createHash('md5').update(randomBytes(32).toString('hex')).digest('hex');
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return fnv1a64(hex);
 }
-
 
 /**
  * Normalize URL path
  * Removes trailing slash and lowercases path
  */
 const ROUTE_SEGMENT_REGEX = /(\[[a-zA-Z_\.]+\])/g;
-export function parsePath(urlPath: string): { path: string, params: string[] } {
+export function parsePath(urlPath: string): { path: string; params: string[] } {
   const params: string[] = [];
   urlPath = urlPath.replace('index', '').replace('.ts', '').replace('.js', '');
 
@@ -46,15 +62,14 @@ export function parsePath(urlPath: string): { path: string, params: string[] } {
 
   // Only lowercase non-param segments (do not lowercase after ':')
   return {
-    path: (
+    path:
       '/' +
       urlPath
         .split('/')
         .map((segment) =>
           segment.startsWith(':') || segment === '*' ? segment : segment.toLowerCase()
         )
-        .join('/')
-    ),
+        .join('/'),
     params,
   };
 }
@@ -75,7 +90,9 @@ export function isValidRoutePath(path: string): boolean {
  *
  * @link https://stackoverflow.com/a/75406413
  */
-export function formDataToJSON(formData: FormData | URLSearchParams): Record<string, string | string[]> {
+export function formDataToJSON(
+  formData: FormData | URLSearchParams
+): Record<string, string | string[]> {
   let object = {};
 
   /**
@@ -170,4 +187,43 @@ export function formDataToJSON(formData: FormData | URLSearchParams): Record<str
  */
 export function removeUndefined(obj: Record<string, any>): Record<string, any> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
+/**
+ * Build a new URL from a base URL and an optional diff.
+ * Does not mutate the base URL.
+ */
+export function buildUrl(base: URL, diff?: HS.UrlDiff, options?: HS.UrlOptions): URL {
+  const next = new URL(base);
+
+  if (options?.clean) {
+    next.search = '';
+    next.hash = '';
+  }
+
+  if (diff?.pathname === null) {
+    next.pathname = '/';
+  } else if (diff?.pathname !== undefined) {
+    next.pathname = diff.pathname;
+  }
+
+  if (diff?.searchParams === null) {
+    next.search = '';
+  } else if (diff?.searchParams !== undefined) {
+    for (const [key, value] of Object.entries(diff.searchParams)) {
+      if (value === null || value === undefined) {
+        next.searchParams.delete(key);
+      } else {
+        next.searchParams.set(key, String(value));
+      }
+    }
+  }
+
+  if (diff?.hash === null) {
+    next.hash = '';
+  } else if (diff?.hash !== undefined) {
+    next.hash = diff.hash;
+  }
+
+  return next;
 }

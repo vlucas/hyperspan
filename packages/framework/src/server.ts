@@ -10,7 +10,7 @@ import {
 } from '@hyperspan/html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
-import { parsePath, removeUndefined } from './utils';
+import { buildUrl, parsePath, removeUndefined } from './utils';
 import { Cookies } from './cookies';
 
 import type { Hyperspan as HS } from './types';
@@ -107,6 +107,10 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
 
   const context: HS.Context = {
     vars: {},
+    url: (diff, options) => {
+      const next = buildUrl(url, diff, options);
+      return `${next.pathname}${next.search}${next.hash}`;
+    },
     route: {
       name: route?._config.name || undefined,
       path,

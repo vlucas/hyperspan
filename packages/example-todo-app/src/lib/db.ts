@@ -1,15 +1,8 @@
-import { Database } from 'bun:sqlite';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
-const db = new Database('todos.sqlite', { create: true });
-
-db.run(`
-  CREATE TABLE IF NOT EXISTS todos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    completed INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+const DB_PATH = join(process.cwd(), 'todos.json');
 
 export interface Todo {
   id: number;
@@ -18,21 +11,50 @@ export interface Todo {
   created_at: string;
 }
 
+type TodoStore = { todos: Todo[]; nextId: number };
+
+async function loadStore(): Promise<TodoStore> {
+  if (!existsSync(DB_PATH)) {
+    return { todos: [], nextId: 1 };
+  }
+  const raw = await readFile(DB_PATH, 'utf-8');
+  return JSON.parse(raw) as TodoStore;
+}
+
+async function saveStore(store: TodoStore): Promise<void> {
+  await mkdir(join(process.cwd()), { recursive: true });
+  await writeFile(DB_PATH, JSON.stringify(store, null, 2));
+}
+
 export async function getTodos(): Promise<Todo[]> {
-  return (await db.query('SELECT * FROM todos ORDER BY created_at DESC').all()) as Todo[];
+  const store = await loadStore();
+  return [...store.todos].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 }
 
 export async function addTodo(title: string): Promise<void> {
-  await db.run('INSERT INTO todos (title) VALUES (?)', [title]);
+  const store = await loadStore();
+  store.todos.push({
+    id: store.nextId++,
+    title,
+    completed: 0,
+    created_at: new Date().toISOString(),
+  });
+  await saveStore(store);
 }
 
 export async function deleteTodo(id: number): Promise<void> {
-  await db.run('DELETE FROM todos WHERE id = ?', [id]);
+  const store = await loadStore();
+  store.todos = store.todos.filter((t) => t.id !== id);
+  await saveStore(store);
 }
 
 export async function toggleTodo(id: number): Promise<void> {
-  await db.run(
-    'UPDATE todos SET completed = CASE WHEN completed = 0 THEN 1 ELSE 0 END WHERE id = ?',
-    [id]
-  );
+  const store = await loadStore();
+  const todo = store.todos.find((t) => t.id === id);
+  if (todo) {
+    todo.completed = todo.completed === 0 ? 1 : 0;
+    await saveStore(store);
+  }
 }

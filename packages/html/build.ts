@@ -1,7 +1,9 @@
-import { build } from 'bun';
+import { build } from 'esbuild';
 
 await build({
-  entrypoints: ['./src/html.ts'],
+  entryPoints: ['./src/html.ts'],
   outdir: './dist',
-  target: 'browser',
+  format: 'esm',
+  target: 'es2020',
+  bundle: true,
 });

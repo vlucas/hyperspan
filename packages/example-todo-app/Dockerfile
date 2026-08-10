@@ -1,11 +1,9 @@
-FROM oven/bun
-
+FROM node:24-alpine
 WORKDIR /usr/src/app
-
-COPY package*.json bun.lock ./
-RUN bun install
+COPY package*.json ./
+RUN npm install
 COPY . .
-
-ENV NODE_ENV production
-
-CMD [ "bun", "start" ]
+RUN npm run build
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD [ "npm", "start" ]

@@ -1,4 +1,4 @@
-import { test, describe, expect } from 'bun:test';
+import { test, describe, expect } from 'vitest';
 import { h } from 'preact';
 import { buildIslandHtml, renderPreactSSR, renderPreactIsland } from './index';
 
@@ -91,9 +91,7 @@ describe('renderPreactSSR', () => {
 
 describe('renderPreactIsland', () => {
   test('throws when component has no __HS_ISLAND property', () => {
-    expect(() => renderPreactIsland(Hello, {})).toThrow(
-      'was not loaded with an island plugin'
-    );
+    expect(() => renderPreactIsland(Hello, {})).toThrow('was not loaded with an island plugin');
   });
 
   test('returns an html_safe object', () => {
@@ -179,10 +177,20 @@ describe('renderPreactIsland', () => {
     (Hello as any).__HS_ISLAND = {
       id: jsId,
       render: (props: any, options: any = {}) =>
-        buildIslandHtml(jsId, 'Hello', 'hello', 'console.log(1)', renderPreactSSR(Hello, props), options),
+        buildIslandHtml(
+          jsId,
+          'Hello',
+          'hello',
+          'console.log(1)',
+          renderPreactSSR(Hello, props),
+          options
+        ),
     };
 
-    const result = renderPreactIsland(Hello, { name: 'World' }, { ssr: true, loading: 'lazy' } as any);
+    const result = renderPreactIsland(Hello, { name: 'World' }, {
+      ssr: true,
+      loading: 'lazy',
+    } as any);
     expect(result.content).toContain('data-loading="lazy"');
     expect(result.content).toContain('<template>');
     expect(result.content).toContain('Hello World!');

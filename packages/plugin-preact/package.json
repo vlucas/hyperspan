@@ -1,35 +1,44 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "1.0.4",
+  "version": "2.0.0-alpha.1",
   "description": "Hyperspan Plugin for Preact",
+  "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "public": true,
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "alpha"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": [],
   "homepage": "https://www.hyperspan.dev/docs/clientjs/islands",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "test": "bun test"
+    "test": "vitest run"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.8",
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
-    "@hyperspan/html": "^1.0.0",
-    "@hyperspan/framework": "^1.0.1"
+    "@hyperspan/html": "^2.0.0-alpha.1",
+    "@hyperspan/framework": "^2.0.0-alpha.1",
+    "vite": "^6.0.0 || ^7.0.0"
   },
   "dependencies": {
     "debug": "^4.4.3",

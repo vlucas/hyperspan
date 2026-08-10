@@ -1,7 +1,10 @@
-import { test, describe, expect, beforeAll, afterAll } from 'bun:test';
-import { join } from 'node:path';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { test, describe, expect, beforeAll, afterAll } from 'vitest';
+import { join, dirname } from 'node:path';
+import { writeFileSync, unlinkSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { buildIslandHtml, renderSvelteSSR, renderSvelteIsland } from './index';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Compile the Hello.svelte fixture into a temp .mjs file for SSR testing.
@@ -9,11 +12,11 @@ import { buildIslandHtml, renderSvelteSSR, renderSvelteIsland } from './index';
 // ---------------------------------------------------------------------------
 
 let HelloComponent: any;
-const tmpPath = join(import.meta.dir, '__fixtures__/__hello_ssr_temp__.mjs');
+const tmpPath = join(__dirname, '__fixtures__/__hello_ssr_temp__.mjs');
 
 beforeAll(async () => {
   const { compile } = await import('svelte/compiler');
-  const source = await Bun.file(join(import.meta.dir, '__fixtures__/Hello.svelte')).text();
+  const source = readFileSync(join(__dirname, '__fixtures__/Hello.svelte'), 'utf-8');
 
   const { js } = compile(source, {
     filename: 'Hello.svelte',
@@ -105,9 +108,11 @@ describe('renderSvelteSSR', () => {
 // ---------------------------------------------------------------------------
 
 describe('renderSvelteIsland', () => {
-  test('throws when component has no __HS_ISLAND property', () => {
+  test('throws when component has no __HS_ISLAND property', async () => {
     function Bare() {}
-    expect(() => renderSvelteIsland(Bare, {})).toThrow('was not loaded with an island plugin');
+    await expect(renderSvelteIsland(Bare, {})).rejects.toThrow(
+      'was not loaded with an island plugin'
+    );
   });
 
   test('returns an html_safe object', async () => {
@@ -121,8 +126,7 @@ describe('renderSvelteIsland', () => {
       },
     };
 
-    // renderSvelteIsland is sync but render() is async, so content is a Promise
-    const result = renderSvelteIsland(mockComponent, { name: 'World' });
+    const result = await renderSvelteIsland(mockComponent, { name: 'World' });
     expect(result).toHaveProperty('_kind', 'html_safe');
     const content = await result.content;
     expect(typeof content).toBe('string');
@@ -139,7 +143,7 @@ describe('renderSvelteIsland', () => {
       },
     };
 
-    const raw = renderSvelteIsland(mockComponent, { name: 'Svelte', count: 5 });
+    const raw = await renderSvelteIsland(mockComponent, { name: 'Svelte', count: 5 });
     const content = await raw.content;
     expect(content).toContain('Hello Svelte!');
     expect(content).toContain('5');
@@ -156,7 +160,7 @@ describe('renderSvelteIsland', () => {
       },
     };
 
-    const raw = renderSvelteIsland(mockComponent, { name: 'World' });
+    const raw = await renderSvelteIsland(mockComponent, { name: 'World' });
     const content = await raw.content;
     expect(content).toContain(`<div id="${jsId}">`);
   });
@@ -174,7 +178,7 @@ describe('renderSvelteIsland', () => {
       },
     };
 
-    const raw = renderSvelteIsland(mockComponent, { name: 'World' });
+    const raw = await renderSvelteIsland(mockComponent, { name: 'World' });
     const content = await raw.content;
     expect(content).toContain('<script type="module"');
     expect(content).toContain('hydrate');
@@ -187,11 +191,21 @@ describe('renderSvelteIsland', () => {
       id: jsId,
       render: async (props: any, options: any = {}) => {
         const ssrContent = await renderSvelteSSR(HelloComponent, props);
-        return buildIslandHtml(jsId, 'Hello', 'hello-svelte', 'console.log(1)', ssrContent, options);
+        return buildIslandHtml(
+          jsId,
+          'Hello',
+          'hello-svelte',
+          'console.log(1)',
+          ssrContent,
+          options
+        );
       },
     };
 
-    const raw = renderSvelteIsland(mockComponent, { name: 'World' }, { ssr: true, loading: 'lazy' } as any);
+    const raw = await renderSvelteIsland(mockComponent, { name: 'World' }, {
+      ssr: true,
+      loading: 'lazy',
+    } as any);
     const content = await raw.content;
     expect(content).toContain('data-loading="lazy"');
     expect(content).toContain('<template>');

@@ -1,4 +1,4 @@
-import { test, expect, describe } from 'bun:test';
+import { test, expect, describe } from 'vitest';
 import { createAction } from './actions';
 import { createRoute } from './server';
 import { html, render, placeholder, type HSHtml } from '@hyperspan/html';
