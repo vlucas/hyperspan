@@ -110,9 +110,7 @@ describe('renderSvelteSSR', () => {
 describe('renderSvelteIsland', () => {
   test('throws when component has no __HS_ISLAND property', async () => {
     function Bare() {}
-    await expect(renderSvelteIsland(Bare, {})).rejects.toThrow(
-      'was not loaded with an island plugin'
-    );
+    await expect(renderSvelteIsland(Bare, {})).rejects.toThrow(/not a Hyperspan island/i);
   });
 
   test('returns an html_safe object', async () => {

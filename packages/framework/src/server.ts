@@ -541,7 +541,7 @@ export async function returnHTMLResponse(
       if (!disableStreaming && (routeContent as HSHtml).asyncContent?.length > 0) {
         return new StreamResponse(
           renderStream(routeContent as HSHtml, {
-            renderChunk: (chunk) => {
+            renderChunk: (chunk: { id: string; content: string }) => {
               // Trailing <!--/hs:chunk--> marks the end of a streaming chunk boundary.
               return html`
                 <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>

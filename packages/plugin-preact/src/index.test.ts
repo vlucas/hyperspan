@@ -49,6 +49,14 @@ describe('buildIslandHtml', () => {
     expect(result).not.toContain('data-loading="lazy"');
     expect(result).not.toContain('<template>');
   });
+
+  test('named export uses brace import syntax', () => {
+    const result = buildIslandHtml(jsId, componentName, esmName, '', '<p>SSR</p>', {
+      exportKind: 'named',
+    });
+    expect(result).toContain(`import { ${componentName} } from "${esmName}"`);
+    expect(result).not.toContain(`import ${componentName} from "${esmName}"`);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -91,7 +99,7 @@ describe('renderPreactSSR', () => {
 
 describe('renderPreactIsland', () => {
   test('throws when component has no __HS_ISLAND property', () => {
-    expect(() => renderPreactIsland(Hello, {})).toThrow('was not loaded with an island plugin');
+    expect(() => renderPreactIsland(Hello, {})).toThrow(/not a Hyperspan island/i);
   });
 
   test('returns an html_safe object', () => {

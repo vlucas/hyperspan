@@ -12,10 +12,16 @@ import {
 import type { AssetManifest } from '@hyperspan/framework';
 import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import { createJiti } from 'jiti';
+import {
+  assertIslandPluginLoaded,
+  getIslandFramework,
+  resolveRegisteredIslandVitePlugins,
+} from './islands';
+import { clientJSPlugin, discoverClientJSForRoutes, buildRegisteredClientJS } from './client-js';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
-  vitePlugins?: Plugin[];
 };
 
 const MANIFEST_VIRTUAL_ID = 'virtual:hyperspan-manifest';
@@ -24,6 +30,13 @@ const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
 const FRAMEWORK_CLIENT_DIR = fileURLToPath(
   new URL('../../framework/src/client/_hs', import.meta.url)
 );
+
+function loadHyperspanConfigSync(root: string, configFile?: string): void {
+  const file = configFile ?? join(root, 'hyperspan.config.ts');
+  if (!existsSync(file)) return;
+  const jiti = createJiti(root, { interopDefault: true });
+  jiti(file);
+}
 
 export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   let root = process.cwd();
@@ -40,8 +53,11 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
     config(config) {
       const projectRoot = config.root ? String(config.root) : process.cwd();
+      loadHyperspanConfigSync(projectRoot, options.configFile);
+      const islandPlugins = resolveRegisteredIslandVitePlugins();
       return {
         appType: 'custom' as const,
+        plugins: islandPlugins,
         publicDir: config.publicDir ?? 'public',
         resolve: {
           alias: {
@@ -87,9 +103,14 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       }
     },
 
-    resolveId(id) {
+    resolveId(id, _importer, options) {
       if (id === MANIFEST_VIRTUAL_ID) {
         return RESOLVED_MANIFEST_VIRTUAL_ID;
+      }
+
+      const framework = getIslandFramework(id, options?.attributes as Record<string, string>);
+      if (framework) {
+        assertIslandPluginLoaded(framework, id);
       }
     },
 
@@ -123,9 +144,11 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         } else if (fileName.includes('hyperspan-scripts')) {
           clients.scripts = publicPath;
           imports['hyperspan-scripts'] = publicPath;
-        } else if (fileName.includes('islands/') || fileName.includes('preact-client')) {
-          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
-          imports[esmName] = publicPath;
+        } else if (
+          fileName.includes('islands/preact-client') ||
+          fileName.endsWith('preact-client.js')
+        ) {
+          imports['preact-client'] = publicPath;
           imports['preact'] = publicPath;
           imports['preact/hooks'] = publicPath;
           imports['preact/jsx-runtime'] = publicPath;
@@ -133,6 +156,21 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
           imports['preact/compat'] = publicPath;
           imports['react'] = publicPath;
           imports['react-dom'] = publicPath;
+        } else if (
+          fileName.includes('islands/island-') ||
+          fileName.includes('_hs/js/islands/island-')
+        ) {
+          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
+          imports[esmName] = publicPath;
+        } else if (
+          fileName.includes('islands/svelte-client') ||
+          fileName.includes('islands/vue-client')
+        ) {
+          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
+          imports[esmName] = publicPath;
+        } else if (fileName.includes('_hs/js/client-')) {
+          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
+          imports[esmName] = publicPath;
         }
 
         // Collect CSS emitted alongside chunks
@@ -187,6 +225,16 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       const tempServer = await createServer(hsConfig);
       tempServer._routes = [];
       await loadRoutes(tempServer, root, hsConfig, ssrVite);
+
+      await discoverClientJSForRoutes(tempServer, 'http://hyperspan-build.local');
+
+      const clientImports = await buildRegisteredClientJS(root, resolvedConfig.build.outDir);
+      if (Object.keys(clientImports).length > 0) {
+        manifest = {
+          ...manifest,
+          imports: { ...manifest.imports, ...clientImports },
+        };
+      }
 
       const cssByRoute: Record<string, string[]> = { ...(manifest.css ?? {}) };
       for (const route of tempServer._routes) {
@@ -318,7 +366,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     });
   }
 
-  return [corePlugin, ...(options.vitePlugins ?? [])];
+  return [corePlugin, clientJSPlugin()];
 }
 
 async function loadHyperspanConfig(root: string, configFile?: string): Promise<HS.Config> {
@@ -509,3 +557,12 @@ async function readNodeBody(req: import('node:http').IncomingMessage): Promise<B
 }
 
 export { MANIFEST_VIRTUAL_ID };
+export {
+  registerIslandPlugin,
+  isIslandPluginLoaded,
+  getIslandFramework,
+  isIslandModule,
+  islandPluginResolveId,
+  getRegisteredIslandFrameworks,
+} from './islands';
+export type { IslandFramework } from './islands';

@@ -1,10 +1,15 @@
 import './types.d';
 import type { Plugin } from 'vite';
-import { basename } from 'node:path';
 import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { assetHash } from '@hyperspan/framework/utils';
+import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
-import { html } from '@hyperspan/html';
+import {
+  registerIslandPlugin,
+  isIslandModule,
+  islandPluginResolveId,
+  splitIslandId,
+} from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 import {
   parse,
@@ -21,9 +26,13 @@ export function buildIslandHtml(
   esmName: string,
   jsContent: string,
   ssrContent: string,
-  options: { loading?: string } = {}
+  options: { loading?: string; exportKind?: 'default' | 'named' } = {}
 ): string {
-  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">import ${componentName} from "${esmName}";${jsContent}</script>`;
+  const importStmt =
+    options.exportKind === 'named'
+      ? `import { ${componentName} } from "${esmName}";`
+      : `import ${componentName} from "${esmName}";`;
+  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">${importStmt}${jsContent}</script>`;
   if (options.loading === 'lazy') {
     return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
   }
@@ -87,18 +96,12 @@ async function compileVueSFC(
   return `${scriptCode}\n${templateCode}\n__sfc__.${renderKey} = ${renderKey};\nexport default __sfc__;\n`;
 }
 
-function isIslandComponent(id: string): boolean {
-  return (
-    (id.includes('/app/components/') || id.includes('\\app\\components\\')) &&
-    id.endsWith('.vue') &&
-    !id.includes('node_modules')
-  );
-}
-
-export function vueVitePlugin(): Plugin {
+export function vueIslandPlugin(): Plugin {
   return {
     name: 'hyperspan-vue',
     enforce: 'pre',
+
+    resolveId: islandPluginResolveId('vue', '.vue'),
 
     configureServer() {
       const clientUrl = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
@@ -107,20 +110,22 @@ export function vueVitePlugin(): Plugin {
     },
 
     async transform(code, id) {
-      if (!isIslandComponent(id)) return;
+      if (!isIslandModule(id, 'vue', '.vue')) return;
 
       log('transform vue island', id);
-      const jsId = assetHash(id);
-      const esmName = basename(id, '.vue');
+      const cleanId = splitIslandId(id).path;
+      const jsId = assetHash(cleanId);
+      const esmName = `island-${assetHash(cleanId)}`;
       const componentName = '__hs_vue_component';
 
-      const ssrCode = await compileVueSFC(code, id, jsId, true);
+      const ssrCode = await compileVueSFC(code, cleanId, jsId, true);
       registerImport(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
 
       const moduleCode = `// hyperspan:processed
 function __hs_buildIslandHtml(jsId, componentName, esmName, jsContent, ssrContent, options) {
   options = options || {};
-  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">import \${componentName} from "\${esmName}";\${jsContent}</script>\`;
+  const importStmt = 'import ' + componentName + ' from "' + esmName + '";';
+  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">\${importStmt}\${jsContent}</script>\`;
   if (options.loading === 'lazy') {
     return \`<div id="\${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\\n\${scriptTag}</template></div>\`;
   }
@@ -147,7 +152,7 @@ ${componentName}.__HS_ISLAND = {
 
     const app = __hs_createSSRApp(${componentName}, props);
     const ssrContent = await __hs_renderToString(app);
-    const jsContent = \`import { createSSRApp as __hs_createSSRApp } from 'vue';__hs_createSSRApp(__hs_vue_component, \${JSON.stringify(props)}).mount(document.getElementById("${jsId}"));\`;
+    const jsContent = \`import { createApp as __hs_createApp } from 'vue';__hs_createApp(__hs_vue_component, \${JSON.stringify(props)}).mount(document.getElementById("${jsId}"));\`;
     return __hs_renderIsland(jsContent, ssrContent, options);
   }
 };
@@ -159,23 +164,20 @@ ${componentName}.__HS_ISLAND = {
 }
 
 export function vuePlugin(): HS.Plugin {
+  registerIslandPlugin('vue', { vitePlugin: vueIslandPlugin });
   return () => {
-    log('vuePlugin loaded (Vite handles bundling in v2)');
+    log('vuePlugin loaded');
   };
 }
 
 export async function renderVueIsland(
-  Component: {
-    __HS_ISLAND?: { render: (props: unknown, options: unknown) => Promise<string> };
-    name?: string;
-  },
+  Component: Parameters<typeof renderIsland>[0],
   props: Record<string, unknown> = {},
-  options: { ssr?: boolean; loading?: string } = { ssr: true }
+  options: Parameters<typeof renderIsland>[2] = { ssr: true }
 ) {
-  if (Component.__HS_ISLAND?.render) {
-    return html.raw(await Component.__HS_ISLAND.render(props, options));
+  const result = renderIsland(Component, props, options);
+  if (result != null && typeof (result as Promise<unknown>).then === 'function') {
+    return await result;
   }
-  throw new Error(
-    `Module ${Component.name} was not loaded with an island plugin! Add vueVitePlugin() to vite.config.ts.`
-  );
+  return result;
 }

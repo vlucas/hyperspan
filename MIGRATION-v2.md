@@ -1,48 +1,88 @@
-# Hyperspan v2 Migration Guide
+# Hyperspan v2
 
-Hyperspan v2 replaces Bun as the required runtime with a **Vite build pipeline** and **portable `fetch(Request) → Response` handlers** deployable to Node, Cloudflare Workers, Bun, and other platforms.
+Hyperspan v2 uses a **Vite build pipeline** and **portable `fetch(Request) → Response` handlers** deployable to Node, Cloudflare Workers, Bun, and other platforms.
 
-## Breaking changes
+## Runtime
 
-### Runtime
-
-- **Bun is no longer required.** Node 24+ is the default runtime.
-- Install dependencies with `npm install` (or pnpm/yarn). Bun still works as an optional runtime via `@hyperspan/adapter-bun`.
+- **Node 24+** is the default runtime.
+- Install dependencies with `npm install` (or pnpm/yarn). Bun works as an optional runtime via `@hyperspan/adapter-bun`.
 - CLI shebangs use Node (`#!/usr/bin/env node`).
 
-### Build pipeline
+## Build pipeline
 
-- **Vite owns dev, build, CSS, client JS, and islands.** `Bun.build` and `Bun.plugin` are removed.
+- **Vite** handles dev, build, CSS, client JS, and islands.
 - Add `vite.config.ts` to your project (see starter template).
-- Production requires an explicit build: `npm run build` before `npm run start`.
+- Run `npm run build` before `npm run start` in production.
 - Assets emit to `dist/` (including `dist/manifest.json`).
 
-### Island plugins
+## Island plugins
 
-Island plugins now export **Vite plugins** in addition to Hyperspan config plugins:
+Configure island plugins in `hyperspan.config.ts`. The Vite integration loads that config automatically:
+
+```ts
+// hyperspan.config.ts
+import { createConfig } from '@hyperspan/framework';
+import { preactPlugin } from '@hyperspan/plugin-preact';
+import { sveltePlugin } from '@hyperspan/plugin-svelte';
+import { vuePlugin } from '@hyperspan/plugin-vue';
+
+export default createConfig({
+  plugins: [preactPlugin(), sveltePlugin(), vuePlugin()],
+});
+```
 
 ```ts
 // vite.config.ts
-import { preactVitePlugin } from '@hyperspan/plugin-preact';
-import { svelteVitePlugin } from '@hyperspan/plugin-svelte';
-import { vueVitePlugin } from '@hyperspan/plugin-vue';
+import { hyperspan } from '@hyperspan/vite-plugin';
+
+export default defineConfig({
+  plugins: [...hyperspan()],
+});
 ```
 
-`hyperspan.config.ts` plugins remain for config hooks but no longer register Bun loaders.
+`hyperspan.config.ts` plugins register island frameworks and run config hooks.
 
-### Scripts
+Mark a component as an island at import time:
 
-| v1 | v2 |
-|----|-----|
-| `bun run dev` | `npm run dev` → `hyperspan dev` (Vite) |
-| `hyperspan start` (Bun) | `hyperspan start` (Node via `@hyperspan/adapter-node`) |
-| — | `hyperspan build` (production bundle) |
+```ts
+import { renderIsland } from '@hyperspan/framework';
+import Counter from '../widgets/counter.tsx' with { island: 'preact' };
 
-### Asset hashing
+html`${renderIsland(Counter, { count: 0 })}`;
+```
 
-- `assetHash()` now uses FNV-1a (portable) instead of MD5. Action URLs at `/__actions/<hash>` will change.
+Use `with { island: 'svelte' }` or `with { island: 'vue' }` for other frameworks. Preact supports named exports in the same file. `renderPreactIsland`, `renderSvelteIsland`, and `renderVueIsland` are aliases for `renderIsland`.
 
-### New packages
+## Custom client JS
+
+Register arbitrary client modules by path. The server never evaluates client-only code — Vite bundles it and the manifest records the public URL.
+
+```ts
+import { buildClientJS } from '@hyperspan/framework/client/js';
+
+const picker = await buildClientJS(import.meta.resolve('./app/client/picker.ts'));
+
+html`
+  <div id="picker"></div>
+  ${picker.renderScriptTag(({ mountPicker }) => mountPicker())}
+`;
+```
+
+`renderScriptTag()` with no argument emits a module script that imports the bundle via the import map. Pass a function or string to inline bootstrap code that receives the module exports.
+
+## Scripts
+
+| Command | What it does |
+|---------|----------------|
+| `npm run dev` | `hyperspan dev` — Vite dev server |
+| `npm run build` | `hyperspan build` — production bundle |
+| `npm run start` | `hyperspan start` — Node via `@hyperspan/adapter-node` |
+
+## Asset hashing
+
+`assetHash()` uses FNV-1a. Action URLs live at `/__actions/<hash>`.
+
+## Packages
 
 | Package | Purpose |
 |---------|---------|
@@ -51,7 +91,7 @@ import { vueVitePlugin } from '@hyperspan/plugin-vue';
 | `@hyperspan/adapter-cloudflare` | Cloudflare Workers |
 | `@hyperspan/adapter-bun` | Optional Bun runtime |
 
-### API additions
+## Framework API
 
 ```ts
 import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/framework';
@@ -60,20 +100,19 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
 - `createFetchHandler(server)` — portable request router
 - `createApp(server)` — `{ fetch, server }` adapter contract
 - `setAssetManifest(manifest)` — register build-time asset URLs
+- `renderIsland(component, props)` — render any island (proxies `__HS_ISLAND`)
 
-## Migration steps
+## Setup
 
 1. **Install v2 alpha packages** — use the `alpha` dist-tag:
    ```bash
    npm install hyperspan@alpha @hyperspan/framework@alpha @hyperspan/vite-plugin@alpha
    ```
    Or pin a specific pre-release: `^2.0.0-alpha.1`
-2. **Upgrade packages** to v2 alpha.
-3. **Add `vite.config.ts`** (copy from starter template).
+2. **Add `vite.config.ts`** (copy from starter template).
 3. **Update `package.json` scripts** to use `npm run dev/build/start`.
-4. **Remove Bun-only dependencies** (`bun-plugin-tailwind`, `bun:sqlite` in app code).
-5. **Run `npm run build`** before deploying.
-6. **Update Docker** to `node:24` base image.
+4. **Run `npm run build`** before deploying.
+5. **Use a `node:24` base image** in Docker.
 
 ## Cloudflare Workers
 
@@ -86,7 +125,7 @@ export default createCloudflareHandler(server, {
 });
 ```
 
-## What stays the same
+## Application structure
 
 - File-based `app/routes` and `app/actions`
 - `createRoute()`, `createAction()`, `html` templates, layouts
@@ -95,4 +134,4 @@ export default createCloudflareHandler(server, {
 
 ## SSG
 
-`hyperspan build:ssg` remains unimplemented in v2 but is easier to add now that routes compile to a manifest at build time.
+`hyperspan build:ssg` is not implemented yet. Routes compile to a manifest at build time, which makes SSG straightforward to add later.

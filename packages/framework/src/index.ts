@@ -19,5 +19,8 @@ export {
   getImportMap,
   registerImport,
 } from './client/manifest';
+export { buildClientJS } from './client/js';
 export type { AssetManifest } from './client/manifest';
+export { renderIsland } from './island';
+export type { IslandRenderOptions } from './island';
 export type { Hyperspan } from './types';

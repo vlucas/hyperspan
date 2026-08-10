@@ -30,6 +30,7 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.1",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "vite": "^6.3.5",
@@ -38,6 +39,7 @@
   "peerDependencies": {
     "@hyperspan/html": "^2.0.0-alpha.1",
     "@hyperspan/framework": "^2.0.0-alpha.1",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.1",
     "vite": "^6.0.0 || ^7.0.0"
   },
   "dependencies": {

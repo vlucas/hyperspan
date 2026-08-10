@@ -100,7 +100,7 @@ describe('renderVueSSR', () => {
 describe('renderVueIsland', () => {
   test('throws when component has no __HS_ISLAND property', async () => {
     const Bare = defineComponent({ render: () => h('div') });
-    await expect(renderVueIsland(Bare, {})).rejects.toThrow('was not loaded with an island plugin');
+    await expect(renderVueIsland(Bare, {})).rejects.toThrow(/not a Hyperspan island/i);
   });
 
   test('returns an html_safe object', async () => {

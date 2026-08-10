@@ -1,25 +1,29 @@
 import { html } from '@hyperspan/html';
-import { createRoute } from '@hyperspan/framework';
-import { renderPreactIsland } from '@hyperspan/plugin-preact';
-import { renderSvelteIsland } from '@hyperspan/plugin-svelte';
-import { renderVueIsland } from '@hyperspan/plugin-vue';
+import { createRoute, renderIsland } from '@hyperspan/framework';
+import { buildClientJS } from '@hyperspan/framework/client/js';
 import MarketingLayout from '~/app/layouts/marketing-layout';
 
-// Client-side components
-import ClientCounter from '~/app/components/client-counter';
-import SvelteCounter from '~/app/components/svelte-counter.svelte';
-import VueCounter from '~/app/components/vue-counter.vue';
+// Client-side islands — opt in with import attributes (any path)
+import ClientCounter from '~/app/components/client-counter.tsx' with { island: 'preact' };
+import SvelteCounter from '~/app/components/svelte-counter.svelte' with { island: 'svelte' };
+import VueCounter from '~/app/components/vue-counter.vue' with { island: 'vue' };
 
 // Styles
 import '~/app/styles/index.css';
 
 export default createRoute().get(async (context) => {
+  const helloClient = await buildClientJS(import.meta.resolve('../client/hello-client.ts'));
+
   const content = html`
     <main class="w-full">
       <!-- Hero -->
-      <section class="bg-gradient-to-br from-slate-900 to-indigo-900 text-white py-24 px-6 text-center rounded-xl">
+      <section
+        class="bg-gradient-to-br from-slate-900 to-indigo-900 text-white py-24 px-6 text-center rounded-xl"
+      >
         <div class="max-w-3xl mx-auto">
-          <div class="inline-block bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-mono px-3 py-1 rounded-full mb-6">
+          <div
+            class="inline-block bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-mono px-3 py-1 rounded-full mb-6"
+          >
             HTML-first &bull; Server-rendered &bull; Islands Architecture
           </div>
           <h1 class="text-5xl font-bold mb-6 leading-tight text-white">
@@ -98,7 +102,7 @@ export default createRoute().get(async (context) => {
                   >Preact Island</span
                 >
               </div>
-              ${renderPreactIsland(ClientCounter, { count: 0 })}
+              ${renderIsland(ClientCounter, { count: 0 })}
             </div>
 
             <!-- Svelte Island -->
@@ -109,7 +113,7 @@ export default createRoute().get(async (context) => {
                   >Svelte Island</span
                 >
               </div>
-              ${await renderSvelteIsland(SvelteCounter, { count: 10 })}
+              ${await renderIsland(SvelteCounter, { count: 10 })}
             </div>
 
             <!-- Vue Island -->
@@ -120,8 +124,15 @@ export default createRoute().get(async (context) => {
                   >Vue Island</span
                 >
               </div>
-              ${await renderVueIsland(VueCounter, { count: 100 })}
+              ${await renderIsland(VueCounter, { count: 100 })}
             </div>
+          </div>
+
+          <div
+            class="mt-10 bg-white rounded-xl border border-slate-200 p-6 shadow-sm max-w-md mx-auto"
+          >
+            <p id="client-greeting" class="text-slate-500 mb-4">Loading client script…</p>
+            ${helloClient.renderScriptTag(({ greetClient }) => greetClient())}
           </div>
         </div>
       </section>

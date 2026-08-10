@@ -1,5 +1,8 @@
 import { html } from '@hyperspan/html';
 import { createRoute } from '@hyperspan/framework';
+import { buildClientJS } from '@hyperspan/framework/client/js';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import AppLayout from '~/app/layouts/app-layout';
 import addTodoAction from '~/app/actions/add-todo';
 import deleteTodoAction from '~/app/actions/delete-todo';
@@ -9,6 +12,9 @@ import { getTodos } from '~/src/lib/db';
 export default createRoute().get(async (context) => {
   const todos = await getTodos();
   const remaining = todos.filter((t) => !t.completed).length;
+  const todoStatsClient = await buildClientJS(
+    join(dirname(fileURLToPath(import.meta.url)), '../client/todo-stats.ts')
+  );
 
   const content = html`
     <main class="w-full max-w-2xl mx-auto py-12 px-4">
@@ -58,6 +64,9 @@ export default createRoute().get(async (context) => {
             </p>
           `
         : ''}
+
+      <p id="todo-client-stats" class="text-xs text-slate-400 text-center mt-2"></p>
+      ${todoStatsClient.renderScriptTag(({ mountTodoStats }) => mountTodoStats())}
     </main>
   `;
 

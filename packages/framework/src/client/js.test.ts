@@ -1,5 +1,68 @@
-import { describe, expect, test } from 'vitest';
-import { extractExports } from './js';
+import { describe, expect, test, beforeEach } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { render } from '@hyperspan/html';
+import {
+  buildClientJS,
+  discoverClientExports,
+  extractExports,
+  getClientJSEntries,
+  resetClientJSEntriesForTests,
+} from './js';
+
+describe('buildClientJS', () => {
+  let clientFile: string;
+
+  beforeEach(() => {
+    resetClientJSEntriesForTests();
+    const dir = mkdtempSync(join(tmpdir(), 'hs-client-'));
+    clientFile = join(dir, 'picker.ts');
+    writeFileSync(
+      clientFile,
+      `export function mountPicker() {
+  document.getElementById('picker')?.classList.add('ready');
+}
+`
+    );
+  });
+
+  test('registers entry and returns stable esmName from path hash', async () => {
+    const result = await buildClientJS(clientFile);
+
+    expect(result.esmName).toMatch(/^client-[0-9a-f]{16}$/);
+    expect(result.publicPath).toBe(`/_hs/js/${result.esmName}.js`);
+    expect(getClientJSEntries()).toHaveLength(1);
+    expect(getClientJSEntries()[0].absPath).toBe(clientFile);
+  });
+
+  test('renderScriptTag with no loader uses import map key', async () => {
+    const result = await buildClientJS(clientFile);
+    const tag = render(result.renderScriptTag());
+
+    expect(tag).toContain(`import "${result.esmName}"`);
+    expect(tag).toContain(`data-source-id="${result.assetHash}"`);
+  });
+
+  test('renderScriptTag with function inlines bootstrap code', async () => {
+    const result = await buildClientJS(clientFile);
+    const tag = render(
+      result.renderScriptTag(({ mountPicker }: { mountPicker: () => void }) => {
+        mountPicker();
+      })
+    );
+
+    expect(tag).toContain(`import {mountPicker} from "${result.esmName}"`);
+    expect(tag).toContain('mountPicker()');
+  });
+
+  test('renderScriptTag with string inlines bootstrap code', async () => {
+    const result = await buildClientJS(clientFile);
+    const tag = render(result.renderScriptTag('({ mountPicker }) => mountPicker()'));
+
+    expect(tag).toContain('({ mountPicker }) => mountPicker()');
+  });
+});
 
 describe('extractExports', () => {
   test('extracts aliased export from bundled JS content', () => {
@@ -14,7 +77,7 @@ describe('extractExports', () => {
     });
   });
 
-  test('returns empty exports when none found', () => {
+  test('returns namespace export when none found', () => {
     const contents = 'function noop(){return 1}const value=2;';
 
     const result = extractExports(contents);
@@ -23,5 +86,16 @@ describe('extractExports', () => {
       exports: '* as _module',
       fnArgs: '_module',
     });
+  });
+});
+
+describe('discoverClientExports', () => {
+  test('discovers named exports from source', () => {
+    const result = discoverClientExports(
+      `export function mountPicker() {}\nexport const VERSION = 1;`
+    );
+
+    expect(result.exports).toBe('{mountPicker, VERSION}');
+    expect(result.fnArgs).toBe('{mountPicker, VERSION}');
   });
 });

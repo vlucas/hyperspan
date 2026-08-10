@@ -1,10 +1,15 @@
 import type { Plugin } from 'vite';
-import { basename } from 'node:path';
 import { assetHash } from '@hyperspan/framework/utils';
 import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
+import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
-import { html } from '@hyperspan/html';
 import { compile } from 'svelte/compiler';
+import {
+  registerIslandPlugin,
+  isIslandModule,
+  islandPluginResolveId,
+  splitIslandId,
+} from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 import './types.d';
 
@@ -28,9 +33,13 @@ export function buildIslandHtml(
   esmName: string,
   jsContent: string,
   ssrContent: string,
-  options: { loading?: string } = {}
+  options: { loading?: string; exportKind?: 'default' | 'named' } = {}
 ): string {
-  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">import ${componentName} from "${esmName}";${jsContent}</script>`;
+  const importStmt =
+    options.exportKind === 'named'
+      ? `import { ${componentName} } from "${esmName}";`
+      : `import ${componentName} from "${esmName}";`;
+  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">${importStmt}${jsContent}</script>`;
   if (options.loading === 'lazy') {
     return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
   }
@@ -43,14 +52,6 @@ export async function renderSvelteSSR(
 ): Promise<string> {
   const { render } = await import('svelte/server');
   return render(Component as ConstructorParameters<typeof render>[0], { props }).html;
-}
-
-function isIslandComponent(id: string): boolean {
-  return (
-    (id.includes('/app/components/') || id.includes('\\app\\components\\')) &&
-    id.endsWith('.svelte') &&
-    !id.includes('node_modules')
-  );
 }
 
 function extractComponentName(ssrCode: string): string | null {
@@ -66,10 +67,12 @@ function extractComponentName(ssrCode: string): string | null {
   return null;
 }
 
-export function svelteVitePlugin(): Plugin {
+export function svelteIslandPlugin(): Plugin {
   return {
     name: 'hyperspan-svelte',
     enforce: 'pre',
+
+    resolveId: islandPluginResolveId('svelte', '.svelte'),
 
     configureServer() {
       const clientUrl = `${JS_ISLAND_PUBLIC_PATH}/svelte-client.js`;
@@ -79,18 +82,21 @@ export function svelteVitePlugin(): Plugin {
     },
 
     async transform(code, id) {
-      if (!isIslandComponent(id)) return;
+      if (!isIslandModule(id, 'svelte', '.svelte')) return;
 
       log('transform svelte island', id);
-      const jsId = assetHash(id);
-      const esmName = basename(id, '.svelte');
+      const cleanId = splitIslandId(id).path;
+      const jsId = assetHash(cleanId);
+      const esmName = `island-${assetHash(cleanId)}`;
 
-      const ssrResult = compile(code, { filename: id, generate: 'server' });
+      const ssrResult = compile(code, { filename: cleanId, generate: 'server' });
       const ssrCode = ssrResult.js.code;
       const componentName = extractComponentName(ssrCode);
 
       if (!componentName) {
-        throw new Error(`No default export found in ${id}. Export a default Svelte component.`);
+        throw new Error(
+          `No default export found in ${cleanId}. Export a default Svelte component and import with \`with { island: 'svelte' }\`.`
+        );
       }
 
       registerImport(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
@@ -98,7 +104,8 @@ export function svelteVitePlugin(): Plugin {
       const moduleCode = `// hyperspan:processed
 function __hs_buildIslandHtml(jsId, componentName, esmName, jsContent, ssrContent, options) {
   options = options || {};
-  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">import \${componentName} from "\${esmName}";\${jsContent}</script>\`;
+  const importStmt = 'import ' + componentName + ' from "' + esmName + '";';
+  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">\${importStmt}\${jsContent}</script>\`;
   if (options.loading === 'lazy') {
     return \`<div id="\${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\\n\${scriptTag}</template></div>\`;
   }
@@ -132,23 +139,20 @@ ${componentName}.__HS_ISLAND = {
 }
 
 export function sveltePlugin(): HS.Plugin {
+  registerIslandPlugin('svelte', { vitePlugin: svelteIslandPlugin });
   return () => {
-    log('sveltePlugin loaded (Vite handles bundling in v2)');
+    log('sveltePlugin loaded');
   };
 }
 
 export async function renderSvelteIsland(
-  Component: {
-    __HS_ISLAND?: { render: (props: unknown, options: unknown) => Promise<string> };
-    name?: string;
-  },
+  Component: Parameters<typeof renderIsland>[0],
   props: Record<string, unknown> = {},
-  options: { ssr?: boolean; loading?: string } = { ssr: true }
+  options: Parameters<typeof renderIsland>[2] = { ssr: true }
 ) {
-  if (Component.__HS_ISLAND?.render) {
-    return html.raw(await Component.__HS_ISLAND.render(props, options));
+  const result = renderIsland(Component, props, options);
+  if (result != null && typeof (result as Promise<unknown>).then === 'function') {
+    return await result;
   }
-  throw new Error(
-    `Module ${Component.name} was not loaded with an island plugin! Add svelteVitePlugin() to vite.config.ts.`
-  );
+  return result;
 }
