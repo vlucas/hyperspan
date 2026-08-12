@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/framework",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "description": "Hyperspan Web Framework",
   "type": "module",
   "main": "src/server.ts",
@@ -100,7 +100,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@hyperspan/html": "^2.0.0-alpha.3",
+    "@hyperspan/html": "^2.0.0-alpha.4",
     "debug": "^4.4.3",
     "isbot": "^5.1.32",
     "zod": "^4.4.3"

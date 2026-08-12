@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,
@@ -36,13 +36,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/adapter-cloudflare": "^2.0.0-alpha.3",
-    "@hyperspan/adapter-node": "^2.0.0-alpha.3",
-    "@hyperspan/framework": "^2.0.0-alpha.3",
-    "@hyperspan/plugin-preact": "^2.0.0-alpha.3",
-    "@hyperspan/plugin-svelte": "^2.0.0-alpha.3",
-    "@hyperspan/plugin-vue": "^2.0.0-alpha.3",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.3",
+    "@hyperspan/adapter-cloudflare": "^2.0.0-alpha.4",
+    "@hyperspan/adapter-node": "^2.0.0-alpha.4",
+    "@hyperspan/framework": "^2.0.0-alpha.4",
+    "@hyperspan/plugin-preact": "^2.0.0-alpha.4",
+    "@hyperspan/plugin-svelte": "^2.0.0-alpha.4",
+    "@hyperspan/plugin-vue": "^2.0.0-alpha.4",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.4",
     "commander": "^14.0.3",
     "degit": "^2.8.4",
     "fast-glob": "^3.3.3",

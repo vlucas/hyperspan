@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: set this to true or false
+  workerd: set this to true or false
+minimumReleaseAgeExclude:
+  - '@hyperspan/framework@2.0.0-alpha.4'
+  - '@hyperspan/html@2.0.0-alpha.4'

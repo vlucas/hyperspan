@@ -75,7 +75,12 @@ export namespace Hyperspan {
     plugins: Array<Hyperspan.Plugin>; // Loaders for client islands
     /** Production runtime target. Controls the generated dist/server entry. */
     deployTarget?: DeployTarget;
-    /** Called once before the production server is created, with platform bindings. */
+    /**
+     * Called before the server is created, with platform bindings.
+     * - Vite/`hyperspan dev`: adapter `/dev` `resolveDevEnv(root)` when present; else `process.env`
+     * - Node/Bun production entry: `process.env`
+     * - Cloudflare Workers entry: Worker `env` bindings
+     */
     beforeServerCreate?: (ctx: ServerCreateContext) => void | Promise<void>;
     // For customizing the routes and adding your own...
     beforeRoutesAdded?: (server: Hyperspan.Server) => void;

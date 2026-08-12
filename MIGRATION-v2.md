@@ -114,7 +114,7 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
    ```bash
    npm install hyperspan@alpha @hyperspan/framework@alpha @hyperspan/vite-plugin@alpha
    ```
-   Or pin a specific pre-release: `^2.0.0-alpha.3`
+   Or pin a specific pre-release: `^2.0.0-alpha.4`
 2. **Add `vite.config.ts`** (copy from starter template).
 3. **Update `package.json` scripts** to use `npm run dev/build/start`.
 4. **Run `npm run build`** before deploying.
@@ -131,9 +131,13 @@ export default createConfig({
   deployTarget: 'cloudflare',
   beforeServerCreate({ env }) {
     // bind KV, D1, secrets, etc.
+    // Called for Vite/`hyperspan dev` (via Wrangler platform proxy),
+    // and for the Workers fetch entry with real bindings.
   },
 });
 ```
+
+For local Vite, `@hyperspan/adapter-cloudflare/dev` loads bindings with Wrangler’s `getPlatformProxy` (prefers `wrangler.dev.jsonc` / `wrangler.dev.toml` when present). Keep `beforeServerCreate` as the only place you wire `env` — do not duplicate that in `vite.config.ts`.
 
 ```toml
 # wrangler.toml

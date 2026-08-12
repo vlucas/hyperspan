@@ -224,6 +224,10 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
     try {
       hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
+      if (hsConfig.beforeServerCreate) {
+        // Build discovery: process.env is enough; skip Wrangler proxy cost/side effects.
+        await hsConfig.beforeServerCreate({ env: process.env });
+      }
       const tempServer = await createServer(hsConfig);
       tempServer._routes = [];
       await loadRoutes(tempServer, root, hsConfig, ssrVite);
@@ -283,6 +287,10 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
   async function rebuildServer() {
     hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
+    if (hsConfig.beforeServerCreate) {
+      const env = await resolveServerCreateEnv(hsConfig, root);
+      await hsConfig.beforeServerCreate({ env });
+    }
     serverInstance = await createServer(hsConfig);
     serverInstance._routes = [];
     await loadRoutes(serverInstance, root, hsConfig, viteDevServer);
@@ -427,6 +435,36 @@ async function loadHyperspanConfig(root: string, configFile?: string): Promise<H
   const jiti = createJiti(root, { interopDefault: true });
   const file = configFile ?? join(root, 'hyperspan.config.ts');
   return jiti(file) as HS.Config;
+}
+
+/**
+ * Env passed to `beforeServerCreate` during Vite/dev.
+ * Platform-specific resolution lives in each adapter's `/dev` export
+ * (e.g. `@hyperspan/adapter-cloudflare/dev`).
+ */
+async function resolveServerCreateEnv(hsConfig: HS.Config, root: string): Promise<unknown> {
+  const target = hsConfig.deployTarget ?? 'node';
+  if (target === 'node' || target === 'bun') {
+    return process.env;
+  }
+
+  const specifier = `@hyperspan/adapter-${target}/dev`;
+  try {
+    const mod = (await import(specifier)) as {
+      resolveDevEnv?: (projectRoot: string) => Promise<unknown>;
+    };
+    if (typeof mod.resolveDevEnv === 'function') {
+      return await mod.resolveDevEnv(root);
+    }
+  } catch (err) {
+    console.warn(
+      `[Hyperspan] Could not resolve ${target} dev env via ${specifier}.`,
+      'Is the matching adapter installed?',
+      '\n',
+      err
+    );
+  }
+  return process.env;
 }
 
 async function loadRoutes(

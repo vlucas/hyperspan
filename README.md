@@ -18,7 +18,7 @@ Visit: [Hyperspan.dev](https://www.hyperspan.dev)
 | `bun` | `export async function start()` | `@hyperspan/adapter-bun` |
 | `cloudflare` | `export default { fetch }` | `@hyperspan/adapter-cloudflare` |
 
-Use `beforeServerCreate({ env })` in `hyperspan.config.ts` to wire platform bindings before the server is created. On Node/Bun, `env` is `process.env`; on Cloudflare Workers, `env` is the bindings object.
+Use `beforeServerCreate({ env })` in `hyperspan.config.ts` to wire platform bindings before the server is created. On Node/Bun, `env` is `process.env`; on Cloudflare Workers, `env` is the bindings object. During `hyperspan dev` with `deployTarget: 'cloudflare'`, `@hyperspan/adapter-cloudflare/dev` resolves bindings via Wrangler’s platform proxy and the Vite plugin passes them into the same hook.
 
 For Cloudflare, `hyperspan build` auto-syncs Wrangler CSS aliases (layout CSS imports are build-time only; styles ship via `dist/assets/`).
 
