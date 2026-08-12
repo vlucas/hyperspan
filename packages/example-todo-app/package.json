@@ -1,7 +1,7 @@
 {
   "name": "example-todo-app",
   "description": "Hyperspan.dev example todo app",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "type": "module",
   "scripts": {
     "dev": "hyperspan dev",
@@ -18,11 +18,11 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.2",
-    "@hyperspan/html": "^2.0.0-alpha.2",
-    "@hyperspan/plugin-preact": "^2.0.0-alpha.2",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.2",
-    "hyperspan": "^2.0.0-alpha.2",
+    "@hyperspan/framework": "^2.0.0-alpha.3",
+    "@hyperspan/html": "^2.0.0-alpha.3",
+    "@hyperspan/plugin-preact": "^2.0.0-alpha.3",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.3",
+    "hyperspan": "^2.0.0-alpha.3",
     "preact": "^10.29.0",
     "tailwindcss": "^4.2.2"
   },
