@@ -14,13 +14,22 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./deploy": {
+      "types": "./src/deploy/index.ts",
+      "default": "./src/deploy/index.ts"
     }
   },
+  "files": [
+    "src",
+    "stubs"
+  ],
   "scripts": {
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.2"
+    "@hyperspan/framework": "^2.0.0-alpha.2",
+    "fast-glob": "^3.3.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250508.0",

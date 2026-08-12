@@ -7,17 +7,10 @@ export type CloudflareAdapterOptions = FetchHandlerOptions & {
 };
 
 /**
- * Create a Cloudflare Workers fetch handler for a Hyperspan app.
+ * Create a Cloudflare Workers fetch handler for a Hyperspan server instance.
  *
- * Usage:
- * ```ts
- * import { createApp } from '@hyperspan/framework';
- * import { createCloudflareHandler } from '@hyperspan/adapter-cloudflare';
- * import server from './dist/server';
- *
- * const { fetch } = createCloudflareHandler(server, { assets: env.ASSETS });
- * export default { fetch };
- * ```
+ * For the usual Worker entry, use `createCloudflareWorker` from
+ * `@hyperspan/adapter-cloudflare/worker` after `hyperspan build`.
  */
 export function createCloudflareHandler(server: HS.Server, options: CloudflareAdapterOptions = {}) {
   const fetch = createFetchHandler(server, {

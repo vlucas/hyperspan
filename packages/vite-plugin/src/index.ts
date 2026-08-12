@@ -6,11 +6,12 @@ import type { Plugin, ViteDevServer, ResolvedConfig } from 'vite';
 import {
   createServer,
   createFetchHandler,
-  getRunnableRoute,
   setAssetManifest,
+  registerRouteModule,
+  getAssetManifest,
 } from '@hyperspan/framework';
 import type { AssetManifest } from '@hyperspan/framework';
-import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
+import { isValidRoutePath } from '@hyperspan/framework/utils';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { createJiti } from 'jiti';
 import {
@@ -19,6 +20,7 @@ import {
   resolveRegisteredIslandVitePlugins,
 } from './islands';
 import { clientJSPlugin, discoverClientJSForRoutes, buildRegisteredClientJS } from './client-js';
+import { writeServerEntry } from './generate-server';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
@@ -258,6 +260,19 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       console.log(
         `[Hyperspan] Discovered ${tempServer._routes.length} routes for production manifest`
       );
+
+      const buildOutDir = isAbsolute(resolvedConfig.build.outDir)
+        ? resolvedConfig.build.outDir
+        : join(root, resolvedConfig.build.outDir);
+      await writeServerEntry({
+        root,
+        outDir: buildOutDir,
+        appDir: hsConfig.appDir ?? './app',
+        deployTarget: hsConfig.deployTarget ?? 'node',
+        configFile:
+          typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+      });
+      console.log('[Hyperspan] Generated production server entry');
     } finally {
       // Give pending dep-scan work a moment so close doesn't race Vite internals.
       await new Promise((r) => setTimeout(r, 50));
@@ -275,6 +290,44 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       onNotMatched: async (request) => serveStatic(request, root, hsConfig.publicDir),
     });
     updateDevManifest();
+    await syncServerEntryForDev();
+  }
+
+  async function syncServerEntryForDev() {
+    if (!resolvedConfig || resolvedConfig.command !== 'serve') {
+      return;
+    }
+
+    try {
+      const outDir = isAbsolute(resolvedConfig.build.outDir)
+        ? resolvedConfig.build.outDir
+        : join(root, resolvedConfig.build.outDir || 'dist');
+      mkdirSync(outDir, { recursive: true });
+      await writeServerEntry({
+        root,
+        outDir,
+        appDir: hsConfig.appDir ?? './app',
+        deployTarget: hsConfig.deployTarget ?? 'node',
+        configFile:
+          typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+      });
+    } catch (err) {
+      console.warn('[Hyperspan] Could not sync production server entry:', err);
+    }
+  }
+
+  function isAppRouteFile(file: string): boolean {
+    const appDir = (hsConfig?.appDir ?? './app').replace(/^\.\//, '');
+    const normalized = file.replace(/\\/g, '/');
+    return normalized.includes(`/${appDir}/routes/`) || normalized.includes(`/${appDir}/actions/`);
+  }
+
+  async function onAppRouteFileEvent(file: string) {
+    hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
+    if (!isAppRouteFile(file)) {
+      return;
+    }
+    await rebuildServer();
   }
 
   function updateDevManifest() {
@@ -359,11 +412,11 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       }
     });
 
-    viteServer.watcher.on('change', async (file) => {
-      if (file.includes('/app/routes/') || file.includes('/app/actions/')) {
-        await rebuildServer();
-      }
-    });
+    for (const event of ['change', 'add', 'unlink'] as const) {
+      viteServer.watcher.on(event, (file) => {
+        void onAppRouteFileEvent(file);
+      });
+    }
   }
 
   return [corePlugin, clientJSPlugin()];
@@ -397,35 +450,18 @@ async function loadRoutes(
       if (!isValidRoutePath(relativeFilePath)) continue;
 
       const mod = viteServer ? await viteServer.ssrLoadModule(filePath) : await import(filePath);
-
-      const route = getRunnableRoute(mod);
-      const parsedPath = parsePath(relativeFilePath);
-
-      let path = parsedPath.path;
-      if (typeof route._path === 'function') {
-        const routePath = route._path();
-        if (routePath && routePath !== '/') path = routePath;
-      }
-
-      if (!route._config.path) {
-        route._config.path = path;
-        if (parsedPath.params.length > 0) {
-          const params = route._config.params ?? {};
-          parsedPath.params.forEach((param) => {
-            params[param] = undefined;
-          });
-          route._config.params = params;
-        }
-      }
-
-      if (viteServer) {
+      const route = registerRouteModule(
+        server,
+        relativeFilePath,
+        mod,
+        viteServer ? undefined : getAssetManifest()
+      );
+      if (route && viteServer) {
         const cssUrls = collectCssUrls(viteServer, filePath);
         if (cssUrls.length > 0) {
           route._config.cssImports = cssUrls;
         }
       }
-
-      server._routes.push(route);
     }
   }
 }

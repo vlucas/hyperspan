@@ -27,6 +27,10 @@
       "types": "./src/utils.ts",
       "default": "./src/utils.ts"
     },
+    "./routes": {
+      "types": "./src/register-routes.ts",
+      "default": "./src/register-routes.ts"
+    },
     "./layout": {
       "types": "./src/layout.ts",
       "default": "./src/layout.ts"

@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@hyperspan/html';
 import { assetHash as assetHashFn } from '../utils';
@@ -69,6 +70,31 @@ export function resolveClientModulePath(modulePathResolved: string): string {
   return modulePathResolved;
 }
 
+/**
+ * Resolve a client module path for hashing and bundling.
+ * Logical app-relative paths (e.g. app/client/foo.ts) hash consistently across
+ * Node and edge runtimes where absolute paths differ.
+ */
+export function resolveClientModulePaths(modulePathResolved: string): {
+  hashKey: string;
+  absPath: string;
+} {
+  const resolved = resolveClientModulePath(modulePathResolved).replace(/\\/g, '/');
+
+  if (!isAbsolute(resolved)) {
+    const hashKey = resolved;
+    if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
+      const candidate = join(process.cwd(), hashKey);
+      if (existsSync(candidate)) {
+        return { hashKey, absPath: candidate };
+      }
+    }
+    return { hashKey, absPath: hashKey };
+  }
+
+  return { hashKey: resolved, absPath: resolved };
+}
+
 export function getClientJSEntries(): ClientJSEntry[] {
   return [...getClientJSRegistry().values()];
 }
@@ -92,15 +118,16 @@ function registerClientJSEntry(entry: ClientJSEntry): void {
  * and returns URLs / script-tag helpers for the browser.
  */
 export async function buildClientJS(modulePathResolved: string): Promise<HS.ClientJSBuildResult> {
-  const absPath = resolveClientModulePath(modulePathResolved);
-  const hash = assetHashFn(absPath);
+  const { hashKey, absPath } = resolveClientModulePaths(modulePathResolved);
+  const hash = assetHashFn(hashKey);
   const esmName = `client-${hash}`;
   const publicPath = resolveImport(esmName) ?? `${JS_PUBLIC_PATH}/${esmName}.js`;
 
   let exports = '* as _module';
   let fnArgs = '_module';
-  if (existsSync(absPath)) {
-    const source = readFileSync(absPath, 'utf-8');
+  const sourcePath = existsSync(absPath) ? absPath : null;
+  if (sourcePath) {
+    const source = readFileSync(sourcePath, 'utf-8');
     const discovered = discoverClientExports(source);
     exports = discovered.exports;
     fnArgs = discovered.fnArgs;

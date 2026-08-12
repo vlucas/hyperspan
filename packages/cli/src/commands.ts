@@ -3,10 +3,11 @@ import degit from 'degit';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import packageJson from '../package.json';
 import { startNodeServer } from '@hyperspan/adapter-node';
-import { createHyperspanServer } from './server';
+import { createHyperspanServer, loadConfig } from './server';
 
 const program = new Command();
 
@@ -73,6 +74,18 @@ program
     await build({
       configFile: join(process.cwd(), 'vite.config.ts'),
     });
+
+    const config = await loadConfig();
+    if (config.deployTarget === 'cloudflare') {
+      const { syncWranglerCssAliases } = await import('@hyperspan/adapter-cloudflare/deploy');
+      const result = syncWranglerCssAliases(process.cwd(), { appDir: config.appDir });
+      if (result.updated) {
+        console.log(
+          `[Hyperspan] Synced Wrangler CSS aliases (${result.aliasCount}) for Cloudflare deploy`
+        );
+      }
+    }
+
     console.log('[Hyperspan] Build complete → dist/');
   });
 
@@ -91,6 +104,16 @@ program
     }
 
     console.log('[Hyperspan] Starting production server...');
+
+    const serverEntry = join(process.cwd(), 'dist/server.ts');
+    if (fs.existsSync(serverEntry)) {
+      const mod = await import(pathToFileURL(serverEntry).href);
+      if (typeof mod.start === 'function') {
+        await mod.start({ port: Number(options.port) });
+        return;
+      }
+    }
+
     const server = await createHyperspanServer();
     startNodeServer(server, { port: Number(options.port) });
   });

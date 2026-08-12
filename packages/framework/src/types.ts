@@ -63,10 +63,20 @@ export namespace Hyperspan {
     disableStreaming?: DisableStreamingFn;
   };
 
+  export type DeployTarget = 'node' | 'bun' | 'cloudflare';
+
+  export type ServerCreateContext = {
+    env: unknown;
+  };
+
   export type Config = {
     appDir: string;
     publicDir: string;
     plugins: Array<Hyperspan.Plugin>; // Loaders for client islands
+    /** Production runtime target. Controls the generated dist/server entry. */
+    deployTarget?: DeployTarget;
+    /** Called once before the production server is created, with platform bindings. */
+    beforeServerCreate?: (ctx: ServerCreateContext) => void | Promise<void>;
     // For customizing the routes and adding your own...
     beforeRoutesAdded?: (server: Hyperspan.Server) => void;
     afterRoutesAdded?: (server: Hyperspan.Server) => void;
@@ -386,6 +396,9 @@ export namespace Hyperspan {
     formErrors: unknown[];
   }
 }
+
+export type DeployTarget = Hyperspan.DeployTarget;
+export type ServerCreateContext = Hyperspan.ServerCreateContext;
 
 declare global {
   interface DocumentEventMap {

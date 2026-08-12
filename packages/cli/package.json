@@ -36,6 +36,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hyperspan/adapter-cloudflare": "^2.0.0-alpha.2",
     "@hyperspan/adapter-node": "^2.0.0-alpha.2",
     "@hyperspan/framework": "^2.0.0-alpha.2",
     "@hyperspan/plugin-preact": "^2.0.0-alpha.2",

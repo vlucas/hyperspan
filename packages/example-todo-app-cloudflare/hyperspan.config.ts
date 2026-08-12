@@ -1,12 +1,12 @@
 import { createConfig } from '@hyperspan/framework';
 import { preactPlugin } from '@hyperspan/plugin-preact';
+import { initDb } from './src/lib/db';
 
-/**
- * Hyperspan config
- * @see https://www.hyperspan.dev/docs/config
- */
 export default createConfig({
-  deployTarget: 'node',
+  deployTarget: 'cloudflare',
+  beforeServerCreate({ env }: { env: Env }) {
+    initDb(env.TODO_KV);
+  },
   appDir: './app',
   publicDir: './public',
   plugins: [preactPlugin()],

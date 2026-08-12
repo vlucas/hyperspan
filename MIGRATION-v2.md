@@ -57,16 +57,22 @@ Use `with { island: 'svelte' }` or `with { island: 'vue' }` for other frameworks
 
 Register arbitrary client modules by path. The server never evaluates client-only code — Vite bundles it and the manifest records the public URL.
 
+Call `buildClientJS()` once at **module scope** (top-level await). It only registers the path for bundling — do not call it inside a route handler on every request.
+
 ```ts
 import { buildClientJS } from '@hyperspan/framework/client/js';
 
-const picker = await buildClientJS(import.meta.resolve('./app/client/picker.ts'));
+const picker = await buildClientJS('app/client/picker.ts');
 
-html`
-  <div id="picker"></div>
-  ${picker.renderScriptTag(({ mountPicker }) => mountPicker())}
-`;
+export default createRoute().get(async (context) => {
+  return html`
+    <div id="picker"></div>
+    ${picker.renderScriptTag(({ mountPicker }) => mountPicker())}
+  `;
+});
 ```
+
+Use an app-relative path (e.g. `app/client/picker.ts`) so the asset hash stays stable across Node, Cloudflare Workers, and other runtimes.
 
 `renderScriptTag()` with no argument emits a module script that imports the bundle via the import map. Pass a function or string to inline bootstrap code that receives the module exports.
 
@@ -116,14 +122,29 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
 
 ## Cloudflare Workers
 
-```ts
-import { createCloudflareHandler } from '@hyperspan/adapter-cloudflare';
-import server from './dist/server';
+Set `deployTarget: 'cloudflare'` in `hyperspan.config.ts`. The build generates `dist/server.ts` with the Cloudflare adapter and your routes assembled — Wrangler uses it as the Worker entry.
 
-export default createCloudflareHandler(server, {
-  assets: env.ASSETS,
+```ts
+import { createConfig } from '@hyperspan/framework';
+
+export default createConfig({
+  deployTarget: 'cloudflare',
+  beforeServerCreate({ env }) {
+    // bind KV, D1, secrets, etc.
+  },
 });
 ```
+
+```toml
+# wrangler.toml
+main = "./dist/server.ts"
+```
+
+CSS imports in layouts (e.g. `import '../styles/globals.css'`) are for Vite build-time only — Tailwind compiles them into `dist/assets/`. At Worker runtime, styles come from the manifest via `hyperspanStyleTags()`.
+
+When `deployTarget: 'cloudflare'`, `hyperspan build` automatically syncs Wrangler CSS aliases via `@hyperspan/adapter-cloudflare/deploy`. You do **not** need stub files or manual `[alias]` entries for stylesheets.
+
+See **`packages/example-todo-app-cloudflare`** for a full deployable example.
 
 ## Application structure
 

@@ -51,6 +51,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
     appDir: './app',
     publicDir: './public',
     plugins: [],
+    deployTarget: 'node',
     responseOptions: {
       disableStreaming: hyperspanDisableStreaming,
     },

@@ -62,6 +62,28 @@ describe('buildClientJS', () => {
 
     expect(tag).toContain('({ mountPicker }) => mountPicker()');
   });
+
+  test('logical app-relative paths hash consistently and resolve on disk when present', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hs-client-logical-'));
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(dir, 'app/client'), { recursive: true });
+    const logicalPath = join(dir, 'app/client/stats.ts');
+    writeFileSync(logicalPath, `export function mountStats() {}\n`);
+
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const first = await buildClientJS('app/client/stats.ts');
+      resetClientJSEntriesForTests();
+      const second = await buildClientJS('app/client/stats.ts');
+      expect(first.esmName).toBe(second.esmName);
+      expect(getClientJSEntries()[0].absPath.replace(/^\/private/, '')).toBe(
+        logicalPath.replace(/^\/private/, '')
+      );
+    } finally {
+      process.chdir(cwd);
+    }
+  });
 });
 
 describe('extractExports', () => {

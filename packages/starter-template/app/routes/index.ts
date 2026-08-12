@@ -11,9 +11,9 @@ import VueCounter from '~/app/components/vue-counter.vue' with { island: 'vue' }
 // Styles
 import '~/app/styles/index.css';
 
-export default createRoute().get(async (context) => {
-  const helloClient = await buildClientJS(import.meta.resolve('../client/hello-client.ts'));
+const helloClient = await buildClientJS('app/client/hello-client.ts');
 
+export default createRoute().get(async (context) => {
   const content = html`
     <main class="w-full">
       <!-- Hero -->

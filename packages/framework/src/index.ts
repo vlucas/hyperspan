@@ -20,7 +20,9 @@ export {
   registerImport,
 } from './client/manifest';
 export { buildClientJS } from './client/js';
+export { registerRouteModule, registerRouteModules } from './register-routes';
+export type { RouteModuleEntry } from './register-routes';
 export type { AssetManifest } from './client/manifest';
 export { renderIsland } from './island';
 export type { IslandRenderOptions } from './island';
-export type { Hyperspan } from './types';
+export type { Hyperspan, ServerCreateContext, DeployTarget } from './types';

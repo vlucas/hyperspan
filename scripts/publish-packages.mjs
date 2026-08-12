@@ -27,7 +27,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packagesDir = join(root, 'packages');
 const dryRun = process.argv.includes('--dry-run');
 
-const SKIP_NAMES = new Set(['example-todo-app', 'hyperspan-app']);
+const SKIP_NAMES = new Set(['example-todo-app', 'example-todo-app-cloudflare', 'hyperspan-app']);
 
 function loadPublishablePackages() {
   const dirs = readdirSync(packagesDir, { withFileTypes: true })

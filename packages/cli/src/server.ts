@@ -1,5 +1,5 @@
-import { createServer, getRunnableRoute, setAssetManifest } from '@hyperspan/framework';
-import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
+import { createServer, setAssetManifest, registerRouteModule } from '@hyperspan/framework';
+import { isValidRoutePath } from '@hyperspan/framework/utils';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -149,39 +149,23 @@ export async function addDirectoryAsRoutes(
 
           log(`Loading route: ${filePath}`);
           const module = await import(pathToFileURL(filePath).href);
-          const route = getRunnableRoute(module);
-          const parsedPath = parsePath(relativeFilePath);
 
-          let path = parsedPath.path;
-          if (typeof route._path === 'function') {
-            const routePath = route._path();
-            if (routePath && routePath !== '/') path = routePath;
-          }
-
-          if (!route._config.path) {
-            route._config.path = path;
-            if (parsedPath.params.length > 0) {
-              const params = route._config.params ?? {};
-              parsedPath.params.forEach((param) => {
-                params[param] = undefined;
-              });
-              route._config.params = params;
-            }
-          }
-
-          // Load CSS manifest for this route if available
+          let productionManifest;
           try {
             const manifestPath = join(CWD, 'dist/manifest.json');
             if (existsSync(manifestPath)) {
-              const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
-              const cssFiles = manifest.css?.[path] ?? manifest.css?.['*'];
-              if (cssFiles?.length) {
-                route._config.cssImports = cssFiles;
-              }
+              productionManifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
             }
           } catch {
             // manifest optional
           }
+
+          const route = registerRouteModule(server, relativeFilePath, module, productionManifest);
+          if (!route) {
+            return null;
+          }
+
+          const path = route._path();
 
           routeMap.push({ route: path, file: filePath.replace(CWD, '') });
           return route;
@@ -202,6 +186,4 @@ export async function addDirectoryAsRoutes(
   if (startConfig.development) {
     console.table(routeMap);
   }
-
-  server._routes.push(...routes);
 }

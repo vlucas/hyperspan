@@ -8,6 +8,20 @@ shipping minimal JavaScript to the client.
 
 Visit: [Hyperspan.dev](https://www.hyperspan.dev)
 
+## Deploy targets
+
+`hyperspan build` generates `dist/server.ts` with the adapter for your `deployTarget` (default `'node'`):
+
+| Target | Generated entry | Adapter |
+|--------|-----------------|---------|
+| `node` | `export async function start()` | `@hyperspan/adapter-node` |
+| `bun` | `export async function start()` | `@hyperspan/adapter-bun` |
+| `cloudflare` | `export default { fetch }` | `@hyperspan/adapter-cloudflare` |
+
+Use `beforeServerCreate({ env })` in `hyperspan.config.ts` to wire platform bindings before the server is created. On Node/Bun, `env` is `process.env`; on Cloudflare Workers, `env` is the bindings object.
+
+For Cloudflare, `hyperspan build` auto-syncs Wrangler CSS aliases (layout CSS imports are build-time only; styles ship via `dist/assets/`).
+
 ## Packages in this repo
 
 - `@hyperspan/html` - Streaming HTML templates, useable in any project
