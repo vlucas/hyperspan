@@ -12,6 +12,7 @@ import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
 import { buildUrl, parsePath, removeUndefined } from './utils';
 import { Cookies } from './cookies';
+import { nodeAdapter } from '@hyperspan/adapter-node';
 
 import type { Hyperspan as HS } from './types';
 
@@ -51,7 +52,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
     appDir: './app',
     publicDir: './public',
     plugins: [],
-    deployTarget: 'node',
+    deployAdapter: config.deployAdapter ?? nodeAdapter(),
     responseOptions: {
       disableStreaming: hyperspanDisableStreaming,
     },
@@ -59,6 +60,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
   return {
     ...defaultConfig,
     ...config,
+    deployAdapter: config.deployAdapter ?? defaultConfig.deployAdapter,
     responseOptions: {
       ...defaultConfig.responseOptions,
       ...config.responseOptions,

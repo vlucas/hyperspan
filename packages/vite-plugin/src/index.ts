@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import fg from 'fast-glob';
 import type { Plugin, ViteDevServer, ResolvedConfig } from 'vite';
 import {
+  createConfig,
   createServer,
   createFetchHandler,
   setAssetManifest,
@@ -20,7 +21,7 @@ import {
   resolveRegisteredIslandVitePlugins,
 } from './islands';
 import { clientJSPlugin, discoverClientJSForRoutes, buildRegisteredClientJS } from './client-js';
-import { writeServerEntry } from './generate-server';
+import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
@@ -95,7 +96,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     async buildStart() {
       try {
         hsConfig = await loadHyperspanConfig(root, options.configFile);
-        if (resolvedConfig.command === 'serve') {
+        if (resolvedConfig.command === 'serve' && !process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY) {
           await rebuildServer();
         }
         // Production build: route/CSS discovery runs in closeBundle via a
@@ -124,17 +125,22 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
     configureServer(server) {
       viteDevServer = server;
+      if (process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY) {
+        return;
+      }
       setupDevMiddleware(server);
       rebuildServer().catch((err) => console.error('[Hyperspan] Failed to load routes:', err));
     },
 
     generateBundle(_outputOptions, bundle) {
-      const imports: Record<string, string> = { ...manifest.imports };
+      const imports: Record<string, string> = {
+        ...manifest.imports,
+        ...getAssetManifest().imports,
+      };
       const clients: AssetManifest['clients'] = { ...manifest.clients };
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'chunk') continue;
-        // Vite emits client entries under dist/assets and dist/islands
         const publicPath = `/${fileName}`;
 
         if (fileName.includes('hyperspan-streaming')) {
@@ -147,49 +153,31 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
           clients.scripts = publicPath;
           imports['hyperspan-scripts'] = publicPath;
         } else if (
-          fileName.includes('islands/preact-client') ||
-          fileName.endsWith('preact-client.js')
-        ) {
-          imports['preact-client'] = publicPath;
-          imports['preact'] = publicPath;
-          imports['preact/hooks'] = publicPath;
-          imports['preact/jsx-runtime'] = publicPath;
-          imports['preact/jsx-dev-runtime'] = publicPath;
-          imports['preact/compat'] = publicPath;
-          imports['react'] = publicPath;
-          imports['react-dom'] = publicPath;
-        } else if (
           fileName.includes('islands/island-') ||
-          fileName.includes('_hs/js/islands/island-')
+          fileName.includes('_hs/js/islands/island-') ||
+          fileName.includes('_hs/js/client-')
         ) {
-          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
-          imports[esmName] = publicPath;
-        } else if (
-          fileName.includes('islands/svelte-client') ||
-          fileName.includes('islands/vue-client')
-        ) {
-          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
-          imports[esmName] = publicPath;
-        } else if (fileName.includes('_hs/js/client-')) {
           const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
           imports[esmName] = publicPath;
         }
 
-        // Collect CSS emitted alongside chunks
-        if (chunk.type === 'chunk' && 'viteMetadata' in chunk) {
+        if ('viteMetadata' in chunk) {
           const importedCss = (chunk as { viteMetadata?: { importedCss?: Set<string> } })
             .viteMetadata?.importedCss;
           if (importedCss) {
             for (const cssFile of importedCss) {
               const cssPath = `/${cssFile}`;
-              // Will be associated with routes in closeBundle SSR pass
               manifest.css['*'] = [...new Set([...(manifest.css['*'] ?? []), cssPath])];
             }
           }
         }
       }
 
-      manifest = { ...manifest, imports, clients };
+      manifest = {
+        ...manifest,
+        imports: { ...imports, ...getAssetManifest().imports },
+        clients,
+      };
       setAssetManifest(manifest);
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
     },
@@ -202,6 +190,11 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
           console.error('[Hyperspan] Failed to discover routes/CSS during build:', err);
         }
       }
+      manifest = {
+        ...manifest,
+        imports: { ...manifest.imports, ...getAssetManifest().imports },
+      };
+      setAssetManifest(manifest);
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
     },
   };
@@ -218,7 +211,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     const ssrVite = await createViteServer({
       configFile: typeof resolvedConfig.configFile === 'string' ? resolvedConfig.configFile : false,
       root,
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, watch: null },
       appType: 'custom',
     });
 
@@ -272,7 +265,6 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         root,
         outDir: buildOutDir,
         appDir: hsConfig.appDir ?? './app',
-        deployTarget: hsConfig.deployTarget ?? 'node',
         configFile:
           typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
       });
@@ -288,7 +280,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   async function rebuildServer() {
     hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
     if (hsConfig.beforeServerCreate) {
-      const env = await resolveServerCreateEnv(hsConfig, root);
+      const env = await resolveServerCreateEnv(hsConfig.deployAdapter, root);
       await hsConfig.beforeServerCreate({ env });
     }
     serverInstance = await createServer(hsConfig);
@@ -315,7 +307,6 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         root,
         outDir,
         appDir: hsConfig.appDir ?? './app',
-        deployTarget: hsConfig.deployTarget ?? 'node',
         configFile:
           typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
       });
@@ -434,35 +425,37 @@ async function loadHyperspanConfig(root: string, configFile?: string): Promise<H
   const { createJiti } = await import('jiti');
   const jiti = createJiti(root, { interopDefault: true });
   const file = configFile ?? join(root, 'hyperspan.config.ts');
-  return jiti(file) as HS.Config;
+  const config = createConfig(jiti(file) as Partial<HS.Config>);
+  config.deployAdapter = resolveDeployAdapter(config.deployAdapter);
+  return config;
 }
 
 /**
  * Env passed to `beforeServerCreate` during Vite/dev.
- * Platform-specific resolution lives in each adapter's `/dev` export
- * (e.g. `@hyperspan/adapter-cloudflare/dev`).
+ * The deploy adapter may provide a native `devModule` that exports `resolveDevEnv`.
  */
-async function resolveServerCreateEnv(hsConfig: HS.Config, root: string): Promise<unknown> {
-  const target = hsConfig.deployTarget ?? 'node';
-  if (target === 'node' || target === 'bun') {
-    return process.env;
-  }
-
-  const specifier = `@hyperspan/adapter-${target}/dev`;
-  try {
-    const mod = (await import(specifier)) as {
-      resolveDevEnv?: (projectRoot: string) => Promise<unknown>;
-    };
-    if (typeof mod.resolveDevEnv === 'function') {
-      return await mod.resolveDevEnv(root);
+async function resolveServerCreateEnv(
+  deployAdapter: HS.Config['deployAdapter'] | undefined,
+  root: string
+): Promise<unknown> {
+  if (deployAdapter?.devModule) {
+    try {
+      const mod = (await import(deployAdapter.devModule)) as {
+        resolveDevEnv?: (projectRoot: string) => Promise<unknown>;
+      };
+      if (typeof mod.resolveDevEnv === 'function') {
+        return await mod.resolveDevEnv(root);
+      }
+    } catch (err) {
+      console.warn(
+        `[Hyperspan] Could not load adapter dev module ${deployAdapter.devModule}.`,
+        '\n',
+        err
+      );
     }
-  } catch (err) {
-    console.warn(
-      `[Hyperspan] Could not resolve ${target} dev env via ${specifier}.`,
-      'Is the matching adapter installed?',
-      '\n',
-      err
-    );
+  }
+  if (typeof deployAdapter?.resolveDevEnv === 'function') {
+    return deployAdapter.resolveDevEnv(root);
   }
   return process.env;
 }

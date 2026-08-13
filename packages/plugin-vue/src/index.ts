@@ -9,6 +9,7 @@ import {
   isIslandModule,
   islandPluginResolveId,
   splitIslandId,
+  registerClientChunkAliases,
 } from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 import {
@@ -107,6 +108,13 @@ export function vueIslandPlugin(): Plugin {
       const clientUrl = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
       registerImport('vue', clientUrl);
       registerImport('vue/dist/vue.esm-bundler.js', clientUrl);
+    },
+
+    generateBundle(_options, bundle) {
+      registerClientChunkAliases(bundle, (fileName) => fileName.includes('vue-client'), [
+        'vue',
+        'vue/dist/vue.esm-bundler.js',
+      ]);
     },
 
     async transform(code, id) {

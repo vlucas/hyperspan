@@ -9,6 +9,7 @@ import {
   isIslandModule,
   islandPluginResolveId,
   splitIslandId,
+  registerClientChunkAliases,
 } from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 import './types.d';
@@ -79,6 +80,14 @@ export function svelteIslandPlugin(): Plugin {
       for (const spec of SVELTE_SPECIFIERS) {
         registerImport(spec, clientUrl);
       }
+    },
+
+    generateBundle(_options, bundle) {
+      registerClientChunkAliases(
+        bundle,
+        (fileName) => fileName.includes('svelte-client'),
+        SVELTE_SPECIFIERS
+      );
     },
 
     async transform(code, id) {

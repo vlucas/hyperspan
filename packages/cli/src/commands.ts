@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import packageJson from '../package.json';
-import { startNodeServer } from '@hyperspan/adapter-node';
 import { createHyperspanServer, loadConfig } from './server';
 
 const program = new Command();
@@ -67,26 +66,30 @@ program
   .option('--dir <path>', 'directory of your hyperspan project', './')
   .description('Build the project for production')
   .action(async function (options) {
-    process.chdir(options.dir);
-    process.env.NODE_ENV = 'production';
+    try {
+      process.chdir(options.dir);
+      process.env.NODE_ENV = 'production';
 
-    const { build } = await import('vite');
-    await build({
-      configFile: join(process.cwd(), 'vite.config.ts'),
-    });
+      const { build } = await import('vite');
+      await build({
+        configFile: join(process.cwd(), 'vite.config.ts'),
+      });
 
-    const config = await loadConfig();
-    if (config.deployTarget === 'cloudflare') {
-      const { syncWranglerCssAliases } = await import('@hyperspan/adapter-cloudflare/deploy');
-      const result = syncWranglerCssAliases(process.cwd(), { appDir: config.appDir });
-      if (result.updated) {
-        console.log(
-          `[Hyperspan] Synced Wrangler CSS aliases (${result.aliasCount}) for Cloudflare deploy`
-        );
+      const config = await loadConfig();
+      if (config.deployAdapter?.afterBuild) {
+        await config.deployAdapter.afterBuild({
+          root: process.cwd(),
+          appDir: config.appDir ?? './app',
+          outDir: join(process.cwd(), 'dist'),
+        });
       }
-    }
 
-    console.log('[Hyperspan] Build complete → dist/');
+      console.log('[Hyperspan] Build complete → dist/');
+    } catch (err) {
+      console.error(err);
+      process.exit(1);
+    }
+    process.exit(0);
   });
 
 program
@@ -114,8 +117,16 @@ program
       }
     }
 
-    const server = await createHyperspanServer();
-    startNodeServer(server, { port: Number(options.port) });
+    const config = await loadConfig();
+    const start = config.deployAdapter.createEntry({
+      createHyperspanServer,
+      config,
+    }).start;
+    if (typeof start !== 'function') {
+      console.error('[Hyperspan] This deploy adapter has no start()');
+      process.exit(1);
+    }
+    await start({ port: Number(options.port) });
   });
 
 program

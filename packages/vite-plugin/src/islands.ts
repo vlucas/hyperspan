@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite';
+import { registerImport } from '@hyperspan/framework';
 
-export type IslandFramework = 'preact' | 'svelte' | 'vue';
+export type IslandFramework = string;
 
 export type IslandPluginRegistration = {
   vitePlugin: () => Plugin;
@@ -15,7 +16,7 @@ export function registerIslandPlugin(
   loadedIslandPlugins.set(framework, registration);
 }
 
-export function isIslandPluginLoaded(framework: string): framework is IslandFramework {
+export function isIslandPluginLoaded(framework: string): boolean {
   return loadedIslandPlugins.has(framework);
 }
 
@@ -62,17 +63,14 @@ export function assertIslandPluginLoaded(framework: string, source: string): voi
   );
 }
 
-export function isIslandModule(id: string, framework: IslandFramework, ext: string): boolean {
+export function isIslandModule(id: string, framework: string, ext: string): boolean {
   if (id.includes('node_modules')) return false;
   const { path, query } = splitIslandId(id);
   if (!path.endsWith(ext)) return false;
   return query.get('island') === framework;
 }
 
-export function islandPluginResolveId(
-  framework: IslandFramework,
-  ext: string
-): Plugin['resolveId'] {
+export function islandPluginResolveId(framework: string, ext: string): Plugin['resolveId'] {
   return async function resolveId(source, importer, options) {
     const requested = getIslandFramework(source, options?.attributes as Record<string, string>);
     if (requested !== framework) return null;
@@ -90,4 +88,25 @@ export function islandPluginResolveId(
 
     return `${clean}?island=${framework}`;
   };
+}
+
+/**
+ * Island plugins call this from `generateBundle` to map their client runtime chunk
+ * onto import-map specifiers. The Vite host does not know about Preact/Svelte/Vue.
+ */
+export function registerClientChunkAliases(
+  bundle: Record<string, { type?: string }>,
+  isMatch: (fileName: string) => boolean,
+  specifiers: readonly string[]
+): void {
+  for (const [fileName, chunk] of Object.entries(bundle)) {
+    if (chunk?.type && chunk.type !== 'chunk') continue;
+    if (!isMatch(fileName)) continue;
+    const publicPath = `/${fileName}`;
+    const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
+    registerImport(esmName, publicPath);
+    for (const spec of specifiers) {
+      registerImport(spec, publicPath);
+    }
+  }
 }

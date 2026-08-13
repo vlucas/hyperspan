@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-svelte",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Hyperspan Plugin for Svelte Client Islands",
   "type": "module",
   "main": "src/index.ts",
@@ -21,7 +21,7 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.4",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.5",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "vite": "^6.3.5",
@@ -29,8 +29,8 @@
   },
   "peerDependencies": {
     "@hyperspan/html": "^2.0.0-alpha.4",
-    "@hyperspan/framework": "^2.0.0-alpha.4",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.4",
+    "@hyperspan/framework": "^2.0.0-alpha.5",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.5",
     "vite": "^6.0.0 || ^7.0.0"
   },
   "dependencies": {

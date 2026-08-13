@@ -6,14 +6,14 @@ A copy of the [example todo app](../example-todo-app) configured for deployment 
 
 - `app/routes/` — pages
 - `app/actions/` — forms and mutations
-- `hyperspan.config.ts` — app config (`deployTarget: 'cloudflare'`, bindings via `beforeServerCreate`)
+- `hyperspan.config.ts` — app config (`deployAdapter: cloudflareAdapter()`, bindings via `beforeServerCreate`)
 - `wrangler.toml` — Cloudflare deploy settings (KV namespace id, etc.)
 
 `hyperspan build` assembles routes, assets, and a production server entry into `dist/`. You don't edit files in `dist/`.
 
 ## Differences from the Node example
 
-- **`hyperspan.config.ts`** sets `deployTarget: 'cloudflare'` — the build wires in `@hyperspan/adapter-cloudflare` automatically.
+- **`hyperspan.config.ts`** sets `deployAdapter: cloudflareAdapter()` — that adapter supplies the Worker entry, Wrangler dev env, and CSS-alias sync. Island plugins go in `plugins`.
 - **Persistence**: todos use Workers KV (`TODO_KV`), initialized in `beforeServerCreate({ env })`.
 - **Client JS**: uses a logical path (`app/client/todo-stats.ts`) for stable asset hashes on Workers.
 
@@ -64,12 +64,6 @@ Paste the matching `id` into `wrangler.toml` under `[[kv_namespaces]]`.
 
 ### Worker bundle fails on Tailwind / CSS
 
-CSS is pre-built into `dist/` by `hyperspan build`. The Cloudflare adapter auto-syncs Wrangler CSS aliases in `wrangler.toml` — no manual stub files needed.
-
-If you run `vite build` directly instead of `hyperspan build`, sync aliases manually:
-
-```bash
-node --import tsx -e "import('@hyperspan/adapter-cloudflare/deploy').then(m => m.syncWranglerCssAliases(process.cwd()))"
-```
+CSS is pre-built into `dist/` by `hyperspan build`. The Cloudflare adapter syncs Wrangler CSS aliases in `wrangler.toml`.
 
 See [MIGRATION-v2.md](../../MIGRATION-v2.md#cloudflare-workers) for details.

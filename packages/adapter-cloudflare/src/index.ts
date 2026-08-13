@@ -1,18 +1,18 @@
-import { createFetchHandler, type FetchHandlerOptions } from '@hyperspan/framework';
+import {
+  createFetchHandler,
+  type Adapter,
+  type DeployEntry,
+  type DeployEntryContext,
+  type FetchHandlerOptions,
+} from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import { syncWranglerCssAliases } from './deploy/sync-wrangler-css-aliases';
 
-export type CloudflareAdapterOptions = FetchHandlerOptions & {
-  /** Cloudflare Assets binding or static asset fetcher */
+type CloudflareAdapterOptions = FetchHandlerOptions & {
   assets?: { fetch: (request: Request) => Promise<Response> };
 };
 
-/**
- * Create a Cloudflare Workers fetch handler for a Hyperspan server instance.
- *
- * For the usual Worker entry, use `createCloudflareWorker` from
- * `@hyperspan/adapter-cloudflare/worker` after `hyperspan build`.
- */
-export function createCloudflareHandler(server: HS.Server, options: CloudflareAdapterOptions = {}) {
+function createCloudflareHandler(server: HS.Server, options: CloudflareAdapterOptions = {}) {
   const fetch = createFetchHandler(server, {
     ...options,
     onNotMatched: async (request) => {
@@ -29,4 +29,42 @@ export function createCloudflareHandler(server: HS.Server, options: CloudflareAd
   return { fetch, server };
 }
 
-export { createFetchHandler };
+function createCloudflareDeployEntry(ctx: DeployEntryContext): DeployEntry {
+  let appPromise: ReturnType<typeof createCloudflareHandler> | null = null;
+
+  return {
+    async fetch(request: Request, env: unknown): Promise<Response> {
+      appPromise ??= (async () => {
+        if (ctx.config.beforeServerCreate) {
+          await ctx.config.beforeServerCreate({ env });
+        }
+        const server = await ctx.createHyperspanServer();
+        const { ASSETS } = env as {
+          ASSETS?: { fetch: (request: Request) => Promise<Response> };
+        };
+        return createCloudflareHandler(server, { assets: ASSETS });
+      })();
+      const app = await appPromise;
+      return app.fetch(request);
+    },
+  };
+}
+
+/**
+ * Cloudflare Workers deployment adapter. Pass to `deployAdapter` in hyperspan.config.ts.
+ */
+export function cloudflareAdapter(): Adapter {
+  return {
+    name: 'cloudflare',
+    devModule: '@hyperspan/adapter-cloudflare/dev',
+    createEntry: createCloudflareDeployEntry,
+    afterBuild({ root, appDir }) {
+      const result = syncWranglerCssAliases(root, { appDir });
+      if (result.updated) {
+        console.log(
+          `[Hyperspan] Synced Wrangler CSS aliases (${result.aliasCount}) for Cloudflare deploy`
+        );
+      }
+    },
+  };
+}

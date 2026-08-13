@@ -63,7 +63,38 @@ export namespace Hyperspan {
     disableStreaming?: DisableStreamingFn;
   };
 
-  export type DeployTarget = 'node' | 'bun' | 'cloudflare';
+  export type AdapterAfterBuildContext = {
+    root: string;
+    appDir: string;
+    outDir: string;
+  };
+
+  export type DeployEntryContext = {
+    createHyperspanServer: () => Promise<Server>;
+    config: Config;
+  };
+
+  export type DeployEntry = {
+    start?(options?: { port?: number }): unknown | Promise<unknown>;
+    fetch?(request: Request, env?: unknown, ctx?: unknown): Response | Promise<Response>;
+  };
+
+  export type Adapter = {
+    /** Diagnostic name, e.g. `node`, `cloudflare`. */
+    name: string;
+    /**
+     * Native ESM specifier exporting `resolveDevEnv(root)`.
+     * Imported by the Vite plugin so platform SDKs like wrangler load correctly.
+     */
+    devModule?: string;
+    resolveDevEnv?(root: string): Promise<unknown>;
+    /** Platform entry (`start` and/or `fetch`). Called from generated `dist/server.ts`. */
+    createEntry(ctx: DeployEntryContext): DeployEntry;
+    afterBuild?(ctx: AdapterAfterBuildContext): void | Promise<void>;
+  };
+
+  /** Runtime adapter object (`nodeAdapter()`, `cloudflareAdapter()`, …). */
+  export type DeployAdapter = Adapter;
 
   export type ServerCreateContext = {
     env: unknown;
@@ -72,12 +103,16 @@ export namespace Hyperspan {
   export type Config = {
     appDir: string;
     publicDir: string;
-    plugins: Array<Hyperspan.Plugin>; // Loaders for client islands
-    /** Production runtime target. Controls the generated dist/server entry. */
-    deployTarget?: DeployTarget;
+    /** Island plugins (`preactPlugin()`, `sveltePlugin()`, …). */
+    plugins: Array<Hyperspan.Plugin>;
+    /**
+     * Deployment adapter. Pass `cloudflareAdapter()` or `bunAdapter()`.
+     * Omit (or pass `nodeAdapter()`) to deploy to Node.
+     */
+    deployAdapter: Adapter;
     /**
      * Called before the server is created, with platform bindings.
-     * - Vite/`hyperspan dev`: adapter `/dev` `resolveDevEnv(root)` when present; else `process.env`
+     * - Vite/`hyperspan dev`: adapter `devModule` `resolveDevEnv(root)` when present; else `process.env`
      * - Node/Bun production entry: `process.env`
      * - Cloudflare Workers entry: Worker `env` bindings
      */
@@ -402,8 +437,12 @@ export namespace Hyperspan {
   }
 }
 
-export type DeployTarget = Hyperspan.DeployTarget;
+export type DeployAdapter = Hyperspan.DeployAdapter;
 export type ServerCreateContext = Hyperspan.ServerCreateContext;
+export type Adapter = Hyperspan.Adapter;
+export type AdapterAfterBuildContext = Hyperspan.AdapterAfterBuildContext;
+export type DeployEntry = Hyperspan.DeployEntry;
+export type DeployEntryContext = Hyperspan.DeployEntryContext;
 
 declare global {
   interface DocumentEventMap {

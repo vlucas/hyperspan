@@ -13,6 +13,7 @@ import {
   isIslandModule,
   islandPluginResolveId,
   splitIslandId,
+  registerClientChunkAliases,
 } from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 
@@ -134,6 +135,16 @@ function __hs_renderIsland_${componentName}(jsContent = '', ssrContent = '', opt
 `;
 }
 
+const PREACT_CLIENT_SPECIFIERS = [
+  'preact',
+  'preact/hooks',
+  'preact/jsx-runtime',
+  'preact/jsx-dev-runtime',
+  'preact/compat',
+  'react',
+  'react-dom',
+] as const;
+
 /**
  * Vite plugin for Preact islands.
  */
@@ -156,13 +167,18 @@ export function preactIslandPlugin(): Plugin {
 
     configureServer() {
       const clientUrl = '/islands/preact-client.js';
-      registerImport('preact', clientUrl);
-      registerImport('preact/hooks', clientUrl);
-      registerImport('preact/jsx-runtime', clientUrl);
-      registerImport('preact/jsx-dev-runtime', clientUrl);
-      registerImport('preact/compat', clientUrl);
-      registerImport('react', clientUrl);
-      registerImport('react-dom', clientUrl);
+      for (const spec of PREACT_CLIENT_SPECIFIERS) {
+        registerImport(spec, clientUrl);
+      }
+    },
+
+    generateBundle(_options, bundle) {
+      registerClientChunkAliases(
+        bundle,
+        (fileName) =>
+          fileName.includes('islands/preact-client') || fileName.endsWith('preact-client.js'),
+        PREACT_CLIENT_SPECIFIERS
+      );
     },
 
     async transform(code, id) {

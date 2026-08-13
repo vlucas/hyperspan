@@ -5,20 +5,23 @@ import {
 } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createFetchHandler, type FetchHandlerOptions } from '@hyperspan/framework';
+import {
+  createFetchHandler,
+  type Adapter,
+  type DeployEntry,
+  type DeployEntryContext,
+  type FetchHandlerOptions,
+} from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 
-export type NodeAdapterOptions = FetchHandlerOptions & {
+type NodeAdapterOptions = FetchHandlerOptions & {
   port?: number;
   hostname?: string;
   publicDir?: string;
   root?: string;
 };
 
-/**
- * Start a Node.js HTTP server for a Hyperspan app.
- */
-export function startNodeServer(server: HS.Server, options: NodeAdapterOptions = {}) {
+function startNodeServer(server: HS.Server, options: NodeAdapterOptions = {}) {
   const root = options.root ?? process.cwd();
   const publicDir = options.publicDir ?? server._config.publicDir ?? './public';
 
@@ -51,7 +54,7 @@ export function startNodeServer(server: HS.Server, options: NodeAdapterOptions =
   return { httpServer, fetch, port };
 }
 
-export async function handleNodeRequest(
+async function handleNodeRequest(
   req: IncomingMessage,
   res: ServerResponse,
   fetch: (request: Request) => Promise<Response>
@@ -74,7 +77,11 @@ export async function handleNodeRequest(
     else if (Array.isArray(value)) headers.set(key, value.join(', '));
   }
 
-  const request = new Request(url, { method: req.method, headers, body });
+  const request = new Request(url, {
+    method: req.method,
+    headers,
+    body: body ? new Uint8Array(body) : undefined,
+  });
   const response = await fetch(request);
 
   res.statusCode = response.status;
@@ -129,4 +136,24 @@ async function serveStaticFile(
   }
 }
 
-export { createFetchHandler };
+function createNodeDeployEntry(ctx: DeployEntryContext): DeployEntry {
+  return {
+    async start(options: { port?: number } = {}) {
+      if (ctx.config.beforeServerCreate) {
+        await ctx.config.beforeServerCreate({ env: process.env });
+      }
+      const server = await ctx.createHyperspanServer();
+      return startNodeServer(server, { port: options.port ?? 3000, publicDir: './dist' });
+    },
+  };
+}
+
+/**
+ * Node deployment adapter. Pass to `deployAdapter`, or omit `deployAdapter` (Node is the default).
+ */
+export function nodeAdapter(): Adapter {
+  return {
+    name: 'node',
+    createEntry: createNodeDeployEntry,
+  };
+}

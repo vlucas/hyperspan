@@ -8,19 +8,39 @@ shipping minimal JavaScript to the client.
 
 Visit: [Hyperspan.dev](https://www.hyperspan.dev)
 
-## Deploy targets
+## Deployment adapters
 
-`hyperspan build` generates `dist/server.ts` with the adapter for your `deployTarget` (default `'node'`):
+Pass a deployment adapter to `deployAdapter`. Island plugins go in `plugins`. Omit `deployAdapter` to deploy to Node.
 
-| Target | Generated entry | Adapter |
-|--------|-----------------|---------|
-| `node` | `export async function start()` | `@hyperspan/adapter-node` |
-| `bun` | `export async function start()` | `@hyperspan/adapter-bun` |
-| `cloudflare` | `export default { fetch }` | `@hyperspan/adapter-cloudflare` |
+```ts
+import { createConfig } from '@hyperspan/framework';
+import { cloudflareAdapter } from '@hyperspan/adapter-cloudflare';
+import { preactPlugin } from '@hyperspan/plugin-preact';
 
-Use `beforeServerCreate({ env })` in `hyperspan.config.ts` to wire platform bindings before the server is created. On Node/Bun, `env` is `process.env`; on Cloudflare Workers, `env` is the bindings object. During `hyperspan dev` with `deployTarget: 'cloudflare'`, `@hyperspan/adapter-cloudflare/dev` resolves bindings via Wrangler’s platform proxy and the Vite plugin passes them into the same hook.
+export default createConfig({
+  deployAdapter: cloudflareAdapter(),
+  plugins: [preactPlugin()],
+});
+```
 
-For Cloudflare, `hyperspan build` auto-syncs Wrangler CSS aliases (layout CSS imports are build-time only; styles ship via `dist/assets/`).
+```ts
+export default createConfig({
+  plugins: [preactPlugin()],
+  // deployAdapter omitted → Node
+});
+```
+
+`hyperspan build` generates `dist/server.ts` from the adapter’s `createEntry()`.
+
+| Adapter | `deployAdapter` | Entry |
+|---------|-----------------|-------|
+| `@hyperspan/adapter-node` (default) | omit, or `nodeAdapter()` | `start()` |
+| `@hyperspan/adapter-bun` | `bunAdapter()` | `start()` |
+| `@hyperspan/adapter-cloudflare` | `cloudflareAdapter()` | `fetch()` |
+
+Use `beforeServerCreate({ env })` to wire platform bindings. On Node/Bun, `env` is `process.env`. On Cloudflare, `cloudflareAdapter()` loads Wrangler bindings during `hyperspan dev` and the Worker `env` in production.
+
+For Cloudflare, `cloudflareAdapter()` also syncs Wrangler CSS aliases after `hyperspan build`.
 
 ## Packages in this repo
 

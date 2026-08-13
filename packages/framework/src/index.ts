@@ -25,4 +25,12 @@ export type { RouteModuleEntry } from './register-routes';
 export type { AssetManifest } from './client/manifest';
 export { renderIsland } from './island';
 export type { IslandRenderOptions } from './island';
-export type { Hyperspan, ServerCreateContext, DeployTarget } from './types';
+export type {
+  Hyperspan,
+  ServerCreateContext,
+  DeployAdapter,
+  Adapter,
+  AdapterAfterBuildContext,
+  DeployEntry,
+  DeployEntryContext,
+} from './types';

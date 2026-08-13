@@ -31,6 +31,8 @@ export default createConfig({
 });
 ```
 
+Pass `deployAdapter: cloudflareAdapter()` or `bunAdapter()` to deploy to Cloudflare or Bun. Island plugins go in `plugins`; the deploy adapter goes in `deployAdapter`.
+
 ```ts
 // vite.config.ts
 import { hyperspan } from '@hyperspan/vite-plugin';
@@ -114,7 +116,7 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
    ```bash
    npm install hyperspan@alpha @hyperspan/framework@alpha @hyperspan/vite-plugin@alpha
    ```
-   Or pin a specific pre-release: `^2.0.0-alpha.4`
+   Or pin a specific pre-release: `^2.0.0-alpha.5`
 2. **Add `vite.config.ts`** (copy from starter template).
 3. **Update `package.json` scripts** to use `npm run dev/build/start`.
 4. **Run `npm run build`** before deploying.
@@ -122,13 +124,14 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
 
 ## Cloudflare Workers
 
-Set `deployTarget: 'cloudflare'` in `hyperspan.config.ts`. The build generates `dist/server.ts` with the Cloudflare adapter and your routes assembled — Wrangler uses it as the Worker entry.
+Pass `cloudflareAdapter()` to `deployAdapter` in `hyperspan.config.ts`. The adapter supplies the Worker entry, Wrangler dev env, and CSS-alias sync.
 
 ```ts
 import { createConfig } from '@hyperspan/framework';
+import { cloudflareAdapter } from '@hyperspan/adapter-cloudflare';
 
 export default createConfig({
-  deployTarget: 'cloudflare',
+  deployAdapter: cloudflareAdapter(),
   beforeServerCreate({ env }) {
     // bind KV, D1, secrets, etc.
     // Called for Vite/`hyperspan dev` (via Wrangler platform proxy),
@@ -137,7 +140,7 @@ export default createConfig({
 });
 ```
 
-For local Vite, `@hyperspan/adapter-cloudflare/dev` loads bindings with Wrangler’s `getPlatformProxy` (prefers `wrangler.dev.jsonc` / `wrangler.dev.toml` when present). Keep `beforeServerCreate` as the only place you wire `env` — do not duplicate that in `vite.config.ts`.
+For local Vite, `cloudflareAdapter()` points the host at `@hyperspan/adapter-cloudflare/dev`, which loads bindings with Wrangler’s `getPlatformProxy` (prefers `wrangler.dev.jsonc` / `wrangler.dev.toml` when present). Wire `env` in `beforeServerCreate`.
 
 ```toml
 # wrangler.toml
@@ -146,7 +149,7 @@ main = "./dist/server.ts"
 
 CSS imports in layouts (e.g. `import '../styles/globals.css'`) are for Vite build-time only — Tailwind compiles them into `dist/assets/`. At Worker runtime, styles come from the manifest via `hyperspanStyleTags()`.
 
-When `deployTarget: 'cloudflare'`, `hyperspan build` automatically syncs Wrangler CSS aliases via `@hyperspan/adapter-cloudflare/deploy`. You do **not** need stub files or manual `[alias]` entries for stylesheets.
+`hyperspan build` runs the deploy adapter’s `afterBuild` hook, which syncs Wrangler CSS aliases.
 
 See **`packages/example-todo-app-cloudflare`** for a full deployable example.
 

@@ -6,7 +6,6 @@ import { preactPlugin } from '@hyperspan/plugin-preact';
  * @see https://www.hyperspan.dev/docs/config
  */
 export default createConfig({
-  deployTarget: 'node',
   appDir: './app',
   publicDir: './public',
   plugins: [preactPlugin()],

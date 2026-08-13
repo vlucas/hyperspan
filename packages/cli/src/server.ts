@@ -1,4 +1,10 @@
-import { createServer, setAssetManifest, registerRouteModule } from '@hyperspan/framework';
+import {
+  createConfig,
+  createServer,
+  setAssetManifest,
+  registerRouteModule,
+} from '@hyperspan/framework';
+import { nodeAdapter } from '@hyperspan/adapter-node';
 import { isValidRoutePath } from '@hyperspan/framework/utils';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -60,7 +66,9 @@ export async function loadConfig(): Promise<HS.Config> {
   const { createJiti } = await import('jiti');
   const jiti = createJiti(CWD, { interopDefault: true });
   try {
-    return jiti(configFile) as HS.Config;
+    const config = createConfig(jiti(configFile) as Partial<HS.Config>);
+    config.deployAdapter ??= nodeAdapter();
+    return config;
   } catch (error) {
     console.error(`[Hyperspan] Unable to load config file: ${error}`);
     console.error(

@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import type { Plugin } from 'vite';
+import { getAssetManifest, setAssetManifest } from '@hyperspan/framework';
 import {
   registerIslandPlugin,
   isIslandPluginLoaded,
@@ -8,11 +9,13 @@ import {
   assertIslandPluginLoaded,
   resetIslandPluginsForTests,
   resolveRegisteredIslandVitePlugins,
+  registerClientChunkAliases,
 } from './islands';
 
 describe('islands registry', () => {
   beforeEach(() => {
     resetIslandPluginsForTests();
+    setAssetManifest({ imports: {}, css: {}, clients: {} });
   });
 
   test('registerIslandPlugin tracks loaded frameworks', () => {
@@ -46,5 +49,17 @@ describe('islands registry', () => {
 
   test('assertIslandPluginLoaded throws with helpful message', () => {
     expect(() => assertIslandPluginLoaded('preact', './x.tsx')).toThrow(/preact island plugin/);
+  });
+
+  test('registerClientChunkAliases maps a client chunk onto import specifiers', () => {
+    registerClientChunkAliases(
+      { 'islands/preact-client.js': { type: 'chunk' } },
+      (fileName) => fileName.endsWith('preact-client.js'),
+      ['preact', 'preact/hooks']
+    );
+    const imports = getAssetManifest().imports;
+    expect(imports['preact-client']).toBe('/islands/preact-client.js');
+    expect(imports.preact).toBe('/islands/preact-client.js');
+    expect(imports['preact/hooks']).toBe('/islands/preact-client.js');
   });
 });

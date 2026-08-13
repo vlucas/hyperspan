@@ -1,9 +1,10 @@
 import { createConfig } from '@hyperspan/framework';
+import { cloudflareAdapter } from '@hyperspan/adapter-cloudflare';
 import { preactPlugin } from '@hyperspan/plugin-preact';
 import { initDb } from './src/lib/db';
 
 export default createConfig({
-  deployTarget: 'cloudflare',
+  deployAdapter: cloudflareAdapter(),
   beforeServerCreate({ env }: { env: Env }) {
     initDb(env.TODO_KV);
   },

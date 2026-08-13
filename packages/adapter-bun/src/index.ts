@@ -1,16 +1,19 @@
 import { join } from 'node:path';
-import { createFetchHandler, type FetchHandlerOptions } from '@hyperspan/framework';
+import {
+  createFetchHandler,
+  type Adapter,
+  type DeployEntry,
+  type DeployEntryContext,
+  type FetchHandlerOptions,
+} from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 
-export type BunAdapterOptions = FetchHandlerOptions & {
+type BunAdapterOptions = FetchHandlerOptions & {
   port?: number;
   development?: boolean;
 };
 
-/**
- * Start a Bun HTTP server using the portable fetch handler.
- */
-export function startBunServer(server: HS.Server, options: BunAdapterOptions = {}) {
+function startBunServer(server: HS.Server, options: BunAdapterOptions = {}) {
   const publicDir = server._config.publicDir || './public';
 
   const fetch = createFetchHandler(server, {
@@ -34,4 +37,24 @@ export function startBunServer(server: HS.Server, options: BunAdapterOptions = {
   return httpServer;
 }
 
-export { createFetchHandler };
+function createBunDeployEntry(ctx: DeployEntryContext): DeployEntry {
+  return {
+    async start(options: { port?: number } = {}) {
+      if (ctx.config.beforeServerCreate) {
+        await ctx.config.beforeServerCreate({ env: process.env });
+      }
+      const server = await ctx.createHyperspanServer();
+      return startBunServer(server, { port: options.port ?? 3000 });
+    },
+  };
+}
+
+/**
+ * Bun deployment adapter. Pass to `deployAdapter` in hyperspan.config.ts.
+ */
+export function bunAdapter(): Adapter {
+  return {
+    name: 'bun',
+    createEntry: createBunDeployEntry,
+  };
+}
