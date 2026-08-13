@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/vite-plugin",
-  "version": "2.0.0-alpha.5",
+  "version": "2.0.0-alpha.6",
   "description": "Vite plugin for Hyperspan apps",
   "type": "module",
   "public": true,
@@ -18,6 +18,10 @@
     "./islands": {
       "types": "./src/islands.ts",
       "default": "./src/islands.ts"
+    },
+    "./tsconfig-aliases": {
+      "types": "./src/tsconfig-aliases.ts",
+      "default": "./src/tsconfig-aliases.ts"
     }
   },
   "scripts": {
@@ -27,7 +31,7 @@
     "@hyperspan/adapter-node": "^2.0.0-alpha.5",
     "@hyperspan/framework": "^2.0.0-alpha.5",
     "fast-glob": "^3.3.3",
-    "jiti": "^2.4.2"
+    "jiti": "^2.7.0"
   },
   "peerDependencies": {
     "vite": "^6.0.0 || ^7.0.0"

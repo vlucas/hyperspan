@@ -12,6 +12,11 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import debug from 'debug';
+import {
+  createAppJiti,
+  resolveAliasedSpecifier,
+  resolveModuleAliases,
+} from '@hyperspan/vite-plugin/tsconfig-aliases';
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
 
@@ -27,6 +32,7 @@ let loadersRegistered = false;
 function ensureLoaders() {
   if (loadersRegistered) return;
   loadersRegistered = true;
+  const aliases = resolveModuleAliases(CWD);
 
   registerHooks({
     resolve(specifier, context, nextResolve) {
@@ -43,10 +49,8 @@ function ensureLoaders() {
         };
       }
 
-      // Resolve ~/ path alias (tsconfig paths) to project root.
-      if (specifier === '~' || specifier.startsWith('~/')) {
-        const subpath = specifier === '~' ? '' : specifier.slice(2);
-        const resolved = join(CWD, subpath);
+      const resolved = resolveAliasedSpecifier(specifier, aliases);
+      if (resolved) {
         for (const ext of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
           const candidate = resolved + ext;
           if (existsSync(candidate)) {
@@ -63,8 +67,7 @@ function ensureLoaders() {
 export async function loadConfig(): Promise<HS.Config> {
   ensureLoaders();
   const configFile = join(CWD, 'hyperspan.config.ts');
-  const { createJiti } = await import('jiti');
-  const jiti = createJiti(CWD, { interopDefault: true });
+  const jiti = createAppJiti(CWD);
   try {
     const config = createConfig(jiti(configFile) as Partial<HS.Config>);
     config.deployAdapter ??= nodeAdapter();

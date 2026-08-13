@@ -9,6 +9,7 @@ import {
   type ClientJSEntry,
 } from '@hyperspan/framework/client/js';
 import { registerImport } from '@hyperspan/framework/client/manifest';
+import { resolveModuleAliases } from './tsconfig-aliases';
 
 export function clientJSPlugin(): Plugin {
   return {
@@ -121,10 +122,7 @@ export async function buildRegisteredClientJS(
       },
     },
     resolve: {
-      alias: {
-        '~': root,
-        '~/': root + '/',
-      },
+      alias: resolveModuleAliases(root),
     },
   });
 

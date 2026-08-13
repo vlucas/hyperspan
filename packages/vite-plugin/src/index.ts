@@ -14,7 +14,6 @@ import {
 import type { AssetManifest } from '@hyperspan/framework';
 import { isValidRoutePath } from '@hyperspan/framework/utils';
 import type { Hyperspan as HS } from '@hyperspan/framework';
-import { createJiti } from 'jiti';
 import {
   assertIslandPluginLoaded,
   getIslandFramework,
@@ -22,6 +21,7 @@ import {
 } from './islands';
 import { clientJSPlugin, discoverClientJSForRoutes, buildRegisteredClientJS } from './client-js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
+import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
@@ -37,8 +37,7 @@ const FRAMEWORK_CLIENT_DIR = fileURLToPath(
 function loadHyperspanConfigSync(root: string, configFile?: string): void {
   const file = configFile ?? join(root, 'hyperspan.config.ts');
   if (!existsSync(file)) return;
-  const jiti = createJiti(root, { interopDefault: true });
-  jiti(file);
+  createAppJiti(root)(file);
 }
 
 export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
@@ -63,10 +62,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         plugins: islandPlugins,
         publicDir: config.publicDir ?? 'public',
         resolve: {
-          alias: {
-            '~': projectRoot,
-            '~/': projectRoot + '/',
-          },
+          alias: resolveModuleAliases(projectRoot),
         },
         build: {
           manifest: true,
@@ -422,8 +418,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 }
 
 async function loadHyperspanConfig(root: string, configFile?: string): Promise<HS.Config> {
-  const { createJiti } = await import('jiti');
-  const jiti = createJiti(root, { interopDefault: true });
+  const jiti = createAppJiti(root);
   const file = configFile ?? join(root, 'hyperspan.config.ts');
   const config = createConfig(jiti(file) as Partial<HS.Config>);
   config.deployAdapter = resolveDeployAdapter(config.deployAdapter);

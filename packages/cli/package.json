@@ -1,6 +1,6 @@
 {
   "name": "hyperspan",
-  "version": "2.0.0-alpha.5",
+  "version": "2.0.0-alpha.6",
   "description": "Hyperspan CLI - for @hyperspan/framework",
   "type": "module",
   "public": true,
@@ -41,11 +41,11 @@
     "@hyperspan/plugin-preact": "^2.0.0-alpha.5",
     "@hyperspan/plugin-svelte": "^2.0.0-alpha.5",
     "@hyperspan/plugin-vue": "^2.0.0-alpha.5",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.5",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.6",
     "commander": "^14.0.3",
     "degit": "^2.8.4",
     "fast-glob": "^3.3.3",
-    "jiti": "^2.4.2",
+    "jiti": "^2.7.0",
     "tsx": "^4.20.5",
     "vite": "^6.3.5"
   },
