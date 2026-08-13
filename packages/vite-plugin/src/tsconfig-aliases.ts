@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createJiti, type Jiti } from 'jiti';
+import JSONC from 'tiny-jsonc';
 
 type Tsconfig = {
   extends?: string;
@@ -10,13 +11,9 @@ type Tsconfig = {
   };
 };
 
-function stripJsonc(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
-
 function readTsconfig(file: string): Tsconfig | undefined {
   try {
-    return JSON.parse(stripJsonc(readFileSync(file, 'utf8'))) as Tsconfig;
+    return JSONC.parse(readFileSync(file, 'utf8')) as Tsconfig;
   } catch {
     return undefined;
   }

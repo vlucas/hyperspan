@@ -45,6 +45,51 @@ describe('tsconfig aliases', () => {
     expect(aliases['@']).toBeUndefined();
   });
 
+  test('parses ~/* paths when include globs contain */', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hs-tsconfig-globs-'));
+    writeFileSync(
+      join(root, 'tsconfig.json'),
+      `{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./*"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["app/**/*.ts", "app/**/*.tsx", "src/**/*.ts"]
+}`
+    );
+
+    const aliases = aliasesFromTsconfig(root);
+    expect(aliases['~/']).toBe(`${root}/`);
+    expect(aliases['~']).toBe(root);
+    expect(aliases['@/']).toBe(`${join(root, 'src')}/`);
+  });
+
+  test('parses comments and trailing commas in tsconfig', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hs-tsconfig-jsonc-'));
+    writeFileSync(
+      join(root, 'tsconfig.json'),
+      `{
+  // app aliases
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./*"], // project root
+      "@/*": ["./src/*"],
+    },
+  },
+  /* glob includes */
+  "include": ["app/**/*.ts", "src/**/*.ts"],
+}`
+    );
+
+    const aliases = aliasesFromTsconfig(root);
+    expect(aliases['~/']).toBe(`${root}/`);
+    expect(aliases['@/']).toBe(`${join(root, 'src')}/`);
+  });
+
   test('returns no aliases when tsconfig has no paths', () => {
     const root = mkdtempSync(join(tmpdir(), 'hs-tsconfig-nopaths-'));
     writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }));
