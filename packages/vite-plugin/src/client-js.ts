@@ -106,6 +106,7 @@ export async function buildRegisteredClientJS(
     root,
     configFile: false,
     logLevel: 'warn',
+    envPrefix: ['APP_PUBLIC_', 'VITE_'],
     build: {
       outDir,
       emptyOutDir: false,

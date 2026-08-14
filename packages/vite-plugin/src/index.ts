@@ -61,6 +61,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         appType: 'custom' as const,
         plugins: islandPlugins,
         publicDir: config.publicDir ?? 'public',
+        envPrefix: ['APP_PUBLIC_', 'VITE_'],
         resolve: {
           alias: resolveModuleAliases(projectRoot),
         },
