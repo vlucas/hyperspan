@@ -7,14 +7,14 @@ import {
   getClientJSEntries,
   resetClientJSEntriesForTests,
 } from '@hyperspan/framework/client/js';
-import { clientJSPlugin } from './client-js';
+import { clientJSPlugin, resolveClientJSSource } from './client-js';
 
 describe('clientJSPlugin', () => {
   beforeEach(() => {
     resetClientJSEntriesForTests();
   });
 
-  test('resolveId maps public client URL to virtual module', async () => {
+  test('resolveId maps buildClientJS public URL to the source file', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hs-vite-client-'));
     const clientFile = join(dir, 'widget.ts');
     writeFileSync(clientFile, 'export function init() {}');
@@ -28,18 +28,28 @@ describe('clientJSPlugin', () => {
       {} as never
     );
 
-    expect(resolved).toBe(`\0hyperspan-client-js:${clientFile}`);
+    expect(resolved).toBe(clientFile);
   });
 
-  test('load returns re-export stub for source file', async () => {
+  test('resolveClientJSSource finds buildClientJS entries when Vite prefixes the project root', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hs-vite-client-'));
     const clientFile = join(dir, 'widget.ts');
-    writeFileSync(clientFile, 'export function init() {}');
+    writeFileSync(clientFile, 'export function mount() {}');
 
     await buildClientJS(clientFile);
-    const plugin = clientJSPlugin();
-    const code = await plugin.load?.(`\0hyperspan-client-js:${clientFile}`);
+    const entry = getClientJSEntries()[0];
 
-    expect(code).toContain(`export * from ${JSON.stringify(clientFile)}`);
+    expect(resolveClientJSSource(`/project${entry.publicPath}`)).toBe(clientFile);
+  });
+
+  test('resolveId maps framework action client URL to source file', async () => {
+    const plugin = clientJSPlugin();
+    const resolved = await plugin.resolveId?.(
+      '/_hs/js/hyperspan-actions.client.js',
+      undefined,
+      {} as never
+    );
+
+    expect(resolved).toMatch(/hyperspan-actions\.client\.ts$/);
   });
 });

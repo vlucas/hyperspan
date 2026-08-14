@@ -19,7 +19,13 @@ import {
   getIslandFramework,
   resolveRegisteredIslandVitePlugins,
 } from './islands';
-import { clientJSPlugin, discoverClientJSForRoutes, buildRegisteredClientJS } from './client-js';
+import {
+  clientJSPlugin,
+  discoverClientJSForRoutes,
+  buildRegisteredClientJS,
+  syncClientJSManifestEntries,
+} from './client-js';
+import { getClientJSEntries, JS_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 
@@ -283,6 +289,9 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     serverInstance = await createServer(hsConfig);
     serverInstance._routes = [];
     await loadRoutes(serverInstance, root, hsConfig, viteDevServer);
+    if (viteDevServer) {
+      await discoverClientJSForRoutes(serverInstance, 'http://hyperspan-dev.local');
+    }
     fetchHandler = createFetchHandler(serverInstance!, {
       onNotMatched: async (request) => serveStatic(request, root, hsConfig.publicDir),
     });
@@ -327,13 +336,15 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   }
 
   function updateDevManifest() {
+    syncClientJSManifestEntries(getClientJSEntries());
+    const registered = getAssetManifest();
     manifest = {
-      imports: manifest.imports,
-      css: manifest.css,
+      imports: { ...registered.imports, ...manifest.imports },
+      css: { ...registered.css, ...manifest.css },
       clients: {
-        streaming: '/_hs/js/hyperspan-streaming.client.js',
-        actions: '/_hs/js/hyperspan-actions.client.js',
-        scripts: '/_hs/js/hyperspan-scripts.client.js',
+        streaming: `${JS_PUBLIC_PATH}/hyperspan-streaming.client.js`,
+        actions: `${JS_PUBLIC_PATH}/hyperspan-actions.client.js`,
+        scripts: `${JS_PUBLIC_PATH}/hyperspan-scripts.client.js`,
       },
     };
     setAssetManifest(manifest);

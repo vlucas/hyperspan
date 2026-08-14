@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { basename, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ViteDevServer } from 'vite';
 import {
@@ -11,29 +12,66 @@ import {
 import { registerImport } from '@hyperspan/framework/client/manifest';
 import { resolveModuleAliases } from './tsconfig-aliases';
 
+const FRAMEWORK_CLIENT_DIR = fileURLToPath(
+  new URL('../../framework/src/client/_hs', import.meta.url)
+);
+
+const FRAMEWORK_CLIENT_FILES: Record<string, string> = {
+  'hyperspan-streaming.client.js': 'hyperspan-streaming.client.ts',
+  'hyperspan-actions.client.js': 'hyperspan-actions.client.ts',
+  'hyperspan-scripts.client.js': 'hyperspan-scripts.client.ts',
+};
+
+function publicClientJSPath(id: string): string | null {
+  const path = id.split('?')[0].replace(/\\/g, '/');
+  const marker = `${JS_PUBLIC_PATH}/`;
+  const idx = path.lastIndexOf(marker);
+  if (idx === -1 || !path.endsWith('.js')) {
+    return null;
+  }
+  return path.slice(idx);
+}
+
+export function resolveClientJSSource(id: string): string | null {
+  const publicPath = publicClientJSPath(id);
+  if (!publicPath) {
+    return null;
+  }
+
+  const fileName = basename(publicPath);
+  const frameworkFile = FRAMEWORK_CLIENT_FILES[fileName];
+  if (frameworkFile) {
+    const absPath = join(FRAMEWORK_CLIENT_DIR, frameworkFile);
+    return existsSync(absPath) ? absPath : null;
+  }
+
+  if (!fileName.startsWith('client-')) {
+    return null;
+  }
+
+  const entry = getClientJSEntryByEsmName(basename(fileName, '.js'));
+  if (!entry || !existsSync(entry.absPath)) {
+    return null;
+  }
+  return entry.absPath;
+}
+
+function toViteTransformUrl(absPath: string, root: string): string {
+  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/$/, '');
+  const normalized = absPath.replace(/\\/g, '/');
+  if (normalized === normalizedRoot || normalized.startsWith(`${normalizedRoot}/`)) {
+    return normalized.slice(normalizedRoot.length) || '/';
+  }
+  return `/@fs${normalized}`;
+}
+
 export function clientJSPlugin(): Plugin {
   return {
     name: 'hyperspan-client-js',
     enforce: 'pre',
 
     resolveId(id) {
-      if (!id.startsWith(`${JS_PUBLIC_PATH}/client-`) || !id.endsWith('.js')) {
-        return null;
-      }
-      const esmName = basename(id, '.js');
-      const entry = getClientJSEntryByEsmName(esmName);
-      if (!entry || !existsSync(entry.absPath)) {
-        return null;
-      }
-      return `\0hyperspan-client-js:${entry.absPath}`;
-    },
-
-    load(id) {
-      if (!id.startsWith('\0hyperspan-client-js:')) {
-        return null;
-      }
-      const absPath = id.slice('\0hyperspan-client-js:'.length);
-      return `export * from ${JSON.stringify(absPath)};`;
+      return resolveClientJSSource(id);
     },
 
     buildStart() {
@@ -58,6 +96,21 @@ export function clientJSPlugin(): Plugin {
         const base = basename(fileName, '.js');
         if (!base.startsWith('client-')) continue;
         registerImport(base, `/${fileName}`);
+      }
+    },
+
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        void handleClientJSDevRequestFromReq(req, res, server, next);
+      });
+    },
+    handleHotUpdate({ file, server }) {
+      const changed = file.replace(/\\/g, '/');
+      const isClientSource = getClientJSEntries().some(
+        (entry) => entry.absPath.replace(/\\/g, '/') === changed
+      );
+      if (isClientSource) {
+        server.ws.send({ type: 'full-reload' });
       }
     },
   };
@@ -145,26 +198,22 @@ export async function handleClientJSDevRequestFromReq(
   next: () => void
 ): Promise<void> {
   const url = req.url?.split('?')[0] ?? '/';
-  if (!isClientJSRequest(url)) {
-    next();
-    return;
-  }
-
-  const esmName = basename(url, '.js');
-  const entry = getClientJSEntryByEsmName(esmName);
-  if (!entry || !existsSync(entry.absPath)) {
+  const source = resolveClientJSSource(url);
+  if (!source) {
     next();
     return;
   }
 
   try {
-    const result = await viteServer.transformRequest(entry.absPath);
+    const result = await viteServer.transformRequest(
+      toViteTransformUrl(source, viteServer.config.root)
+    );
     if (!result?.code) {
       next();
       return;
     }
     res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.end(result.code);
   } catch (err) {
     viteServer.ssrFixStacktrace(err as Error);
