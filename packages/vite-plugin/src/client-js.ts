@@ -116,26 +116,6 @@ export function clientJSPlugin(): Plugin {
   };
 }
 
-export async function discoverClientJSForRoutes(
-  server: {
-    _routes: Array<{ _path: () => string; fetch: (request: Request) => Promise<Response> }>;
-  },
-  baseUrl: string
-): Promise<void> {
-  for (const route of server._routes) {
-    const path = route._path();
-    const url = path === '/' ? `${baseUrl}/` : `${baseUrl}${path}`;
-    try {
-      const response = await route.fetch(new Request(url));
-      if (response.body) {
-        await response.body.cancel();
-      }
-    } catch (err) {
-      console.warn(`[Hyperspan] Client JS discovery skipped for ${url}:`, err);
-    }
-  }
-}
-
 export function syncClientJSManifestEntries(entries: ClientJSEntry[]): void {
   for (const entry of entries) {
     registerImport(entry.esmName, entry.publicPath);
