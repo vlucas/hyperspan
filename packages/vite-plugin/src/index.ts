@@ -1,5 +1,4 @@
 import { join, isAbsolute } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import fg from 'fast-glob';
 import type { Plugin, ViteDevServer, ResolvedConfig } from 'vite';
@@ -19,8 +18,13 @@ import {
   getIslandFramework,
   resolveRegisteredIslandVitePlugins,
 } from './islands';
-import { clientJSPlugin, buildRegisteredClientJS, syncClientJSManifestEntries } from './client-js';
-import { getClientJSEntries, JS_PUBLIC_PATH } from '@hyperspan/framework/client/js';
+import {
+  clientJSPlugin,
+  buildRegisteredClientJS,
+  syncClientJSManifestEntries,
+  clientJSRollupInput,
+} from './client-js';
+import { getClientJSEntries } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 
@@ -30,10 +34,6 @@ export type HyperspanVitePluginOptions = {
 
 const MANIFEST_VIRTUAL_ID = 'virtual:hyperspan-manifest';
 const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
-
-const FRAMEWORK_CLIENT_DIR = fileURLToPath(
-  new URL('../../framework/src/client/_hs', import.meta.url)
-);
 
 function loadHyperspanConfigSync(root: string, configFile?: string): void {
   const file = configFile ?? join(root, 'hyperspan.config.ts');
@@ -69,10 +69,12 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         build: {
           manifest: true,
           rollupOptions: {
-            input: {
-              'hyperspan-streaming': join(FRAMEWORK_CLIENT_DIR, 'hyperspan-streaming.client.ts'),
-              'hyperspan-actions': join(FRAMEWORK_CLIENT_DIR, 'hyperspan-actions.client.ts'),
-              'hyperspan-scripts': join(FRAMEWORK_CLIENT_DIR, 'hyperspan-scripts.client.ts'),
+            input: clientJSRollupInput(),
+            output: {
+              entryFileNames: (chunkInfo) =>
+                chunkInfo.name.startsWith('client-')
+                  ? `_hs/js/${chunkInfo.name}.js`
+                  : 'assets/[name]-[hash].js',
             },
           },
         },
@@ -135,27 +137,28 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         ...manifest.imports,
         ...getAssetManifest().imports,
       };
-      const clients: AssetManifest['clients'] = { ...manifest.clients };
+      const clients: AssetManifest['clients'] = {
+        ...manifest.clients,
+        ...Object.fromEntries(
+          getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
+        ),
+      };
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
-        if (chunk.type !== 'chunk') continue;
         const publicPath = `/${fileName}`;
+        const esmName = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
+        if (esmName.startsWith('client-')) {
+          imports[esmName] = publicPath;
+          clients[esmName] = publicPath;
+        }
 
-        if (fileName.includes('hyperspan-streaming')) {
-          clients.streaming = publicPath;
-          imports['hyperspan-streaming'] = publicPath;
-        } else if (fileName.includes('hyperspan-actions')) {
-          clients.actions = publicPath;
-          imports['hyperspan-actions'] = publicPath;
-        } else if (fileName.includes('hyperspan-scripts')) {
-          clients.scripts = publicPath;
-          imports['hyperspan-scripts'] = publicPath;
-        } else if (
+        if (chunk.type !== 'chunk') continue;
+
+        if (
           fileName.includes('islands/island-') ||
           fileName.includes('_hs/js/islands/island-') ||
           fileName.includes('_hs/js/client-')
         ) {
-          const esmName = fileName.split('/').pop()!.replace(/\.js$/, '');
           imports[esmName] = publicPath;
         }
 
@@ -331,11 +334,9 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     manifest = {
       imports: { ...registered.imports, ...manifest.imports },
       css: { ...registered.css, ...manifest.css },
-      clients: {
-        streaming: `${JS_PUBLIC_PATH}/hyperspan-streaming.client.js`,
-        actions: `${JS_PUBLIC_PATH}/hyperspan-actions.client.js`,
-        scripts: `${JS_PUBLIC_PATH}/hyperspan-scripts.client.js`,
-      },
+      clients: Object.fromEntries(
+        getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
+      ),
     };
     setAssetManifest(manifest);
   }

@@ -7,11 +7,34 @@ import {
   getClientJSEntries,
   resetClientJSEntriesForTests,
 } from '@hyperspan/framework/client/js';
-import { clientJSPlugin, resolveClientJSSource } from './client-js';
+import {
+  clientJSPlugin,
+  resolveClientJSSource,
+  bundleIifeClientJS,
+  clientJSRollupInput,
+} from './client-js';
 
 describe('clientJSPlugin', () => {
   beforeEach(() => {
     resetClientJSEntriesForTests();
+  });
+
+  test('clientJSRollupInput includes module entries and skips iife', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hs-vite-client-'));
+    const moduleFile = join(dir, 'widget.ts');
+    const iifeFile = join(dir, 'stream.ts');
+    writeFileSync(moduleFile, 'export function init() {}');
+    writeFileSync(iifeFile, 'export function boot() {}');
+
+    await buildClientJS(moduleFile);
+    await buildClientJS(iifeFile, { type: 'iife' });
+
+    const input = clientJSRollupInput();
+    const moduleEntry = getClientJSEntries().find((entry) => entry.absPath === moduleFile)!;
+    const iifeEntry = getClientJSEntries().find((entry) => entry.absPath === iifeFile)!;
+
+    expect(input[moduleEntry.esmName]).toBe(moduleFile);
+    expect(input[iifeEntry.esmName]).toBeUndefined();
   });
 
   test('resolveId maps buildClientJS public URL to the source file', async () => {
@@ -42,14 +65,17 @@ describe('clientJSPlugin', () => {
     expect(resolveClientJSSource(`/project${entry.publicPath}`)).toBe(clientFile);
   });
 
-  test('resolveId maps framework action client URL to source file', async () => {
-    const plugin = clientJSPlugin();
-    const resolved = await plugin.resolveId?.(
-      '/_hs/js/hyperspan-actions.client.js',
-      undefined,
-      {} as never
-    );
+  test('iife buildClientJS entries bundle without import/export', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hs-vite-iife-'));
+    writeFileSync(join(dir, 'dep.ts'), 'export const n = 1;\n');
+    const clientFile = join(dir, 'boot.ts');
+    writeFileSync(clientFile, `import { n } from './dep.ts';\nconsole.log(n);\n`);
 
-    expect(resolved).toMatch(/hyperspan-actions\.client\.ts$/);
+    await buildClientJS(clientFile, { type: 'iife' });
+    const entry = getClientJSEntries().find((item) => item.absPath === clientFile);
+    expect(entry?.type).toBe('iife');
+    const code = await bundleIifeClientJS(clientFile);
+    expect(code).not.toMatch(/\bimport\s+/);
+    expect(code).not.toMatch(/\bexport\s+/);
   });
 });

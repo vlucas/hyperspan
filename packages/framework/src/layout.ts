@@ -1,23 +1,20 @@
 import { html } from '@hyperspan/html';
 import { CSS_PUBLIC_PATH } from './client/css';
-import { getImportMap, getRouteCss, getClientJSFromManifest } from './client/manifest';
+import { getImportMap, getRouteCss } from './client/manifest';
+import { actionsClient, streamingClient } from './client/js';
 import type { Hyperspan as HS } from './types';
 
-function streamingClientPath(): string {
-  return getClientJSFromManifest('streaming').publicPath;
-}
-
 /**
- * Output the importmap for the client so we can use ESModules on the client to load JS files on demand
+ * Output the importmap for the client so we can use ESModules on the client to load JS files on demand.
+ *
+ * The streaming client MUST be loaded as a classic <script>, not type=module.
+ * Browsers defer all ESM until the document finishes parsing, which would hold
+ * every streaming chunk until the whole page is done. A dynamically inserted
+ * classic script runs as soon as it downloads.
  */
 export function hyperspanScriptTags() {
   const imports = getImportMap();
-  let streamingPath: string;
-  try {
-    streamingPath = streamingClientPath();
-  } catch {
-    streamingPath = '/_hs/js/hyperspan-streaming.client.js';
-  }
+  const streamingPath = streamingClient.publicPath;
 
   return html`
     <script type="importmap">
@@ -65,10 +62,5 @@ export function hyperspanStyleTags(context: HS.Context) {
  * Render the actions client script tag (used by createAction).
  */
 export function hyperspanActionsScriptTag() {
-  try {
-    const actions = getClientJSFromManifest('actions');
-    return html`<script type="module" src="${actions.publicPath}"></script>`;
-  } catch {
-    return html`<script type="module" src="/_hs/js/hyperspan-actions.client.js"></script>`;
-  }
+  return html`<script type="module" src="${actionsClient.publicPath}"></script>`;
 }

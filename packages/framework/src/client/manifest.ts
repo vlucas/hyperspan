@@ -3,11 +3,7 @@ import type { Hyperspan as HS } from '../types';
 export type AssetManifest = {
   imports: Record<string, string>;
   css: Record<string, string[]>;
-  clients: {
-    streaming?: string;
-    actions?: string;
-    scripts?: string;
-  };
+  clients: Record<string, string>;
 };
 
 let _manifest: AssetManifest = {
@@ -67,7 +63,7 @@ export function getClientJSFromManifest(
   moduleId: string,
   _exportNames = 'default'
 ): ClientJSBuildResult {
-  const publicPath = _manifest.clients[moduleId as keyof AssetManifest['clients']];
+  const publicPath = _manifest.clients[moduleId];
   if (!publicPath) {
     throw new Error(
       `[Hyperspan] Client module "${moduleId}" not found in asset manifest. Run hyperspan build or start dev server.`

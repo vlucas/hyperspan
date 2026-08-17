@@ -11,6 +11,13 @@ export { registerImport, resolveImport, getImportMap } from './manifest';
 export const JS_PUBLIC_PATH = '/_hs/js';
 export const JS_ISLAND_PUBLIC_PATH = '/_hs/js/islands';
 
+export type ClientJSType = 'module' | 'iife';
+
+export type BuildClientJSOptions = {
+  /** `iife` emits a classic <script> (runs during HTML streaming). Default `module`. */
+  type?: ClientJSType;
+};
+
 export type ClientJSEntry = {
   absPath: string;
   assetHash: string;
@@ -18,6 +25,7 @@ export type ClientJSEntry = {
   publicPath: string;
   exports: string;
   fnArgs: string;
+  type: ClientJSType;
 };
 
 const CLIENT_JS_REGISTRY = Symbol.for('@hyperspan/client-js-entries');
@@ -89,6 +97,14 @@ export function resolveClientModulePaths(modulePathResolved: string): {
         return { hashKey, absPath: candidate };
       }
     }
+    try {
+      const url = import.meta.resolve(resolved);
+      if (typeof url === 'string' && url.startsWith('file://')) {
+        return { hashKey, absPath: fileURLToPath(url) };
+      }
+    } catch {
+      // Bare specifiers that aren't installed yet still hash stably.
+    }
     return { hashKey, absPath: hashKey };
   }
 
@@ -111,13 +127,11 @@ function registerClientJSEntry(entry: ClientJSEntry): void {
   getClientJSRegistry().set(entry.esmName, entry);
 }
 
-/**
- * Build (or look up) a client JS module and return a helper for rendering script tags.
- *
- * Never evaluates the module on the server — only registers the path for Vite to bundle
- * and returns URLs / script-tag helpers for the browser.
- */
-export async function buildClientJS(modulePathResolved: string): Promise<HS.ClientJSBuildResult> {
+function registerClientJS(
+  modulePathResolved: string,
+  options: BuildClientJSOptions = {}
+): HS.ClientJSBuildResult {
+  const type = options.type ?? 'module';
   const { hashKey, absPath } = resolveClientModulePaths(modulePathResolved);
   const hash = assetHashFn(hashKey);
   const esmName = `client-${hash}`;
@@ -133,7 +147,7 @@ export async function buildClientJS(modulePathResolved: string): Promise<HS.Clie
     fnArgs = discovered.fnArgs;
   }
 
-  registerClientJSEntry({ absPath, assetHash: hash, esmName, publicPath, exports, fnArgs });
+  registerClientJSEntry({ absPath, assetHash: hash, esmName, publicPath, exports, fnArgs, type });
   registerImport(esmName, publicPath);
 
   return {
@@ -141,6 +155,10 @@ export async function buildClientJS(modulePathResolved: string): Promise<HS.Clie
     esmName,
     publicPath,
     renderScriptTag: (loadScript) => {
+      if (type === 'iife') {
+        return html`<script src="${publicPath}"></script>`;
+      }
+
       const t = typeof loadScript;
 
       if (t === 'string') {
@@ -168,6 +186,28 @@ export async function buildClientJS(modulePathResolved: string): Promise<HS.Clie
     },
   };
 }
+
+/**
+ * Build (or look up) a client JS module and return a helper for rendering script tags.
+ *
+ * Never evaluates the module on the server — only registers the path for Vite to bundle
+ * and returns URLs / script-tag helpers for the browser.
+ */
+export async function buildClientJS(
+  modulePathResolved: string,
+  options: BuildClientJSOptions = {}
+): Promise<HS.ClientJSBuildResult> {
+  return registerClientJS(modulePathResolved, options);
+}
+
+/** Same `buildClientJS` path an app would use for a package export. */
+export const streamingClient = registerClientJS(
+  '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts',
+  { type: 'iife' }
+);
+export const actionsClient = registerClientJS(
+  '@hyperspan/framework/client/_hs/hyperspan-actions.client.ts'
+);
 
 /**
  * Discover export names from source or bundled client JS.

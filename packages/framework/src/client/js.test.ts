@@ -63,6 +63,26 @@ describe('buildClientJS', () => {
     expect(tag).toContain('({ mountPicker }) => mountPicker()');
   });
 
+  test('package export specifiers resolve on disk like app logical paths', async () => {
+    const result = await buildClientJS(
+      '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts',
+      { type: 'iife' }
+    );
+
+    expect(result.publicPath).toMatch(/^\/_hs\/js\/client-[0-9a-f]{16}\.js$/);
+    expect(getClientJSEntries()[0].type).toBe('iife');
+    expect(getClientJSEntries()[0].absPath).toMatch(/hyperspan-streaming\.client\.ts$/);
+  });
+
+  test('type iife renders a classic script tag', async () => {
+    const result = await buildClientJS(clientFile, { type: 'iife' });
+    const tag = render(result.renderScriptTag());
+
+    expect(tag).toContain(`<script src="${result.publicPath}"`);
+    expect(tag).not.toContain('type="module"');
+    expect(getClientJSEntries()[0].type).toBe('iife');
+  });
+
   test('logical app-relative paths hash consistently and resolve on disk when present', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hs-client-logical-'));
     const { mkdirSync } = await import('node:fs');

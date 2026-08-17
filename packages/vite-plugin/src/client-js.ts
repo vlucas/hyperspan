@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs';
-import { basename, isAbsolute, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ViteDevServer } from 'vite';
 import {
@@ -11,16 +10,6 @@ import {
 } from '@hyperspan/framework/client/js';
 import { registerImport } from '@hyperspan/framework/client/manifest';
 import { resolveModuleAliases } from './tsconfig-aliases';
-
-const FRAMEWORK_CLIENT_DIR = fileURLToPath(
-  new URL('../../framework/src/client/_hs', import.meta.url)
-);
-
-const FRAMEWORK_CLIENT_FILES: Record<string, string> = {
-  'hyperspan-streaming.client.js': 'hyperspan-streaming.client.ts',
-  'hyperspan-actions.client.js': 'hyperspan-actions.client.ts',
-  'hyperspan-scripts.client.js': 'hyperspan-scripts.client.ts',
-};
 
 function publicClientJSPath(id: string): string | null {
   const path = id.split('?')[0].replace(/\\/g, '/');
@@ -39,12 +28,6 @@ export function resolveClientJSSource(id: string): string | null {
   }
 
   const fileName = basename(publicPath);
-  const frameworkFile = FRAMEWORK_CLIENT_FILES[fileName];
-  if (frameworkFile) {
-    const absPath = join(FRAMEWORK_CLIENT_DIR, frameworkFile);
-    return existsSync(absPath) ? absPath : null;
-  }
-
   if (!fileName.startsWith('client-')) {
     return null;
   }
@@ -54,6 +37,40 @@ export function resolveClientJSSource(id: string): string | null {
     return null;
   }
   return entry.absPath;
+}
+
+/** Rollup input for ESM `buildClientJS` entries (IIFE clients are emitted as assets). */
+export function clientJSRollupInput(): Record<string, string> {
+  return Object.fromEntries(
+    getClientJSEntries()
+      .filter((entry) => entry.type === 'module' && existsSync(entry.absPath))
+      .map((entry) => [entry.esmName, entry.absPath])
+  );
+}
+
+/**
+ * Bundle a `buildClientJS(..., { type: 'iife' })` entry as a classic script (no import/export).
+ */
+export async function bundleIifeClientJS(
+  absPath: string,
+  options: { minify?: boolean } = {}
+): Promise<string> {
+  const esbuild = await import('esbuild');
+  const result = await esbuild.build({
+    absWorkingDir: dirname(absPath),
+    entryPoints: [absPath],
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    write: false,
+    minify: options.minify ?? false,
+    logLevel: 'silent',
+  });
+  const code = result.outputFiles?.[0]?.text;
+  if (!code) {
+    throw new Error(`[Hyperspan] Failed to bundle IIFE client script: ${absPath}`);
+  }
+  return code;
 }
 
 function toViteTransformUrl(absPath: string, root: string): string {
@@ -66,17 +83,23 @@ function toViteTransformUrl(absPath: string, root: string): string {
 }
 
 export function clientJSPlugin(): Plugin {
+  let command: 'build' | 'serve' = 'serve';
+
   return {
     name: 'hyperspan-client-js',
     enforce: 'pre',
+
+    configResolved(config) {
+      command = config.command;
+    },
 
     resolveId(id) {
       return resolveClientJSSource(id);
     },
 
-    buildStart() {
+    async buildStart() {
       for (const entry of getClientJSEntries()) {
-        if (!existsSync(entry.absPath)) continue;
+        if (entry.type === 'iife' || !existsSync(entry.absPath)) continue;
         try {
           this.emitFile({
             type: 'chunk',
@@ -87,13 +110,22 @@ export function clientJSPlugin(): Plugin {
           // Serve mode — client modules are resolved via Vite resolveId/load.
         }
       }
+
+      if (command !== 'build') return;
+      for (const entry of getClientJSEntries()) {
+        if (entry.type !== 'iife' || !existsSync(entry.absPath)) continue;
+        const code = await bundleIifeClientJS(entry.absPath, { minify: true });
+        this.emitFile({
+          type: 'asset',
+          fileName: `_hs/js/${entry.esmName}.js`,
+          source: code,
+        });
+      }
     },
 
     generateBundle(_outputOptions, bundle) {
-      for (const [fileName, chunk] of Object.entries(bundle)) {
-        if (chunk.type !== 'chunk') continue;
-        if (!fileName.includes('client-')) continue;
-        const base = basename(fileName, '.js');
+      for (const fileName of Object.keys(bundle)) {
+        const base = basename(fileName.split('?')[0], '.js');
         if (!base.startsWith('client-')) continue;
         registerImport(base, `/${fileName}`);
       }
@@ -106,10 +138,10 @@ export function clientJSPlugin(): Plugin {
     },
     handleHotUpdate({ file, server }) {
       const changed = file.replace(/\\/g, '/');
-      const isClientSource = getClientJSEntries().some(
+      const isClient = getClientJSEntries().some(
         (entry) => entry.absPath.replace(/\\/g, '/') === changed
       );
-      if (isClientSource) {
+      if (isClient) {
         server.ws.send({ type: 'full-reload' });
       }
     },
@@ -126,44 +158,58 @@ export async function buildRegisteredClientJS(
   root: string,
   buildOutDir: string
 ): Promise<Record<string, string>> {
-  const entries = getClientJSEntries();
+  const entries = getClientJSEntries().filter((entry) => existsSync(entry.absPath));
   if (entries.length === 0) {
     return {};
   }
 
-  const { build } = await import('vite');
   const outDir = isAbsolute(buildOutDir) ? buildOutDir : join(root, buildOutDir);
-  const input = Object.fromEntries(entries.map((entry) => [entry.esmName, entry.absPath]));
-
-  await build({
-    root,
-    configFile: false,
-    logLevel: 'warn',
-    envPrefix: ['APP_PUBLIC_', 'VITE_'],
-    build: {
-      outDir,
-      emptyOutDir: false,
-      minify: true,
-      lib: {
-        entry: input,
-        formats: ['es'],
-        fileName: (_format, entryName) => `_hs/js/${entryName}.js`,
-      },
-      rollupOptions: {
-        output: {
-          exports: 'named',
-        },
-      },
-    },
-    resolve: {
-      alias: resolveModuleAliases(root),
-    },
-  });
-
+  const iifeEntries = entries.filter((entry) => entry.type === 'iife');
+  const esmEntries = entries.filter((entry) => entry.type === 'module');
   const imports: Record<string, string> = {};
-  for (const entry of entries) {
+
+  for (const entry of iifeEntries) {
+    const code = await bundleIifeClientJS(entry.absPath, { minify: true });
+    const outFile = join(outDir, '_hs/js', `${entry.esmName}.js`);
+    mkdirSync(dirname(outFile), { recursive: true });
+    writeFileSync(outFile, code);
     imports[entry.esmName] = `/_hs/js/${entry.esmName}.js`;
   }
+
+  if (esmEntries.length > 0) {
+    const { build } = await import('vite');
+    const input = Object.fromEntries(esmEntries.map((entry) => [entry.esmName, entry.absPath]));
+
+    await build({
+      root,
+      configFile: false,
+      logLevel: 'warn',
+      envPrefix: ['APP_PUBLIC_', 'VITE_'],
+      build: {
+        outDir,
+        emptyOutDir: false,
+        minify: true,
+        lib: {
+          entry: input,
+          formats: ['es'],
+          fileName: (_format, entryName) => `_hs/js/${entryName}.js`,
+        },
+        rollupOptions: {
+          output: {
+            exports: 'named',
+          },
+        },
+      },
+      resolve: {
+        alias: resolveModuleAliases(root),
+      },
+    });
+
+    for (const entry of esmEntries) {
+      imports[entry.esmName] = `/_hs/js/${entry.esmName}.js`;
+    }
+  }
+
   return imports;
 }
 
@@ -185,16 +231,19 @@ export async function handleClientJSDevRequestFromReq(
   }
 
   try {
-    const result = await viteServer.transformRequest(
-      toViteTransformUrl(source, viteServer.config.root)
-    );
-    if (!result?.code) {
+    const entry = getClientJSEntryByEsmName(basename(url, '.js'));
+    const code =
+      entry?.type === 'iife'
+        ? await bundleIifeClientJS(source)
+        : (await viteServer.transformRequest(toViteTransformUrl(source, viteServer.config.root)))
+            ?.code;
+    if (!code) {
       next();
       return;
     }
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.end(result.code);
+    res.end(code);
   } catch (err) {
     viteServer.ssrFixStacktrace(err as Error);
     next(err as Error);

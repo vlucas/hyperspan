@@ -20,6 +20,7 @@ export {
   registerImport,
 } from './client/manifest';
 export { buildClientJS } from './client/js';
+export type { BuildClientJSOptions, ClientJSType } from './client/js';
 export { registerRouteModule, registerRouteModules } from './register-routes';
 export type { RouteModuleEntry } from './register-routes';
 export type { AssetManifest } from './client/manifest';
