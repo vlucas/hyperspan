@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@hyperspan/html';
 import { assetHash as assetHashFn } from '../utils';
@@ -19,6 +19,8 @@ export type BuildClientJSOptions = {
 };
 
 export type ClientJSEntry = {
+  /** Original path/specifier passed to `buildClientJS`. */
+  modulePath: string;
   absPath: string;
   assetHash: string;
   esmName: string;
@@ -29,6 +31,34 @@ export type ClientJSEntry = {
 };
 
 const CLIENT_JS_REGISTRY = Symbol.for('@hyperspan/client-js-entries');
+const PATH_ALIASES = Symbol.for('@hyperspan/path-aliases');
+
+function getPathAliases(): Record<string, string> {
+  const globalAliases = globalThis as {
+    [PATH_ALIASES]?: Record<string, string>;
+  };
+  if (!globalAliases[PATH_ALIASES]) {
+    globalAliases[PATH_ALIASES] = {};
+  }
+  return globalAliases[PATH_ALIASES];
+}
+
+/** Register tsconfig path aliases (`~/` → project root). Called by the Vite plugin. */
+export function registerPathAliases(aliases: Record<string, string>): void {
+  Object.assign(getPathAliases(), aliases);
+}
+
+function resolveWithAliases(specifier: string): string | undefined {
+  const aliases = getPathAliases();
+  const keys = Object.keys(aliases).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (specifier === key || specifier.startsWith(key)) {
+      const rest = specifier.slice(key.length).replace(/^\//, '');
+      return join(aliases[key], rest);
+    }
+  }
+  return undefined;
+}
 
 function getClientJSRegistry(): Map<string, ClientJSEntry> {
   const globalRegistry = globalThis as {
@@ -69,46 +99,56 @@ export const JS_IMPORT_MAP = {
 };
 
 /**
- * Resolve import.meta.resolve() / file URL / absolute path to a filesystem path.
+ * Prefer a cwd-relative hash so `import.meta.resolve(...)` and `app/client/foo.ts`
+ * produce the same public URL. Absolute paths outside the project stay as-is.
  */
-export function resolveClientModulePath(modulePathResolved: string): string {
-  if (modulePathResolved.startsWith('file://')) {
-    return fileURLToPath(modulePathResolved);
+function stableHashKey(absPath: string): string {
+  const normalized = absPath.replace(/\\/g, '/');
+  if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
+    const rel = relative(process.cwd(), absPath).replace(/\\/g, '/');
+    if (rel && !rel.startsWith('..') && !isAbsolute(rel)) {
+      return rel;
+    }
   }
-  return modulePathResolved;
+  const marker = '/node_modules/';
+  const idx = normalized.lastIndexOf(marker);
+  if (idx !== -1) {
+    return normalized.slice(idx + marker.length);
+  }
+  return normalized;
+}
+
+function toFilePath(modulePath: string): string {
+  return modulePath.startsWith('file://') ? fileURLToPath(modulePath) : modulePath;
 }
 
 /**
- * Resolve a client module path for hashing and bundling.
- * Logical app-relative paths (e.g. app/client/foo.ts) hash consistently across
- * Node and edge runtimes where absolute paths differ.
+ * `import.meta.resolve('./file.ts')` → file URL or absolute path.
+ * `~/app/client/foo.ts` → registered tsconfig alias.
+ * `app/client/foo.ts` → project root.
+ * Relative `./` / `../` paths error — resolve them at the call site.
  */
-export function resolveClientModulePaths(modulePathResolved: string): {
-  hashKey: string;
-  absPath: string;
-} {
-  const resolved = resolveClientModulePath(modulePathResolved).replace(/\\/g, '/');
-
-  if (!isAbsolute(resolved)) {
-    const hashKey = resolved;
-    if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
-      const candidate = join(process.cwd(), hashKey);
-      if (existsSync(candidate)) {
-        return { hashKey, absPath: candidate };
-      }
-    }
-    try {
-      const url = import.meta.resolve(resolved);
-      if (typeof url === 'string' && url.startsWith('file://')) {
-        return { hashKey, absPath: fileURLToPath(url) };
-      }
-    } catch {
-      // Bare specifiers that aren't installed yet still hash stably.
-    }
-    return { hashKey, absPath: hashKey };
+function resolveClientModule(modulePath: string): { hashKey: string; absPath: string } {
+  if (modulePath.startsWith('file://') || isAbsolute(modulePath)) {
+    const absPath = toFilePath(modulePath);
+    return { hashKey: stableHashKey(absPath), absPath };
   }
 
-  return { hashKey: resolved, absPath: resolved };
+  const specifier = modulePath.replace(/\\/g, '/');
+  if (specifier.startsWith('.')) {
+    throw new Error(
+      `[Hyperspan] buildClientJS(${JSON.stringify(modulePath)}) got a relative path. ` +
+        `Use import.meta.resolve(${JSON.stringify(modulePath)}) at the call site, ` +
+        `or a tsconfig alias like '~/app/client/file.ts'.`
+    );
+  }
+
+  const aliased = resolveWithAliases(specifier);
+  if (aliased) {
+    return { hashKey: specifier, absPath: aliased };
+  }
+
+  return { hashKey: specifier, absPath: join(process.cwd(), specifier) };
 }
 
 export function getClientJSEntries(): ClientJSEntry[] {
@@ -121,10 +161,10 @@ export function getClientJSEntryByEsmName(esmName: string): ClientJSEntry | unde
 
 export function resetClientJSEntriesForTests(): void {
   getClientJSRegistry().clear();
-}
-
-function registerClientJSEntry(entry: ClientJSEntry): void {
-  getClientJSRegistry().set(entry.esmName, entry);
+  const aliases = getPathAliases();
+  for (const key of Object.keys(aliases)) {
+    delete aliases[key];
+  }
 }
 
 function registerClientJS(
@@ -132,7 +172,7 @@ function registerClientJS(
   options: BuildClientJSOptions = {}
 ): HS.ClientJSBuildResult {
   const type = options.type ?? 'module';
-  const { hashKey, absPath } = resolveClientModulePaths(modulePathResolved);
+  const { hashKey, absPath } = resolveClientModule(modulePathResolved);
   const hash = assetHashFn(hashKey);
   const esmName = `client-${hash}`;
   const publicPath = resolveImport(esmName) ?? `${JS_PUBLIC_PATH}/${esmName}.js`;
@@ -147,7 +187,16 @@ function registerClientJS(
     fnArgs = discovered.fnArgs;
   }
 
-  registerClientJSEntry({ absPath, assetHash: hash, esmName, publicPath, exports, fnArgs, type });
+  getClientJSRegistry().set(esmName, {
+    modulePath: modulePathResolved,
+    absPath,
+    assetHash: hash,
+    esmName,
+    publicPath,
+    exports,
+    fnArgs,
+    type,
+  });
   registerImport(esmName, publicPath);
 
   return {
@@ -188,10 +237,10 @@ function registerClientJS(
 }
 
 /**
- * Build (or look up) a client JS module and return a helper for rendering script tags.
- *
- * Never evaluates the module on the server — only registers the path for Vite to bundle
- * and returns URLs / script-tag helpers for the browser.
+ * Register a client JS module for Vite to bundle.
+ * Prefer a tsconfig alias or project-root path (`~/app/client/foo.ts`,
+ * `app/client/foo.ts`). Relative `./` / `../` paths must be resolved at the
+ * call site with `import.meta.resolve('./file.ts')`.
  */
 export async function buildClientJS(
   modulePathResolved: string,
@@ -200,13 +249,12 @@ export async function buildClientJS(
   return registerClientJS(modulePathResolved, options);
 }
 
-/** Same `buildClientJS` path an app would use for a package export. */
 export const streamingClient = registerClientJS(
-  '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts',
+  import.meta.resolve('./_hs/hyperspan-streaming.client.ts'),
   { type: 'iife' }
 );
 export const actionsClient = registerClientJS(
-  '@hyperspan/framework/client/_hs/hyperspan-actions.client.ts'
+  import.meta.resolve('./_hs/hyperspan-actions.client.ts')
 );
 
 /**

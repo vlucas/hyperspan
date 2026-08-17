@@ -7,7 +7,7 @@ import deleteTodoAction from '~/app/actions/delete-todo';
 import toggleTodoAction from '~/app/actions/toggle-todo';
 import { getTodos } from '~/src/lib/db';
 
-const todoStatsClient = await buildClientJS('app/client/todo-stats.ts');
+const todoStatsClient = await buildClientJS('~/app/client/todo-stats.ts');
 
 export default createRoute().get(async (context) => {
   const todos = await getTodos();

@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { render } from '@hyperspan/html';
@@ -8,6 +8,7 @@ import {
   discoverClientExports,
   extractExports,
   getClientJSEntries,
+  registerPathAliases,
   resetClientJSEntriesForTests,
 } from './js';
 
@@ -63,15 +64,20 @@ describe('buildClientJS', () => {
     expect(tag).toContain('({ mountPicker }) => mountPicker()');
   });
 
-  test('package export specifiers resolve on disk like app logical paths', async () => {
-    const result = await buildClientJS(
-      '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts',
-      { type: 'iife' }
-    );
+  test('import.meta.resolve at the call site registers a real file', async () => {
+    const result = await buildClientJS(import.meta.resolve('./_hs/hyperspan-streaming.client.ts'), {
+      type: 'iife',
+    });
 
     expect(result.publicPath).toMatch(/^\/_hs\/js\/client-[0-9a-f]{16}\.js$/);
     expect(getClientJSEntries()[0].type).toBe('iife');
+    expect(existsSync(getClientJSEntries()[0].absPath)).toBe(true);
     expect(getClientJSEntries()[0].absPath).toMatch(/hyperspan-streaming\.client\.ts$/);
+  });
+
+  test('relative paths must be resolved at the call site', async () => {
+    await expect(buildClientJS('../client/picker.ts')).rejects.toThrow(/import\.meta\.resolve/);
+    await expect(buildClientJS('./picker.ts')).rejects.toThrow(/import\.meta\.resolve/);
   });
 
   test('type iife renders a classic script tag', async () => {
@@ -103,6 +109,37 @@ describe('buildClientJS', () => {
     } finally {
       process.chdir(cwd);
     }
+  });
+
+  test('tsconfig aliases resolve inside buildClientJS without import.meta.resolve', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hs-client-alias-'));
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(dir, 'app/client'), { recursive: true });
+    const absPath = join(dir, 'app/client/stats.ts');
+    writeFileSync(absPath, `export function mountStats() {}\n`);
+
+    registerPathAliases({ '~/': `${dir}/`, '~': dir });
+
+    const result = await buildClientJS('~/app/client/stats.ts');
+    expect(getClientJSEntries()[0].absPath.replace(/^\/private/, '')).toBe(
+      absPath.replace(/^\/private/, '')
+    );
+    expect(getClientJSEntries()[0].modulePath).toBe('~/app/client/stats.ts');
+
+    resetClientJSEntriesForTests();
+    registerPathAliases({ '~/': `${dir}/`, '~': dir });
+    const second = await buildClientJS('~/app/client/stats.ts');
+    expect(second.esmName).toBe(result.esmName);
+  });
+
+  test('aliased specifiers keep a stable hash when the file is missing', async () => {
+    registerPathAliases({ '~/': '/definitely-missing-hyperspan-root/' });
+    const first = await buildClientJS('~/app/client/missing.ts');
+    resetClientJSEntriesForTests();
+    registerPathAliases({ '~/': '/definitely-missing-hyperspan-root/' });
+    const second = await buildClientJS('~/app/client/missing.ts');
+    expect(first.esmName).toBe(second.esmName);
+    expect(existsSync(getClientJSEntries()[0].absPath)).toBe(false);
   });
 });
 

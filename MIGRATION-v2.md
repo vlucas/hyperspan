@@ -64,7 +64,7 @@ Call `buildClientJS()` once at **module scope** (top-level await). It only regis
 ```ts
 import { buildClientJS } from '@hyperspan/framework/client/js';
 
-const picker = await buildClientJS('app/client/picker.ts');
+const picker = await buildClientJS('~/app/client/picker.ts');
 
 export default createRoute().get(async (context) => {
   return html`
@@ -74,7 +74,7 @@ export default createRoute().get(async (context) => {
 });
 ```
 
-Use an app-relative path (e.g. `app/client/picker.ts`) so the asset hash stays stable across Node, Cloudflare Workers, and other runtimes.
+Prefer a tsconfig alias (`~/app/client/picker.ts`) or a project-root path (`app/client/picker.ts`). Relative `./` / `../` paths error — resolve them at the call site with `import.meta.resolve('./file.ts')`. The Vite plugin registers tsconfig aliases so `buildClientJS` can resolve them, and polyfills `import.meta.resolve` for Vite SSR.
 
 `renderScriptTag()` with no argument emits a module script that imports the bundle via the import map. Pass a function or string to inline bootstrap code that receives the module exports.
 

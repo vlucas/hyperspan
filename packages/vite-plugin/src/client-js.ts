@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ViteDevServer } from 'vite';
@@ -21,6 +21,10 @@ function publicClientJSPath(id: string): string | null {
   return path.slice(idx);
 }
 
+function existingClientFile(entry: ClientJSEntry): string | null {
+  return existsSync(entry.absPath) ? entry.absPath : null;
+}
+
 export function resolveClientJSSource(id: string): string | null {
   const publicPath = publicClientJSPath(id);
   if (!publicPath) {
@@ -33,18 +37,19 @@ export function resolveClientJSSource(id: string): string | null {
   }
 
   const entry = getClientJSEntryByEsmName(basename(fileName, '.js'));
-  if (!entry || !existsSync(entry.absPath)) {
+  if (!entry) {
     return null;
   }
-  return entry.absPath;
+  return existingClientFile(entry);
 }
 
 /** Rollup input for ESM `buildClientJS` entries (IIFE clients are emitted as assets). */
 export function clientJSRollupInput(): Record<string, string> {
   return Object.fromEntries(
     getClientJSEntries()
-      .filter((entry) => entry.type === 'module' && existsSync(entry.absPath))
-      .map((entry) => [entry.esmName, entry.absPath])
+      .filter((entry) => entry.type === 'module')
+      .map((entry) => [entry.esmName, existingClientFile(entry)] as const)
+      .filter((item): item is [string, string] => Boolean(item[1]))
   );
 }
 
@@ -99,11 +104,12 @@ export function clientJSPlugin(): Plugin {
 
     async buildStart() {
       for (const entry of getClientJSEntries()) {
-        if (entry.type === 'iife' || !existsSync(entry.absPath)) continue;
+        const absPath = existingClientFile(entry);
+        if (entry.type === 'iife' || !absPath) continue;
         try {
           this.emitFile({
             type: 'chunk',
-            id: entry.absPath,
+            id: absPath,
             fileName: `_hs/js/${entry.esmName}.js`,
           });
         } catch {
@@ -113,8 +119,9 @@ export function clientJSPlugin(): Plugin {
 
       if (command !== 'build') return;
       for (const entry of getClientJSEntries()) {
-        if (entry.type !== 'iife' || !existsSync(entry.absPath)) continue;
-        const code = await bundleIifeClientJS(entry.absPath, { minify: true });
+        const absPath = existingClientFile(entry);
+        if (entry.type !== 'iife' || !absPath) continue;
+        const code = await bundleIifeClientJS(absPath, { minify: true });
         this.emitFile({
           type: 'asset',
           fileName: `_hs/js/${entry.esmName}.js`,
@@ -138,9 +145,9 @@ export function clientJSPlugin(): Plugin {
     },
     handleHotUpdate({ file, server }) {
       const changed = file.replace(/\\/g, '/');
-      const isClient = getClientJSEntries().some(
-        (entry) => entry.absPath.replace(/\\/g, '/') === changed
-      );
+      const isClient = getClientJSEntries().some((entry) => {
+        return entry.absPath.replace(/\\/g, '/') === changed;
+      });
       if (isClient) {
         server.ws.send({ type: 'full-reload' });
       }
@@ -158,7 +165,12 @@ export async function buildRegisteredClientJS(
   root: string,
   buildOutDir: string
 ): Promise<Record<string, string>> {
-  const entries = getClientJSEntries().filter((entry) => existsSync(entry.absPath));
+  const entries = getClientJSEntries()
+    .map((entry) => {
+      const absPath = existingClientFile(entry);
+      return absPath ? { ...entry, absPath } : null;
+    })
+    .filter((entry): entry is ClientJSEntry => entry !== null);
   if (entries.length === 0) {
     return {};
   }

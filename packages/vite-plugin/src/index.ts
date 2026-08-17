@@ -24,7 +24,8 @@ import {
   syncClientJSManifestEntries,
   clientJSRollupInput,
 } from './client-js';
-import { getClientJSEntries } from '@hyperspan/framework/client/js';
+import { importMetaResolvePlugin } from './import-meta-resolve';
+import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 
@@ -56,6 +57,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
     config(config) {
       const projectRoot = config.root ? String(config.root) : process.cwd();
+      registerPathAliases(resolveModuleAliases(projectRoot));
       loadHyperspanConfigSync(projectRoot, options.configFile);
       const islandPlugins = resolveRegisteredIslandVitePlugins();
       return {
@@ -417,7 +419,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     }
   }
 
-  return [corePlugin, clientJSPlugin()];
+  return [importMetaResolvePlugin(), corePlugin, clientJSPlugin()];
 }
 
 async function loadHyperspanConfig(root: string, configFile?: string): Promise<HS.Config> {
