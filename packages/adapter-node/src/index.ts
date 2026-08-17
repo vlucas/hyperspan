@@ -73,22 +73,44 @@ async function handleNodeRequest(
 
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
-    if (typeof value === 'string') headers.set(key, value);
-    else if (Array.isArray(value)) headers.set(key, value.join(', '));
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      headers.set(key, key.toLowerCase() === 'cookie' ? value.join('; ') : value.join(', '));
+    } else {
+      headers.set(key, value);
+    }
   }
 
-  const request = new Request(url, {
+  const init: RequestInit & { duplex?: 'half' } = {
     method: req.method,
     headers,
-    body: body ? new Uint8Array(body) : undefined,
-  });
+    redirect: 'manual',
+  };
+  if (body) {
+    init.body = new Uint8Array(body);
+    init.duplex = 'half';
+  }
+  const request = new Request(url, init);
+  if (headers.has('cookie') && !request.headers.has('cookie')) {
+    Object.defineProperty(request, 'headers', {
+      value: headers,
+      writable: false,
+      configurable: true,
+    });
+  }
   const response = await fetch(request);
 
   res.statusCode = response.status;
+  const setCookies =
+    typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
   response.headers.forEach((value, key) => {
     if (key.toLowerCase() === 'transfer-encoding') return;
+    if (key.toLowerCase() === 'set-cookie') return;
     res.setHeader(key, value);
   });
+  if (setCookies.length > 0) {
+    res.setHeader('Set-Cookie', setCookies);
+  }
 
   if (response.body) {
     const reader = response.body.getReader();

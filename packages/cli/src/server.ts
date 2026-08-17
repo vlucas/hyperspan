@@ -1,6 +1,7 @@
 import {
   createConfig,
   createServer,
+  initServerRoutes,
   setAssetManifest,
   registerRouteModule,
 } from '@hyperspan/framework';
@@ -105,19 +106,12 @@ export async function createHyperspanServer(startConfig: startConfig = {}): Prom
 
   const server = await createServer(config);
 
-  if (config.beforeRoutesAdded) {
-    config.beforeRoutesAdded(server);
-  }
-
   console.log('[Hyperspan] Adding routes...');
-  await addDirectoryAsRoutes(server, 'routes', startConfig);
-
-  console.log('[Hyperspan] Adding actions...');
-  await addDirectoryAsRoutes(server, 'actions', startConfig);
-
-  if (config.afterRoutesAdded) {
-    config.afterRoutesAdded(server);
-  }
+  await initServerRoutes(server, config, async (server) => {
+    await addDirectoryAsRoutes(server, 'routes', startConfig);
+    console.log('[Hyperspan] Adding actions...');
+    await addDirectoryAsRoutes(server, 'actions', startConfig);
+  });
 
   return server;
 }

@@ -54,6 +54,8 @@ describe('generate-server', () => {
     expect(source).toContain('hyperspanConfig.deployAdapter.createEntry({');
     expect(source).toContain('export async function start(');
     expect(source).toContain('export default __hs_entry');
+    expect(source).toContain('initServerRoutes');
+    expect(source).not.toContain('if (hyperspanConfig.beforeRoutesAdded)');
     expect(source).not.toContain('@hyperspan/adapter-node');
     expect(source).not.toContain('@hyperspan/adapter-cloudflare');
   });

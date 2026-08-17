@@ -3,6 +3,7 @@ export {
   createContext,
   createRoute,
   createServer,
+  initServerRoutes,
   getRunnableRoute,
   StreamResponse,
   IS_PROD,

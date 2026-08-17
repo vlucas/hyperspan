@@ -118,8 +118,8 @@ export namespace Hyperspan {
      */
     beforeServerCreate?: (ctx: ServerCreateContext) => void | Promise<void>;
     // For customizing the routes and adding your own...
-    beforeRoutesAdded?: (server: Hyperspan.Server) => void;
-    afterRoutesAdded?: (server: Hyperspan.Server) => void;
+    beforeRoutesAdded?: (server: Hyperspan.Server) => void | Promise<void>;
+    afterRoutesAdded?: (server: Hyperspan.Server) => void | Promise<void>;
     responseOptions?: ResponseOptions;
   };
 

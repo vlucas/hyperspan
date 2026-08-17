@@ -73,6 +73,29 @@ describe('createFetchHandler', () => {
     expect(await response.text()).toBe('abc');
   });
 
+  test('preserves Cookie on the request passed to the route', async () => {
+    const server = await createServer({
+      appDir: './app',
+      publicDir: './public',
+      plugins: [],
+    });
+
+    const route = createRoute({ path: '/session' }).get((c: HS.Context) =>
+      c.res.text(c.req.raw.headers.get('cookie') ?? '')
+    );
+    server._routes.push(route);
+
+    const headers = new Headers({ cookie: 'session=abc' });
+    const request = new Request('http://localhost/session', { headers });
+    // Node's Request constructor strips Cookie; re-attach like Vite's nodeToWebRequest.
+    Object.defineProperty(request, 'headers', { value: headers });
+
+    const fetch = createFetchHandler(server);
+    const response = await fetch(request);
+
+    expect(await response.text()).toBe('session=abc');
+  });
+
   test('redirects trailing slashes', async () => {
     const server = await createServer({
       appDir: './app',

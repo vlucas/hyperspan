@@ -1,6 +1,7 @@
 {
   "name": "hyperspan",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],
@@ -12,6 +13,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   }
 }

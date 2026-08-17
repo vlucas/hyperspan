@@ -6,6 +6,7 @@ import {
   createConfig,
   createServer,
   createFetchHandler,
+  initServerRoutes,
   setAssetManifest,
   registerRouteModule,
   getAssetManifest,
@@ -28,6 +29,7 @@ import { importMetaResolvePlugin } from './import-meta-resolve';
 import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
+import { applyWebResponseToNode, incomingRequestUrl, nodeToWebRequest } from './node-http';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
@@ -35,6 +37,8 @@ export type HyperspanVitePluginOptions = {
 
 const MANIFEST_VIRTUAL_ID = 'virtual:hyperspan-manifest';
 const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
+const DEV_BINDINGS_ID = 'virtual:hyperspan-dev-bindings';
+const RESOLVED_DEV_BINDINGS_ID = '\0' + DEV_BINDINGS_ID;
 
 function loadHyperspanConfigSync(root: string, configFile?: string): void {
   const file = configFile ?? join(root, 'hyperspan.config.ts');
@@ -50,6 +54,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   let serverInstance: HS.Server | null = null;
   let manifest: AssetManifest = { imports: {}, css: {}, clients: {} };
   let fetchHandler: ((req: Request) => Promise<Response>) | null = null;
+  let command: 'build' | 'serve' = 'serve';
 
   const corePlugin: Plugin = {
     name: 'hyperspan',
@@ -70,7 +75,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         },
         build: {
           manifest: true,
-          rollupOptions: {
+          rolldownOptions: {
             input: clientJSRollupInput(),
             output: {
               entryFileNames: (chunkInfo) =>
@@ -93,12 +98,19 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     configResolved(config) {
       resolvedConfig = config;
       root = config.root;
+      command = config.command;
     },
 
     async buildStart() {
       try {
         hsConfig = await loadHyperspanConfig(root, options.configFile);
-        if (resolvedConfig.command === 'serve' && !process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY) {
+        // Defer dev server rebuild until configureServer sets viteDevServer so
+        // beforeServerCreate runs in the SSR module graph (visible to routes/actions).
+        if (
+          resolvedConfig.command === 'serve' &&
+          !process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY &&
+          viteDevServer
+        ) {
           await rebuildServer();
         }
         // Production build: route/CSS discovery runs in closeBundle via a
@@ -112,6 +124,12 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       if (id === MANIFEST_VIRTUAL_ID) {
         return RESOLVED_MANIFEST_VIRTUAL_ID;
       }
+      if (
+        command === 'serve' &&
+        (id === DEV_BINDINGS_ID || id === '@hyperspan/framework/dev-bindings')
+      ) {
+        return RESOLVED_DEV_BINDINGS_ID;
+      }
 
       const framework = getIslandFramework(id, options?.attributes as Record<string, string>);
       if (framework) {
@@ -122,6 +140,14 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     load(id) {
       if (id === RESOLVED_MANIFEST_VIRTUAL_ID) {
         return `export default ${JSON.stringify(manifest)};`;
+      }
+      if (id === RESOLVED_DEV_BINDINGS_ID) {
+        return `
+let devBindings;
+export function setDevBindings(env) { devBindings = env; }
+export function getDevBindings() { return devBindings; }
+export function clearDevBindingsForTests() { devBindings = undefined; }
+`;
       }
     },
 
@@ -226,7 +252,9 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       }
       const tempServer = await createServer(hsConfig);
       tempServer._routes = [];
-      await loadRoutes(tempServer, root, hsConfig, ssrVite);
+      await initServerRoutes(tempServer, hsConfig, (server) =>
+        loadRoutes(server, root, hsConfig, ssrVite)
+      );
 
       const clientImports = await buildRegisteredClientJS(root, resolvedConfig.build.outDir);
       if (Object.keys(clientImports).length > 0) {
@@ -278,20 +306,53 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     }
   }
 
-  async function rebuildServer() {
-    hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
-    if (hsConfig.beforeServerCreate) {
-      const env = await resolveServerCreateEnv(hsConfig.deployAdapter, root);
-      await hsConfig.beforeServerCreate({ env });
+  async function syncDevBindingsToSsr(env: unknown): Promise<void> {
+    if (!viteDevServer) {
+      return;
     }
-    serverInstance = await createServer(hsConfig);
-    serverInstance._routes = [];
-    await loadRoutes(serverInstance, root, hsConfig, viteDevServer);
-    fetchHandler = createFetchHandler(serverInstance!, {
-      onNotMatched: async (request) => serveStatic(request, root, hsConfig.publicDir),
+    const mod = await viteDevServer.ssrLoadModule('@hyperspan/framework/dev-bindings');
+    mod.setDevBindings(env);
+  }
+
+  async function loadRuntimeConfig(): Promise<HS.Config> {
+    // Vite SSR so hooks and routes share one module graph (jiti is a separate graph).
+    if (viteDevServer) {
+      const configFile = options.configFile ?? 'hyperspan.config.ts';
+      const mod = await viteDevServer.ssrLoadModule(configFile);
+      const config = createConfig(mod.default as Partial<HS.Config>);
+      config.deployAdapter = resolveDeployAdapter(config.deployAdapter);
+      return config;
+    }
+    return loadHyperspanConfig(root, options.configFile);
+  }
+
+  let rebuildInFlight: Promise<void> | null = null;
+
+  async function rebuildServer() {
+    if (rebuildInFlight) {
+      return rebuildInFlight;
+    }
+
+    rebuildInFlight = (async () => {
+      hsConfig = await loadRuntimeConfig();
+      const env = await resolveServerCreateEnv(hsConfig.deployAdapter, root);
+      await syncDevBindingsToSsr(env);
+      await hsConfig.beforeServerCreate?.({ env });
+      serverInstance = await createServer(hsConfig);
+      serverInstance._routes = [];
+      await initServerRoutes(serverInstance, hsConfig, (server) =>
+        loadRoutes(server, root, hsConfig, viteDevServer)
+      );
+      fetchHandler = createFetchHandler(serverInstance!, {
+        onNotMatched: async (request) => serveStatic(request, root, hsConfig.publicDir),
+      });
+      updateDevManifest();
+      await syncServerEntryForDev();
+    })().finally(() => {
+      rebuildInFlight = null;
     });
-    updateDevManifest();
-    await syncServerEntryForDev();
+
+    return rebuildInFlight;
   }
 
   async function syncServerEntryForDev() {
@@ -322,7 +383,17 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     return normalized.includes(`/${appDir}/routes/`) || normalized.includes(`/${appDir}/actions/`);
   }
 
-  async function onAppRouteFileEvent(file: string) {
+  function isHyperspanConfigFile(file: string): boolean {
+    const normalized = file.replace(/\\/g, '/');
+    const configFile = (options.configFile ?? 'hyperspan.config.ts').replace(/\\/g, '/');
+    return normalized.endsWith(configFile) || normalized.endsWith('/hyperspan.config.ts');
+  }
+
+  async function onWatchedFileEvent(file: string) {
+    if (isHyperspanConfigFile(file)) {
+      await rebuildServer();
+      return;
+    }
     hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
     if (!isAppRouteFile(file)) {
       return;
@@ -369,33 +440,17 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
       try {
         if (!fetchHandler) {
-          hsConfig = await loadHyperspanConfig(root, options.configFile);
           await rebuildServer();
         }
 
-        const host = req.headers.host ?? 'localhost:5173';
         const body =
           req.method !== 'GET' && req.method !== 'HEAD' ? await readNodeBody(req) : undefined;
 
-        const headers = new Headers();
-        for (const [key, value] of Object.entries(req.headers)) {
-          if (typeof value === 'string') headers.set(key, value);
-          else if (Array.isArray(value)) headers.set(key, value.join(', '));
-        }
-
-        const request = new Request(`http://${host}${url}`, {
-          method: req.method,
-          headers,
-          body,
-        });
+        const request = nodeToWebRequest(req, incomingRequestUrl(req, url), body);
 
         const response = await fetchHandler!(request);
 
-        res.statusCode = response.status;
-        response.headers.forEach((value, key) => {
-          if (key.toLowerCase() === 'transfer-encoding') return;
-          res.setHeader(key, value);
-        });
+        applyWebResponseToNode(response, res);
 
         if (response.body) {
           const reader = response.body.getReader();
@@ -414,7 +469,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
 
     for (const event of ['change', 'add', 'unlink'] as const) {
       viteServer.watcher.on(event, (file) => {
-        void onAppRouteFileEvent(file);
+        void onWatchedFileEvent(file);
       });
     }
   }

@@ -18,6 +18,18 @@ export function findWranglerConfigPath(root: string): string | undefined {
   ].find((path) => existsSync(path));
 }
 
+type PlatformProxy = {
+  env: unknown;
+  dispose?: () => Promise<void>;
+};
+
+/** One Miniflare/workerd per Wrangler config — a second proxy locks local D1 (SQLITE_BUSY). */
+const proxyByConfig = new Map<string, Promise<PlatformProxy>>();
+
+function proxyCacheKey(root: string, configPath?: string): string {
+  return configPath ?? join(root, ':default');
+}
+
 /**
  * Resolve Cloudflare bindings for Vite/`hyperspan dev` via Wrangler's platform proxy.
  *
@@ -29,10 +41,22 @@ export async function resolveDevEnv(
   options: ResolveCloudflareDevEnvOptions = {}
 ): Promise<unknown> {
   const configPath = options.configPath ?? findWranglerConfigPath(root);
+  const key = proxyCacheKey(root, configPath);
+
+  let pending = proxyByConfig.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const { getPlatformProxy } = await import('wrangler');
+      return getPlatformProxy(configPath ? { configPath } : {}) as Promise<PlatformProxy>;
+    })();
+    proxyByConfig.set(key, pending);
+    pending.catch(() => {
+      proxyByConfig.delete(key);
+    });
+  }
 
   try {
-    const { getPlatformProxy } = await import('wrangler');
-    const proxy = await getPlatformProxy(configPath ? { configPath } : {});
+    const proxy = await pending;
     return proxy.env;
   } catch (err) {
     console.warn(

@@ -75,7 +75,8 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const url = new URL(req.url);
   const query = new URLSearchParams(url.search);
   const method = req.method.toUpperCase();
-  const headers = new Headers(req.headers);
+  const requestHeaders = new Headers(req.headers);
+  const responseHeaders = new Headers();
   const path = route?._path() || '/';
   const requestParams = (req as Request & { params?: Record<string, string | undefined> }).params;
   const params: Record<string, string | undefined> = Object.assign(
@@ -95,12 +96,21 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   // Status override for the response. Will use if set. (e.g. c.res.status = 400)
   let status: number | undefined = undefined;
 
+  const copyHeaders = (source: Headers, target: Headers) => {
+    source.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') return;
+      target.set(key, value);
+    });
+    const cookies = typeof source.getSetCookie === 'function' ? source.getSetCookie() : [];
+    for (const cookie of cookies) {
+      target.append('Set-Cookie', cookie);
+    }
+  };
+
   const merge = async (response: Response) => {
-    // Convert headers to plain objects and merge (response headers override context headers)
-    const mergedHeaders = {
-      ...Object.fromEntries(headers.entries()),
-      ...Object.fromEntries(response.headers.entries()),
-    };
+    const mergedHeaders = new Headers();
+    copyHeaders(responseHeaders, mergedHeaders);
+    copyHeaders(response.headers, mergedHeaders);
 
     return new Response(await response.text(), {
       status: context.res.status ?? response.status,
@@ -124,7 +134,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       raw: req,
       url,
       method,
-      headers,
+      headers: requestHeaders,
       query,
       cookies: new Cookies(req),
       async text() {
@@ -141,8 +151,8 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       },
     },
     res: {
-      cookies: new Cookies(req, headers),
-      headers,
+      cookies: new Cookies(req, responseHeaders),
+      headers: responseHeaders,
       status,
       html: (html: string, options?: ResponseInit) =>
         merge(
@@ -502,6 +512,20 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
   };
 
   return api;
+}
+
+/**
+ * Shared route lifecycle for Vite dev, production entries, and `hyperspan start`.
+ * Always: `beforeRoutesAdded` → add routes → `afterRoutesAdded`.
+ */
+export async function initServerRoutes(
+  server: HS.Server,
+  config: Pick<HS.Config, 'beforeRoutesAdded' | 'afterRoutesAdded'>,
+  addRoutes: (server: HS.Server) => void | Promise<void>
+): Promise<void> {
+  await config.beforeRoutesAdded?.(server);
+  await addRoutes(server);
+  await config.afterRoutesAdded?.(server);
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   clientJSPlugin,
   resolveClientJSSource,
   bundleIifeClientJS,
+  bundleClientJSDev,
   clientJSRollupInput,
 } from './client-js';
 
@@ -77,5 +78,17 @@ describe('clientJSPlugin', () => {
     const code = await bundleIifeClientJS(clientFile);
     expect(code).not.toMatch(/\bimport\s+/);
     expect(code).not.toMatch(/\bexport\s+/);
+  });
+
+  test('module buildClientJS entries bundle as ESM for dev serving', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hs-vite-esm-'));
+    writeFileSync(join(dir, 'dep.ts'), 'export const n = 1;\n');
+    const clientFile = join(dir, 'widget.ts');
+    writeFileSync(clientFile, `import { n } from './dep.ts';\nexport function init() { return n; }\n`);
+
+    await buildClientJS(clientFile);
+    const code = await bundleClientJSDev(clientFile, 'module');
+    expect(code).toMatch(/\bexport\b/);
+    expect(code).not.toMatch(/\bimport\s+.*from\s+['"]\.\//);
   });
 });

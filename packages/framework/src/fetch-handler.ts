@@ -141,10 +141,11 @@ export function createFetchHandler(
 
     const matched = matchRoute(compiledRoutes, pathname, method);
     if (matched) {
-      const reqWithParams = new Request(request);
-      (reqWithParams as Request & { params?: Record<string, string | undefined> }).params =
+      // Attach params on the original request. `new Request(request)` clones
+      // through Node's Request constructor, which strips Cookie/Origin/Host.
+      (request as Request & { params?: Record<string, string | undefined> }).params =
         matched.params;
-      return matched.route.fetch(reqWithParams);
+      return matched.route.fetch(request);
     }
 
     if (options.onNotMatched) {

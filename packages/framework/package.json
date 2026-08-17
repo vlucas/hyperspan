@@ -35,6 +35,10 @@
       "types": "./src/layout.ts",
       "default": "./src/layout.ts"
     },
+    "./dev-bindings": {
+      "types": "./src/dev-bindings.ts",
+      "default": "./src/dev-bindings.ts"
+    },
     "./client/css": {
       "types": "./src/client/css.ts",
       "default": "./src/client/css.ts"
@@ -97,7 +101,7 @@
     "@types/node": "^24.10.0",
     "prettier": "^3.5.2",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@hyperspan/html": "^2.0.0-alpha.4",

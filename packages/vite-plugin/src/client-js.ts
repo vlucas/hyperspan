@@ -54,10 +54,11 @@ export function clientJSRollupInput(): Record<string, string> {
 }
 
 /**
- * Bundle a `buildClientJS(..., { type: 'iife' })` entry as a classic script (no import/export).
+ * Bundle a client script for dev serving (works for sources outside Vite root, e.g. linked packages).
  */
-export async function bundleIifeClientJS(
+export async function bundleClientJSDev(
   absPath: string,
+  type: ClientJSEntry['type'],
   options: { minify?: boolean } = {}
 ): Promise<string> {
   const esbuild = await import('esbuild');
@@ -65,7 +66,7 @@ export async function bundleIifeClientJS(
     absWorkingDir: dirname(absPath),
     entryPoints: [absPath],
     bundle: true,
-    format: 'iife',
+    format: type === 'iife' ? 'iife' : 'esm',
     platform: 'browser',
     write: false,
     minify: options.minify ?? false,
@@ -73,18 +74,19 @@ export async function bundleIifeClientJS(
   });
   const code = result.outputFiles?.[0]?.text;
   if (!code) {
-    throw new Error(`[Hyperspan] Failed to bundle IIFE client script: ${absPath}`);
+    throw new Error(`[Hyperspan] Failed to bundle client script: ${absPath}`);
   }
   return code;
 }
 
-function toViteTransformUrl(absPath: string, root: string): string {
-  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/$/, '');
-  const normalized = absPath.replace(/\\/g, '/');
-  if (normalized === normalizedRoot || normalized.startsWith(`${normalizedRoot}/`)) {
-    return normalized.slice(normalizedRoot.length) || '/';
-  }
-  return `/@fs${normalized}`;
+/**
+ * Bundle a `buildClientJS(..., { type: 'iife' })` entry as a classic script (no import/export).
+ */
+export async function bundleIifeClientJS(
+  absPath: string,
+  options: { minify?: boolean } = {}
+): Promise<string> {
+  return bundleClientJSDev(absPath, 'iife', options);
 }
 
 export function clientJSPlugin(): Plugin {
@@ -103,21 +105,18 @@ export function clientJSPlugin(): Plugin {
     },
 
     async buildStart() {
+      if (command !== 'build') return;
+
       for (const entry of getClientJSEntries()) {
         const absPath = existingClientFile(entry);
         if (entry.type === 'iife' || !absPath) continue;
-        try {
-          this.emitFile({
-            type: 'chunk',
-            id: absPath,
-            fileName: `_hs/js/${entry.esmName}.js`,
-          });
-        } catch {
-          // Serve mode — client modules are resolved via Vite resolveId/load.
-        }
+        this.emitFile({
+          type: 'chunk',
+          id: absPath,
+          fileName: `_hs/js/${entry.esmName}.js`,
+        });
       }
 
-      if (command !== 'build') return;
       for (const entry of getClientJSEntries()) {
         const absPath = existingClientFile(entry);
         if (entry.type !== 'iife' || !absPath) continue;
@@ -206,7 +205,7 @@ export async function buildRegisteredClientJS(
           formats: ['es'],
           fileName: (_format, entryName) => `_hs/js/${entryName}.js`,
         },
-        rollupOptions: {
+        rolldownOptions: {
           output: {
             exports: 'named',
           },
@@ -244,11 +243,7 @@ export async function handleClientJSDevRequestFromReq(
 
   try {
     const entry = getClientJSEntryByEsmName(basename(url, '.js'));
-    const code =
-      entry?.type === 'iife'
-        ? await bundleIifeClientJS(source)
-        : (await viteServer.transformRequest(toViteTransformUrl(source, viteServer.config.root)))
-            ?.code;
+    const code = await bundleClientJSDev(source, entry?.type ?? 'module');
     if (!code) {
       next();
       return;

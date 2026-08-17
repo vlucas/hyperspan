@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'vitest';
-import { createRoute, createServer, createContext } from './server';
+import { createRoute, createServer, createContext, initServerRoutes } from './server';
 import { createAction } from './actions';
 import { html, placeholder } from '@hyperspan/html';
 import type { Hyperspan as HS } from './types';
@@ -90,6 +90,25 @@ test('server returns a route with a POST request', async () => {
   expect(response).toBeInstanceOf(Response);
   expect(response.status).toBe(200);
   expect(await response.text()).toBe('<h1>POST /users</h1>');
+});
+
+test('POST HTML response does not inherit request Content-Length', async () => {
+  const route = createRoute().post((context: HS.Context) => {
+    return context.res.html('<h1>hello world this is longer than the form body</h1>');
+  });
+  const body = 'email=a@b.com&password=secret';
+  const request = new Request('http://localhost:3000/', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      'content-length': String(body.length),
+    },
+    body,
+  });
+  const response = await route.fetch(request);
+  const text = await response.text();
+  expect(text).toBe('<h1>hello world this is longer than the form body</h1>');
+  expect(Number(response.headers.get('content-length') ?? text.length)).toBe(text.length);
 });
 
 test('server returns a route with a ALL request', async () => {
@@ -565,4 +584,32 @@ describe('when streaming is disabled', () => {
     expect(text).not.toContain('Outer placeholder');
     expect(text).not.toContain('hs:loading');
   });
+});
+
+test('initServerRoutes runs beforeRoutesAdded, then addRoutes, then afterRoutesAdded', async () => {
+  const order: string[] = [];
+  const server = await createServer({
+    appDir: './app',
+    publicDir: './public',
+    plugins: [],
+  });
+
+  await initServerRoutes(
+    server,
+    {
+      beforeRoutesAdded(s) {
+        order.push('before');
+        s.use(async (_c, next) => next());
+      },
+      afterRoutesAdded() {
+        order.push('after');
+      },
+    },
+    () => {
+      order.push('routes');
+    }
+  );
+
+  expect(order).toEqual(['before', 'routes', 'after']);
+  expect(server._middleware['*']).toHaveLength(1);
 });
