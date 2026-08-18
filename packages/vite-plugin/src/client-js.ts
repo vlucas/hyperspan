@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ViteDevServer } from 'vite';
@@ -25,18 +25,33 @@ function existingClientFile(entry: ClientJSEntry): string | null {
   return existsSync(entry.absPath) ? entry.absPath : null;
 }
 
-export function resolveClientJSSource(id: string): string | null {
+function clientEsmNameFromPublicUrl(id: string): string | null {
   const publicPath = publicClientJSPath(id);
   if (!publicPath) {
     return null;
   }
 
   const fileName = basename(publicPath);
-  if (!fileName.startsWith('client-')) {
+  if (!fileName.startsWith('client-') || !fileName.endsWith('.js')) {
     return null;
   }
 
-  const entry = getClientJSEntryByEsmName(basename(fileName, '.js'));
+  const base = fileName.slice(0, -3);
+  if (getClientJSEntryByEsmName(base)) {
+    return base;
+  }
+
+  const withViteHash = base.match(/^(client-[0-9a-f]{16})(?:-[a-zA-Z0-9]+)?$/);
+  return withViteHash?.[1] ?? null;
+}
+
+export function resolveClientJSSource(id: string): string | null {
+  const esmName = clientEsmNameFromPublicUrl(id);
+  if (!esmName) {
+    return null;
+  }
+
+  const entry = getClientJSEntryByEsmName(esmName);
   if (!entry) {
     return null;
   }
@@ -91,6 +106,7 @@ export async function bundleIifeClientJS(
 
 export function clientJSPlugin(): Plugin {
   let command: 'build' | 'serve' = 'serve';
+  const emitted = new Map<string, string>();
 
   return {
     name: 'hyperspan-client-js',
@@ -105,35 +121,37 @@ export function clientJSPlugin(): Plugin {
     },
 
     async buildStart() {
+      emitted.clear();
       if (command !== 'build') return;
 
       for (const entry of getClientJSEntries()) {
         const absPath = existingClientFile(entry);
         if (entry.type === 'iife' || !absPath) continue;
-        this.emitFile({
+        const ref = this.emitFile({
           type: 'chunk',
           id: absPath,
-          fileName: `_hs/js/${entry.esmName}.js`,
+          name: entry.esmName,
         });
+        emitted.set(entry.esmName, ref);
       }
 
       for (const entry of getClientJSEntries()) {
         const absPath = existingClientFile(entry);
         if (entry.type !== 'iife' || !absPath) continue;
         const code = await bundleIifeClientJS(absPath, { minify: true });
-        this.emitFile({
+        const ref = this.emitFile({
           type: 'asset',
-          fileName: `_hs/js/${entry.esmName}.js`,
+          name: entry.esmName,
+          originalFileName: `${entry.esmName}.js`,
           source: code,
         });
+        emitted.set(entry.esmName, ref);
       }
     },
 
-    generateBundle(_outputOptions, bundle) {
-      for (const fileName of Object.keys(bundle)) {
-        const base = basename(fileName.split('?')[0], '.js');
-        if (!base.startsWith('client-')) continue;
-        registerImport(base, `/${fileName}`);
+    generateBundle() {
+      for (const [esmName, ref] of emitted) {
+        registerImport(esmName, `/${this.getFileName(ref)}`);
       }
     },
 
@@ -180,18 +198,15 @@ export async function buildRegisteredClientJS(
   const imports: Record<string, string> = {};
 
   for (const entry of iifeEntries) {
-    const code = await bundleIifeClientJS(entry.absPath, { minify: true });
-    const outFile = join(outDir, '_hs/js', `${entry.esmName}.js`);
-    mkdirSync(dirname(outFile), { recursive: true });
-    writeFileSync(outFile, code);
-    imports[entry.esmName] = `/_hs/js/${entry.esmName}.js`;
+    const publicPath = await writeHashedIifeClientJS(entry.absPath, entry.esmName, outDir);
+    imports[entry.esmName] = publicPath;
   }
 
   if (esmEntries.length > 0) {
     const { build } = await import('vite');
     const input = Object.fromEntries(esmEntries.map((entry) => [entry.esmName, entry.absPath]));
 
-    await build({
+    const buildResult = await build({
       root,
       configFile: false,
       logLevel: 'warn',
@@ -203,10 +218,10 @@ export async function buildRegisteredClientJS(
         lib: {
           entry: input,
           formats: ['es'],
-          fileName: (_format, entryName) => `_hs/js/${entryName}.js`,
         },
         rolldownOptions: {
           output: {
+            entryFileNames: '_hs/js/[name]-[hash].js',
             exports: 'named',
           },
         },
@@ -216,12 +231,52 @@ export async function buildRegisteredClientJS(
       },
     });
 
+    const results = Array.isArray(buildResult) ? buildResult : [buildResult];
+    for (const result of results) {
+      if (!result || !('output' in result)) continue;
+      for (const item of result.output) {
+        if (item.type === 'chunk' && item.name.startsWith('client-')) {
+          imports[item.name] = `/${item.fileName}`.replace(/\\/g, '/');
+        }
+      }
+    }
+
     for (const entry of esmEntries) {
-      imports[entry.esmName] = `/_hs/js/${entry.esmName}.js`;
+      imports[entry.esmName] ??= `/_hs/js/${entry.esmName}.js`;
     }
   }
 
   return imports;
+}
+
+async function writeHashedIifeClientJS(
+  absPath: string,
+  esmName: string,
+  outDir: string
+): Promise<string> {
+  const esbuild = await import('esbuild');
+  const jsDir = join(outDir, '_hs/js');
+  mkdirSync(jsDir, { recursive: true });
+  const result = await esbuild.build({
+    absWorkingDir: dirname(absPath),
+    entryPoints: { [esmName]: absPath },
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    write: true,
+    minify: true,
+    outdir: jsDir,
+    entryNames: '[name]-[hash]',
+    logLevel: 'silent',
+    metafile: true,
+  });
+  const output = Object.keys(result.metafile?.outputs ?? {}).find((filePath) =>
+    basename(filePath).startsWith(`${esmName}-`)
+  );
+  if (!output) {
+    throw new Error(`[Hyperspan] Failed to emit hashed IIFE client script: ${absPath}`);
+  }
+  return `/_hs/js/${basename(output)}`;
 }
 
 export function isClientJSRequest(url: string): boolean {
@@ -242,7 +297,9 @@ export async function handleClientJSDevRequestFromReq(
   }
 
   try {
-    const entry = getClientJSEntryByEsmName(basename(url, '.js'));
+    const entry = getClientJSEntryByEsmName(
+      clientEsmNameFromPublicUrl(url) ?? basename(url, '.js')
+    );
     const code = await bundleClientJSDev(source, entry?.type ?? 'module');
     if (!code) {
       next();

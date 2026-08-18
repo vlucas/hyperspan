@@ -69,8 +69,12 @@ export namespace Hyperspan {
     outDir: string;
   };
 
+  export type ServerCreateContext = {
+    env: unknown;
+  };
+
   export type DeployEntryContext = {
-    createHyperspanServer: () => Promise<Server>;
+    createHyperspanServer: (ctx: ServerCreateContext) => Promise<Server>;
     config: Config;
   };
 
@@ -78,6 +82,18 @@ export namespace Hyperspan {
     start?(options?: { port?: number }): unknown | Promise<unknown>;
     fetch?(request: Request, env?: unknown, ctx?: unknown): Response | Promise<Response>;
   };
+
+  /** Optional snippets interpolated into generated `dist/server.ts`. Null/omitted slots emit nothing. */
+  export type ServerEntrySlots = {
+    beforeFileContent?: string | null;
+    beforeCreateServer?: string | null;
+    afterCreateServer?: string | null;
+    beforeRoutes?: string | null;
+    afterRoutes?: string | null;
+    afterFileContent?: string | null;
+  };
+
+  export type ServerEntryTemplate = (slots?: ServerEntrySlots) => string;
 
   export type Adapter = {
     /** Diagnostic name, e.g. `node`, `cloudflare`. */
@@ -88,17 +104,16 @@ export namespace Hyperspan {
      */
     devModule?: string;
     resolveDevEnv?(root: string): Promise<unknown>;
-    /** Platform entry (`start` and/or `fetch`). Called from generated `dist/server.ts`. */
-    createEntry(ctx: DeployEntryContext): DeployEntry;
+    /**
+     * Render generated `dist/server.ts` from the shared bootstrap template.
+     * Fill slots (especially `afterFileContent`) for the platform entry.
+     */
+    renderServerEntry(template: ServerEntryTemplate): string | Promise<string>;
     afterBuild?(ctx: AdapterAfterBuildContext): void | Promise<void>;
   };
 
   /** Runtime adapter object (`nodeAdapter()`, `cloudflareAdapter()`, …). */
   export type DeployAdapter = Adapter;
-
-  export type ServerCreateContext = {
-    env: unknown;
-  };
 
   export type Config = {
     appDir: string;
@@ -415,7 +430,7 @@ export namespace Hyperspan {
    * Client JS Module = ESM Module + Public Path + Render Script Tag
    */
   export type ClientJSBuildResult = {
-    assetHash: string; // Asset hash of the module path
+    assetHash: string; // Identity of the resolved path; production file hash comes from Vite
     esmName: string; // Filename of the built JavaScript file without the extension
     publicPath: string; // Full public path of the built JavaScript file
     /**
@@ -443,6 +458,8 @@ export type Adapter = Hyperspan.Adapter;
 export type AdapterAfterBuildContext = Hyperspan.AdapterAfterBuildContext;
 export type DeployEntry = Hyperspan.DeployEntry;
 export type DeployEntryContext = Hyperspan.DeployEntryContext;
+export type ServerEntrySlots = Hyperspan.ServerEntrySlots;
+export type ServerEntryTemplate = Hyperspan.ServerEntryTemplate;
 
 declare global {
   interface DocumentEventMap {

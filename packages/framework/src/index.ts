@@ -35,4 +35,6 @@ export type {
   AdapterAfterBuildContext,
   DeployEntry,
   DeployEntryContext,
+  ServerEntrySlots,
+  ServerEntryTemplate,
 } from './types';

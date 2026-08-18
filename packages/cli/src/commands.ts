@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import packageJson from '../package.json';
-import { createHyperspanServer, loadConfig } from './server';
+import { loadConfig } from './server';
 
 const program = new Command();
 
@@ -109,24 +109,19 @@ program
     console.log('[Hyperspan] Starting production server...');
 
     const serverEntry = join(process.cwd(), 'dist/server.ts');
-    if (fs.existsSync(serverEntry)) {
-      const mod = await import(pathToFileURL(serverEntry).href);
-      if (typeof mod.start === 'function') {
-        await mod.start({ port: Number(options.port) });
-        return;
-      }
-    }
-
-    const config = await loadConfig();
-    const start = config.deployAdapter.createEntry({
-      createHyperspanServer,
-      config,
-    }).start;
-    if (typeof start !== 'function') {
-      console.error('[Hyperspan] This deploy adapter has no start()');
+    if (!fs.existsSync(serverEntry)) {
+      console.error('[Hyperspan] dist/server.ts not found. Run hyperspan build first.');
       process.exit(1);
     }
-    await start({ port: Number(options.port) });
+
+    const mod = await import(pathToFileURL(serverEntry).href);
+    if (typeof mod.start !== 'function') {
+      console.error(
+        '[Hyperspan] dist/server.ts has no start() — use Wrangler for Cloudflare Workers.'
+      );
+      process.exit(1);
+    }
+    await mod.start({ port: Number(options.port) });
   });
 
 program

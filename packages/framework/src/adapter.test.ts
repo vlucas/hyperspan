@@ -4,11 +4,7 @@ import { createConfig } from './server';
 
 const cloudflare: Adapter = {
   name: 'cloudflare',
-  createEntry() {
-    return {
-      fetch: async () => new Response('ok'),
-    };
-  },
+  renderServerEntry: (template) => template(),
 };
 
 describe('createConfig deployAdapter', () => {

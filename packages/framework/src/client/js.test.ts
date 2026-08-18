@@ -2,7 +2,9 @@ import { describe, expect, test, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { render } from '@hyperspan/html';
+import { setAssetManifest } from './manifest';
 import {
   buildClientJS,
   discoverClientExports,
@@ -10,6 +12,8 @@ import {
   getClientJSEntries,
   registerPathAliases,
   resetClientJSEntriesForTests,
+  stableClientSourceKey,
+  streamingClient,
 } from './js';
 
 describe('buildClientJS', () => {
@@ -17,6 +21,7 @@ describe('buildClientJS', () => {
 
   beforeEach(() => {
     resetClientJSEntriesForTests();
+    setAssetManifest({ imports: {}, css: {}, clients: {}, clientSources: {} });
     const dir = mkdtempSync(join(tmpdir(), 'hs-client-'));
     clientFile = join(dir, 'picker.ts');
     writeFileSync(
@@ -28,7 +33,7 @@ describe('buildClientJS', () => {
     );
   });
 
-  test('registers entry and returns stable esmName from path hash', async () => {
+  test('registers entry with a stable path identity', async () => {
     const result = await buildClientJS(clientFile);
 
     expect(result.esmName).toMatch(/^client-[0-9a-f]{16}$/);
@@ -37,11 +42,38 @@ describe('buildClientJS', () => {
     expect(getClientJSEntries()[0].absPath).toBe(clientFile);
   });
 
+  test('changing file contents does not change the import-map key', async () => {
+    const first = await buildClientJS(clientFile);
+    writeFileSync(clientFile, `export function mountPicker() { return 2; }\n`);
+    resetClientJSEntriesForTests();
+    const second = await buildClientJS(clientFile);
+    expect(second.esmName).toBe(first.esmName);
+  });
+
+  test('publicPath uses the Vite-hashed URL from the import map', async () => {
+    const result = await buildClientJS(clientFile);
+    const hashed = `/_hs/js/${result.esmName}-a1b2c3d4.js`;
+    setAssetManifest({
+      imports: { [result.esmName]: hashed },
+      css: {},
+      clients: {},
+      clientSources: {},
+    });
+    expect(result.publicPath).toBe(hashed);
+  });
+
+  test('absolute path and file URL of the same file share one hash', async () => {
+    const viaAbs = await buildClientJS(clientFile);
+    resetClientJSEntriesForTests();
+    const viaUrl = await buildClientJS(pathToFileURL(clientFile).href);
+    expect(viaUrl.esmName).toBe(viaAbs.esmName);
+  });
+
   test('renderScriptTag with no loader uses import map key', async () => {
     const result = await buildClientJS(clientFile);
     const tag = render(result.renderScriptTag());
 
-    expect(tag).toContain(`import "${result.esmName}"`);
+    expect(tag).toContain(`import '${result.esmName}'`);
     expect(tag).toContain(`data-source-id="${result.assetHash}"`);
   });
 
@@ -53,7 +85,7 @@ describe('buildClientJS', () => {
       })
     );
 
-    expect(tag).toContain(`import {mountPicker} from "${result.esmName}"`);
+    expect(tag).toContain(`import {mountPicker} from '${result.esmName}'`);
     expect(tag).toContain('mountPicker()');
   });
 
@@ -64,11 +96,22 @@ describe('buildClientJS', () => {
     expect(tag).toContain('({ mountPicker }) => mountPicker()');
   });
 
+  test('package specifiers and import.meta.resolve of the same file share one hash', async () => {
+    const spec = '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts';
+    const first = await buildClientJS(spec, { type: 'iife' });
+    resetClientJSEntriesForTests();
+    const second = await buildClientJS(spec, { type: 'iife' });
+    expect(first.esmName).toBe(second.esmName);
+    expect(first.esmName).toBe(streamingClient.esmName);
+    expect(existsSync(getClientJSEntries()[0].absPath)).toBe(true);
+  });
+
   test('import.meta.resolve at the call site registers a real file', async () => {
     const result = await buildClientJS(import.meta.resolve('./_hs/hyperspan-streaming.client.ts'), {
       type: 'iife',
     });
 
+    expect(result.esmName).toBe(streamingClient.esmName);
     expect(result.publicPath).toMatch(/^\/_hs\/js\/client-[0-9a-f]{16}\.js$/);
     expect(getClientJSEntries()[0].type).toBe('iife');
     expect(existsSync(getClientJSEntries()[0].absPath)).toBe(true);
@@ -132,14 +175,19 @@ describe('buildClientJS', () => {
     expect(second.esmName).toBe(result.esmName);
   });
 
-  test('aliased specifiers keep a stable hash when the file is missing', async () => {
-    registerPathAliases({ '~/': '/definitely-missing-hyperspan-root/' });
-    const first = await buildClientJS('~/app/client/missing.ts');
-    resetClientJSEntriesForTests();
-    registerPathAliases({ '~/': '/definitely-missing-hyperspan-root/' });
-    const second = await buildClientJS('~/app/client/missing.ts');
-    expect(first.esmName).toBe(second.esmName);
-    expect(existsSync(getClientJSEntries()[0].absPath)).toBe(false);
+  test('missing files use a build-time hash from clientSources', async () => {
+    const ghost = '/definitely-missing-hyperspan-root/app/client/gone.ts';
+    const builtName = 'client-from-build0123';
+    setAssetManifest({
+      imports: { [builtName]: `/_hs/js/${builtName}.js` },
+      css: {},
+      clients: {},
+      clientSources: { [stableClientSourceKey(ghost)]: builtName },
+    });
+
+    const result = await buildClientJS(ghost);
+    expect(result.esmName).toBe(builtName);
+    expect(result.publicPath).toBe(`/_hs/js/${builtName}.js`);
   });
 });
 

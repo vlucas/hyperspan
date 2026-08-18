@@ -29,16 +29,13 @@ function createCloudflareHandler(server: HS.Server, options: CloudflareAdapterOp
   return { fetch, server };
 }
 
-function createCloudflareDeployEntry(ctx: DeployEntryContext): DeployEntry {
+export function createCloudflareDeployEntry(ctx: DeployEntryContext): DeployEntry {
   let appPromise: ReturnType<typeof createCloudflareHandler> | null = null;
 
   return {
     async fetch(request: Request, env: unknown): Promise<Response> {
       appPromise ??= (async () => {
-        if (ctx.config.beforeServerCreate) {
-          await ctx.config.beforeServerCreate({ env });
-        }
-        const server = await ctx.createHyperspanServer();
+        const server = await ctx.createHyperspanServer({ env });
         const { ASSETS } = env as {
           ASSETS?: { fetch: (request: Request) => Promise<Response> };
         };
@@ -57,12 +54,21 @@ export function cloudflareAdapter(): Adapter {
   return {
     name: 'cloudflare',
     devModule: '@hyperspan/adapter-cloudflare/dev',
-    createEntry: createCloudflareDeployEntry,
+    renderServerEntry: (template) =>
+      template({
+        beforeFileContent: `import '@hyperspan/adapter-cloudflare/polyfills';
+import { createCloudflareDeployEntry } from '@hyperspan/adapter-cloudflare';`,
+        afterFileContent: `export default createCloudflareDeployEntry({
+  createHyperspanServer,
+  config: hyperspanConfig,
+});
+`,
+      }),
     afterBuild({ root, appDir }) {
-      const result = syncWranglerCssAliases(root, { appDir });
-      if (result.updated) {
+      const css = syncWranglerCssAliases(root, { appDir });
+      if (css.updated) {
         console.log(
-          `[Hyperspan] Synced Wrangler CSS aliases (${result.aliasCount}) for Cloudflare deploy`
+          `[Hyperspan] Synced Wrangler CSS aliases (${css.aliasCount}) for Cloudflare deploy`
         );
       }
     },

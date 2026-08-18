@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-vue",
-  "version": "2.0.0-alpha.13",
+  "version": "2.0.0-alpha.14",
   "description": "Hyperspan Plugin for Vue.js Client Islands",
   "type": "module",
   "main": "src/index.ts",
@@ -21,7 +21,7 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.13",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.14",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "vite": "^8.2.1",
@@ -29,9 +29,9 @@
     "vue": "^3.5.0"
   },
   "peerDependencies": {
-    "@hyperspan/html": "^2.0.0-alpha.13",
-    "@hyperspan/framework": "^2.0.0-alpha.13",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.13",
+    "@hyperspan/html": "^2.0.0-alpha.14",
+    "@hyperspan/framework": "^2.0.0-alpha.14",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.14",
     "vite": "^8.0.0"
   },
   "dependencies": {

@@ -74,16 +74,16 @@ export default createRoute().get(async (context) => {
 });
 ```
 
-Prefer a tsconfig alias (`~/app/client/picker.ts`) or a project-root path (`app/client/picker.ts`). Relative `./` / `../` paths error — resolve them at the call site with `import.meta.resolve('./file.ts')`. The Vite plugin registers tsconfig aliases so `buildClientJS` can resolve them, and polyfills `import.meta.resolve` for Vite SSR.
+Prefer a tsconfig alias (`~/app/client/picker.ts`), a project-root path (`app/client/foo.ts`), or `import.meta.resolve('./file.ts')` at the call site. The import-map key is a stable identity of the resolved file. Vite/esbuild content-hash the emitted filename; `publicPath` uses that URL from the asset manifest. Relative `./` / `../` paths passed as strings error. The Vite plugin registers tsconfig aliases so `buildClientJS` can resolve them, and polyfills `import.meta.resolve` for Vite SSR.
 
 `renderScriptTag()` with no argument emits a module script that imports the bundle via the import map. Pass a function or string to inline bootstrap code that receives the module exports.
 
 ## Scripts
 
-| Command | What it does |
-|---------|----------------|
-| `npm run dev` | `hyperspan dev` — Vite dev server |
-| `npm run build` | `hyperspan build` — production bundle |
+| Command         | What it does                                           |
+| --------------- | ------------------------------------------------------ |
+| `npm run dev`   | `hyperspan dev` — Vite dev server                      |
+| `npm run build` | `hyperspan build` — production bundle                  |
 | `npm run start` | `hyperspan start` — Node via `@hyperspan/adapter-node` |
 
 ## Asset hashing
@@ -92,12 +92,12 @@ Prefer a tsconfig alias (`~/app/client/picker.ts`) or a project-root path (`app/
 
 ## Packages
 
-| Package | Purpose |
-|---------|---------|
-| `@hyperspan/vite-plugin` | Vite integration, route loading, manifest |
-| `@hyperspan/adapter-node` | Node.js HTTP server (default) |
-| `@hyperspan/adapter-cloudflare` | Cloudflare Workers |
-| `@hyperspan/adapter-bun` | Optional Bun runtime |
+| Package                         | Purpose                                   |
+| ------------------------------- | ----------------------------------------- |
+| `@hyperspan/vite-plugin`        | Vite integration, route loading, manifest |
+| `@hyperspan/adapter-node`       | Node.js HTTP server (default)             |
+| `@hyperspan/adapter-cloudflare` | Cloudflare Workers                        |
+| `@hyperspan/adapter-bun`        | Optional Bun runtime                      |
 
 ## Framework API
 
@@ -116,7 +116,7 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
    ```bash
    npm install hyperspan@alpha @hyperspan/framework@alpha @hyperspan/vite-plugin@alpha
    ```
-   Or pin a specific pre-release: `^2.0.0-alpha.13`
+   Or pin a specific pre-release: `^2.0.0-alpha.14`
 2. **Add `vite.config.ts`** (copy from starter template).
 3. **Update `package.json` scripts** to use `npm run dev/build/start`.
 4. **Run `npm run build`** before deploying.
@@ -124,7 +124,7 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
 
 ## Cloudflare Workers
 
-Pass `cloudflareAdapter()` to `deployAdapter` in `hyperspan.config.ts`. The adapter supplies the Worker entry, Wrangler dev env, and CSS-alias sync.
+Pass `cloudflareAdapter()` to `deployAdapter` in `hyperspan.config.ts`. The adapter’s `renderServerEntry` generates the Worker file (polyfill import + `export default` fetch entry), plus Wrangler dev env and CSS-alias sync after build.
 
 ```ts
 import { createConfig } from '@hyperspan/framework';

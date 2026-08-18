@@ -1,7 +1,7 @@
 {
   "name": "hyperspan-app",
   "description": "Hyperspan.dev starter template",
-  "version": "2.0.0-alpha.13",
+  "version": "2.0.0-alpha.14",
   "type": "module",
   "scripts": {
     "dev": "hyperspan dev",
@@ -19,14 +19,14 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.13",
-    "@hyperspan/html": "^2.0.0-alpha.13",
-    "@hyperspan/plugin-preact": "^2.0.0-alpha.13",
-    "@hyperspan/plugin-svelte": "^2.0.0-alpha.13",
-    "@hyperspan/plugin-vue": "^2.0.0-alpha.13",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.13",
+    "@hyperspan/framework": "^2.0.0-alpha.14",
+    "@hyperspan/html": "^2.0.0-alpha.14",
+    "@hyperspan/plugin-preact": "^2.0.0-alpha.14",
+    "@hyperspan/plugin-svelte": "^2.0.0-alpha.14",
+    "@hyperspan/plugin-vue": "^2.0.0-alpha.14",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.14",
     "@tailwindcss/typography": "^0.5.19",
-    "hyperspan": "^2.0.0-alpha.13",
+    "hyperspan": "^2.0.0-alpha.14",
     "preact": "^10.29.0",
     "svelte": "^5.39.0",
     "tailwindcss": "^4.2.2",

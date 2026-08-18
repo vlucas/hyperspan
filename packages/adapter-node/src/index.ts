@@ -158,13 +158,10 @@ async function serveStaticFile(
   }
 }
 
-function createNodeDeployEntry(ctx: DeployEntryContext): DeployEntry {
+export function createNodeDeployEntry(ctx: DeployEntryContext): DeployEntry {
   return {
     async start(options: { port?: number } = {}) {
-      if (ctx.config.beforeServerCreate) {
-        await ctx.config.beforeServerCreate({ env: process.env });
-      }
-      const server = await ctx.createHyperspanServer();
+      const server = await ctx.createHyperspanServer({ env: process.env });
       return startNodeServer(server, { port: options.port ?? 3000, publicDir: './dist' });
     },
   };
@@ -176,6 +173,18 @@ function createNodeDeployEntry(ctx: DeployEntryContext): DeployEntry {
 export function nodeAdapter(): Adapter {
   return {
     name: 'node',
-    createEntry: createNodeDeployEntry,
+    renderServerEntry: (template) =>
+      template({
+        beforeFileContent: `import { createNodeDeployEntry } from '@hyperspan/adapter-node';`,
+        afterFileContent: `const __hs_entry = createNodeDeployEntry({
+  createHyperspanServer,
+  config: hyperspanConfig,
+});
+export async function start(options: { port?: number } = {}) {
+  return __hs_entry.start?.(options);
+}
+export default __hs_entry;
+`,
+      }),
   };
 }

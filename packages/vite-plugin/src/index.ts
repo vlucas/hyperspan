@@ -26,7 +26,11 @@ import {
   clientJSRollupInput,
 } from './client-js';
 import { importMetaResolvePlugin } from './import-meta-resolve';
-import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
+import {
+  getClientJSEntries,
+  getClientJSSourceMap,
+  registerPathAliases,
+} from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 import { applyWebResponseToNode, incomingRequestUrl, nodeToWebRequest } from './node-http';
@@ -52,7 +56,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   let viteDevServer: ViteDevServer | null = null;
   let hsConfig: HS.Config;
   let serverInstance: HS.Server | null = null;
-  let manifest: AssetManifest = { imports: {}, css: {}, clients: {} };
+  let manifest: AssetManifest = { imports: {}, css: {}, clients: {}, clientSources: {} };
   let fetchHandler: ((req: Request) => Promise<Response>) | null = null;
   let command: 'build' | 'serve' = 'serve';
 
@@ -80,8 +84,12 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
             output: {
               entryFileNames: (chunkInfo) =>
                 chunkInfo.name.startsWith('client-')
-                  ? `_hs/js/${chunkInfo.name}.js`
+                  ? `_hs/js/${chunkInfo.name}-[hash].js`
                   : 'assets/[name]-[hash].js',
+              assetFileNames: (assetInfo) =>
+                (assetInfo.name ?? '').startsWith('client-')
+                  ? '_hs/js/[name]-[hash][extname]'
+                  : 'assets/[name]-[hash][extname]',
             },
           },
         },
@@ -171,13 +179,17 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
           getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
         ),
       };
+      const clientSources: AssetManifest['clientSources'] = {
+        ...manifest.clientSources,
+        ...getClientJSSourceMap(),
+      };
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         const publicPath = `/${fileName}`;
-        const esmName = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
-        if (esmName.startsWith('client-')) {
-          imports[esmName] = publicPath;
-          clients[esmName] = publicPath;
+        const clientName = clientImportKeyFromBundleEntry(fileName, chunk);
+        if (clientName) {
+          imports[clientName] = publicPath;
+          clients[clientName] = publicPath;
         }
 
         if (chunk.type !== 'chunk') continue;
@@ -187,7 +199,10 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
           fileName.includes('_hs/js/islands/island-') ||
           fileName.includes('_hs/js/client-')
         ) {
-          imports[esmName] = publicPath;
+          const islandName = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
+          if (!clientName) {
+            imports[islandName] = publicPath;
+          }
         }
 
         if ('viteMetadata' in chunk) {
@@ -206,6 +221,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         ...manifest,
         imports: { ...imports, ...getAssetManifest().imports },
         clients,
+        clientSources,
       };
       setAssetManifest(manifest);
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
@@ -296,6 +312,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         appDir: hsConfig.appDir ?? './app',
         configFile:
           typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+        adapter: hsConfig.deployAdapter,
       });
       console.log('[Hyperspan] Generated production server entry');
     } finally {
@@ -371,6 +388,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         appDir: hsConfig.appDir ?? './app',
         configFile:
           typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+        adapter: hsConfig.deployAdapter,
       });
     } catch (err) {
       console.warn('[Hyperspan] Could not sync production server entry:', err);
@@ -410,6 +428,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
       clients: Object.fromEntries(
         getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
       ),
+      clientSources: getClientJSSourceMap(),
     };
     setAssetManifest(manifest);
   }
@@ -662,6 +681,18 @@ async function serveStatic(
   } catch {
     return undefined;
   }
+}
+
+function clientImportKeyFromBundleEntry(
+  fileName: string,
+  chunk: { type?: string; name?: string }
+): string | null {
+  if (chunk.name?.startsWith('client-')) {
+    return chunk.name.replace(/\.js$/, '');
+  }
+  const base = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
+  const match = base.match(/^(client-[0-9a-f]{16})(?:-[a-zA-Z0-9]+)?$/);
+  return match?.[1] ?? null;
 }
 
 function emitManifestFile(root: string, manifest: AssetManifest, buildOutDir = 'dist') {

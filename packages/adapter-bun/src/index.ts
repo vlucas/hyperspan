@@ -37,13 +37,10 @@ function startBunServer(server: HS.Server, options: BunAdapterOptions = {}) {
   return httpServer;
 }
 
-function createBunDeployEntry(ctx: DeployEntryContext): DeployEntry {
+export function createBunDeployEntry(ctx: DeployEntryContext): DeployEntry {
   return {
     async start(options: { port?: number } = {}) {
-      if (ctx.config.beforeServerCreate) {
-        await ctx.config.beforeServerCreate({ env: process.env });
-      }
-      const server = await ctx.createHyperspanServer();
+      const server = await ctx.createHyperspanServer({ env: process.env });
       return startBunServer(server, { port: options.port ?? 3000 });
     },
   };
@@ -55,6 +52,18 @@ function createBunDeployEntry(ctx: DeployEntryContext): DeployEntry {
 export function bunAdapter(): Adapter {
   return {
     name: 'bun',
-    createEntry: createBunDeployEntry,
+    renderServerEntry: (template) =>
+      template({
+        beforeFileContent: `import { createBunDeployEntry } from '@hyperspan/adapter-bun';`,
+        afterFileContent: `const __hs_entry = createBunDeployEntry({
+  createHyperspanServer,
+  config: hyperspanConfig,
+});
+export async function start(options: { port?: number } = {}) {
+  return __hs_entry.start?.(options);
+}
+export default __hs_entry;
+`,
+      }),
   };
 }

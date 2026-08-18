@@ -30,13 +30,13 @@ export default createConfig({
 });
 ```
 
-`hyperspan build` generates `dist/server.ts` from the adapter’s `createEntry()`.
+`hyperspan build` generates `dist/server.ts` via the deploy adapter’s `renderServerEntry(template)`. Each adapter fills template slots (`beforeFileContent` for imports, `afterFileContent` for the platform entry) — Node/Bun export `start()`, Cloudflare exports a Worker `fetch` default.
 
-| Adapter | `deployAdapter` | Entry |
-|---------|-----------------|-------|
+| Adapter                             | `deployAdapter`          | Entry     |
+| ----------------------------------- | ------------------------ | --------- |
 | `@hyperspan/adapter-node` (default) | omit, or `nodeAdapter()` | `start()` |
-| `@hyperspan/adapter-bun` | `bunAdapter()` | `start()` |
-| `@hyperspan/adapter-cloudflare` | `cloudflareAdapter()` | `fetch()` |
+| `@hyperspan/adapter-bun`            | `bunAdapter()`           | `start()` |
+| `@hyperspan/adapter-cloudflare`     | `cloudflareAdapter()`    | `fetch()` |
 
 Use `beforeServerCreate({ env })` to wire platform bindings. On Node/Bun, `env` is `process.env`. On Cloudflare, `cloudflareAdapter()` loads Wrangler bindings during `hyperspan dev` and the Worker `env` in production.
 

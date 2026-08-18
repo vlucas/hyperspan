@@ -10,7 +10,7 @@ same hooks.
 
 - Do not add hard-coded names, allowlists, or special cases for built-in behavior (`streaming`, `actions`, a specific
         island, a specific adapter, …).
-- Do not fork an internal path that apps cannot use. If built-in client JS must run as a classic script, that is `buildClientJS('~/app/client/file.ts', { type: 'iife' })` — the same call an app uses. Prefer a tsconfig alias or project-root path. Relative `./` / `../` paths must use `import.meta.resolve('./file.ts')` at the call site.
+- Do not fork an internal path that apps cannot use. If built-in client JS must run as a classic script, that is `buildClientJS(import.meta.resolve('./file.ts'), { type: 'iife' })` — the same call an app uses. Prefer `import.meta.resolve()` at the call site, a tsconfig alias, or a project-root path. The import-map key is a stable resolved-path identity; Vite/esbuild content-hash the emitted file. Relative `./` / `../` strings passed to `buildClientJS` must use `import.meta.resolve('./file.ts')` at the call site.
 - When a new requirement shows up, extend the public API (options, registries, events). Then use that extension inside
 the framework.
 - Built-ins are just default registrations of those APIs, not privileged exceptions.
