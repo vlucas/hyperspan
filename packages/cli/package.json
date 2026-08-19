@@ -41,7 +41,7 @@
     "@hyperspan/plugin-preact": "^2.0.0-alpha.16",
     "@hyperspan/plugin-svelte": "^2.0.0-alpha.16",
     "@hyperspan/plugin-vue": "^2.0.0-alpha.16",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.16",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.17",
     "commander": "^14.0.3",
     "degit": "^2.8.4",
     "fast-glob": "^3.3.3",
