@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/vite-plugin",
-  "version": "2.0.0-alpha.16",
+  "version": "2.0.0-alpha.17",
   "description": "Vite plugin for Hyperspan apps",
   "type": "module",
   "public": true,

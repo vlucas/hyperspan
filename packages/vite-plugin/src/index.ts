@@ -124,7 +124,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         // Production build: route/CSS discovery runs in closeBundle via a
         // temporary Vite SSR server (buildStart has no module graph yet).
       } catch (err) {
-        console.error('[Hyperspan] Failed to load routes during buildStart:', err);
+        reportLoadFailure('Loading the Hyperspan config and routes', err);
       }
     },
 
@@ -165,7 +165,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         return;
       }
       setupDevMiddleware(server);
-      rebuildServer().catch((err) => console.error('[Hyperspan] Failed to load routes:', err));
+      rebuildServer().catch((err) => reportLoadFailure('Loading routes', err));
     },
 
     generateBundle(_outputOptions, bundle) {
@@ -224,7 +224,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         try {
           await discoverRoutesForBuild();
         } catch (err) {
-          console.error('[Hyperspan] Failed to discover routes/CSS during build:', err);
+          reportLoadFailure('Route and CSS discovery', err);
         }
       }
       const imports = { ...getAssetManifest().imports, ...manifest.imports };
@@ -235,6 +235,19 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
     },
   };
+
+  /** Fail the build on a load error, or log it and keep the dev server up. */
+  function reportLoadFailure(stage: string, err: unknown): void {
+    if (command === 'build') {
+      console.error(`[Hyperspan] ${stage} failed. Stopping the build.`);
+      throw err;
+    }
+
+    console.error(
+      `[Hyperspan] ${stage} failed. The dev server is still running — fix the error and save to retry.`
+    );
+    console.error(err);
+  }
 
   /**
    * During `vite build`, spin up a middleware-mode Vite server so we can
