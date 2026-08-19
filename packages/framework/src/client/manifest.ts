@@ -4,15 +4,12 @@ export type AssetManifest = {
   imports: Record<string, string>;
   css: Record<string, string[]>;
   clients: Record<string, string>;
-  /** Resolved path / original specifier → import-map key (`client-{id}`). */
-  clientSources?: Record<string, string>;
 };
 
 let _manifest: AssetManifest = {
   imports: {},
   css: {},
   clients: {},
-  clientSources: {},
 };
 
 /**
@@ -23,7 +20,6 @@ export function setAssetManifest(manifest: AssetManifest): void {
     imports: manifest.imports ?? {},
     css: manifest.css ?? {},
     clients: manifest.clients ?? {},
-    clientSources: { ...(manifest.clientSources ?? {}) },
   };
 }
 

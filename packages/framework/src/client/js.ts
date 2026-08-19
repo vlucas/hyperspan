@@ -3,7 +3,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@hyperspan/html';
 import { assetHash as assetHashFn } from '../utils';
-import { getAssetManifest, getImportMap, registerImport, resolveImport } from './manifest';
+import { getImportMap, registerImport, resolveImport } from './manifest';
 import type { Hyperspan as HS } from '../types';
 
 export { registerImport, resolveImport, getImportMap } from './manifest';
@@ -21,10 +21,17 @@ export type BuildClientJSOptions = {
 export type ClientJSEntry = {
   /** Original path/specifier passed to `buildClientJS`. */
   modulePath: string;
+  /** Resolved file path. Lazy — only a build/dev tool with a filesystem reads this. */
   absPath: string;
-  /** Identities used to look up a stable import-map key when the source file is gone (Workers). */
-  sourceKeys: string[];
-  /** Identity hash of the resolved path (not file contents). */
+  /** Runtime-stable identity of the module. Same value on Vite, Node, and Workers. */
+  identityKey: string;
+  /**
+   * Identity came from a filesystem path rather than a logical specifier. Such an
+   * identity only matches at runtime on a runtime that can resolve paths, so it is
+   * not portable to a Worker.
+   */
+  identityFromPath: boolean;
+  /** Identity hash of `identityKey` (not of file contents). */
   assetHash: string;
   esmName: string;
   publicPath: string;
@@ -33,7 +40,13 @@ export type ClientJSEntry = {
   type: ClientJSType;
 };
 
+export type ClientJSPathIdentity = {
+  modulePath: string;
+  identityKey: string;
+};
+
 const CLIENT_JS_REGISTRY = Symbol.for('@hyperspan/client-js-entries');
+const CLIENT_JS_PATH_IDENTITIES = Symbol.for('@hyperspan/client-js-path-identities');
 const PATH_ALIASES = Symbol.for('@hyperspan/path-aliases');
 
 function getPathAliases(): Record<string, string> {
@@ -61,6 +74,23 @@ function resolveWithAliases(specifier: string): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Client scripts registered from a path rather than a logical specifier, kept outside
+ * the registry. A path identity can coincide with the equivalent project-relative
+ * specifier (`file:///proj/app/client/x.ts` and `app/client/x.ts` share one identity),
+ * so the registry entry may be replaced by whichever form registered last. Deploy
+ * checks need the record regardless of that order.
+ */
+export function getPathIdentityClientJS(): ClientJSPathIdentity[] {
+  const globalPathIdentities = globalThis as {
+    [CLIENT_JS_PATH_IDENTITIES]?: ClientJSPathIdentity[];
+  };
+  if (!globalPathIdentities[CLIENT_JS_PATH_IDENTITIES]) {
+    globalPathIdentities[CLIENT_JS_PATH_IDENTITIES] = [];
+  }
+  return globalPathIdentities[CLIENT_JS_PATH_IDENTITIES];
 }
 
 function getClientJSRegistry(): Map<string, ClientJSEntry> {
@@ -102,9 +132,9 @@ export const JS_IMPORT_MAP = {
 };
 
 /**
- * File URLs from `import.meta.resolve` must not use a cwd-relative pnpm path —
- * that changes between install layouts and Workers. Prefer the path after the
- * last `node_modules/` so published packages stay stable.
+ * File paths must not become a cwd-relative pnpm path — that changes between
+ * install layouts and Workers. Prefer the path after the last `node_modules/`
+ * so published packages stay stable.
  */
 export function stableClientSourceKey(absPath: string): string {
   const normalized = absPath.replace(/\\/g, '/');
@@ -146,24 +176,27 @@ function clientPublicPath(esmName: string): string {
 }
 
 /**
- * Resolve to a real file path. The import-map key hashes `stableClientSourceKey(absPath)`
- * so `import.meta.resolve()`, aliases, and package specifiers of the same file share
- * one key. Vite/esbuild attach a content hash to the emitted filename; `publicPath`
- * reads that from the asset manifest. Relative `./` / `../` paths error — resolve
- * them at the call site.
+ * Identity of a client module, computed with string math only — no filesystem and
+ * no `import.meta.resolve`. Workers can therefore build the same identity (and so
+ * the same public URL) that Vite used at build time.
+ *
+ * A logical specifier (package export, tsconfig alias, project-root path) is its
+ * own identity. File URLs and absolute paths fall back to a path identity.
  */
-function resolveClientAbsPath(modulePath: string): string {
-  if (modulePath.startsWith('file://') || isAbsolute(modulePath)) {
-    return toFilePath(modulePath);
+function clientIdentityKey(specifier: string): string {
+  if (specifier.startsWith('file://') || isAbsolute(specifier)) {
+    return stableClientSourceKey(toFilePath(specifier));
   }
+  return specifier;
+}
 
-  const specifier = modulePath.replace(/\\/g, '/');
-  if (specifier.startsWith('.')) {
-    throw new Error(
-      `[Hyperspan] buildClientJS(${JSON.stringify(modulePath)}) got a relative path. ` +
-        `Use import.meta.resolve(${JSON.stringify(modulePath)}) at the call site, ` +
-        `or a tsconfig alias like '~/app/client/file.ts'.`
-    );
+/**
+ * Resolve an identity to a real file path. Only build/dev tooling calls this, so
+ * `import.meta.resolve` never runs during module load on a Worker.
+ */
+function resolveClientAbsPath(specifier: string): string {
+  if (specifier.startsWith('file://') || isAbsolute(specifier)) {
+    return toFilePath(specifier);
   }
 
   const aliased = resolveWithAliases(specifier);
@@ -171,7 +204,9 @@ function resolveClientAbsPath(modulePath: string): string {
     return aliased;
   }
 
-  return tryResolveToFile(specifier) ?? join(process.cwd(), specifier);
+  const cwd =
+    typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
+  return tryResolveToFile(specifier) ?? (cwd ? join(cwd, specifier) : specifier);
 }
 
 function readClientSource(absPath: string): string | undefined {
@@ -185,60 +220,21 @@ function readClientSource(absPath: string): string | undefined {
   return undefined;
 }
 
-function clientSourceKeys(modulePath: string, absPath: string): string[] {
-  const keys = new Set<string>([stableClientSourceKey(absPath), modulePath.replace(/\\/g, '/')]);
-  if (modulePath.startsWith('file://')) {
-    keys.add(toFilePath(modulePath));
-  }
-  return [...keys];
-}
-
-function resolveEsmName(sourceKeys: string[], fallbackHash: string): string {
-  const sources = getAssetManifest().clientSources;
-  if (sources) {
-    for (const key of sourceKeys) {
-      if (sources[key]) {
-        return sources[key];
-      }
-    }
-  }
-  return `client-${fallbackHash}`;
-}
-
 export function getClientJSEntries(): ClientJSEntry[] {
   return [...getClientJSRegistry().values()];
 }
 
 export function getClientJSEntryByEsmName(esmName: string): ClientJSEntry | undefined {
-  for (const entry of getClientJSRegistry().values()) {
-    if (currentEsmName(entry) === esmName) {
-      return entry;
-    }
-  }
-  return undefined;
-}
-
-export function getClientJSSourceMap(): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const entry of getClientJSEntries()) {
-    const esmName = currentEsmName(entry);
-    for (const key of entry.sourceKeys) {
-      map[key] = esmName;
-    }
-  }
-  return map;
+  return getClientJSRegistry().get(esmName);
 }
 
 export function resetClientJSEntriesForTests(): void {
   getClientJSRegistry().clear();
+  getPathIdentityClientJS().length = 0;
   const aliases = getPathAliases();
   for (const key of Object.keys(aliases)) {
     delete aliases[key];
   }
-}
-
-function currentEsmName(entry: ClientJSEntry): string {
-  return resolveEsmName(entry.sourceKeys, entry.assetHash);
 }
 
 function registerClientJS(
@@ -246,60 +242,83 @@ function registerClientJS(
   options: BuildClientJSOptions = {}
 ): HS.ClientJSBuildResult {
   const type = options.type ?? 'module';
-  const absPath = resolveClientAbsPath(modulePathResolved);
-  const sourceKeys = clientSourceKeys(modulePathResolved, absPath);
-  const identityKey = stableClientSourceKey(absPath);
-  const hash = assetHashFn(identityKey);
-  const source = readClientSource(absPath);
+  const specifier = modulePathResolved.replace(/\\/g, '/');
+  if (specifier.startsWith('.')) {
+    throw new Error(
+      `[Hyperspan] buildClientJS(${JSON.stringify(modulePathResolved)}) got a relative path, ` +
+        `which has no stable identity across dev, build, and deploy. Use a tsconfig alias ` +
+        `like '~/app/client/file.ts' — the build resolves it, and every runtime (including ` +
+        `Workers, which cannot resolve paths) matches it in the asset manifest.`
+    );
+  }
 
-  let exports = '* as _module';
-  let fnArgs = '_module';
-  if (source) {
-    const discovered = discoverClientExports(source);
-    exports = discovered.exports;
-    fnArgs = discovered.fnArgs;
+  const identityKey = clientIdentityKey(specifier);
+  const identityFromPath = identityKey !== specifier;
+  const hash = assetHashFn(identityKey);
+  const esmName = `client-${hash}`;
+
+  if (identityFromPath) {
+    getPathIdentityClientJS().push({ modulePath: modulePathResolved, identityKey });
+  }
+
+  let absPath: string | undefined;
+  let discovered: { exports: string; fnArgs: string } | undefined;
+
+  // Both are lazy: a Worker renders script tags without a filesystem, and
+  // resolving there would need `import.meta.resolve`, which workerd may reject.
+  function currentAbsPath(): string {
+    return (absPath ??= resolveClientAbsPath(specifier));
+  }
+  function currentExports(): { exports: string; fnArgs: string } {
+    if (!discovered) {
+      const source = readClientSource(currentAbsPath());
+      discovered = source
+        ? discoverClientExports(source)
+        : { exports: '* as _module', fnArgs: '_module' };
+    }
+    return discovered;
   }
 
   const entry: ClientJSEntry = {
     modulePath: modulePathResolved,
-    absPath,
-    sourceKeys,
+    get absPath() {
+      return currentAbsPath();
+    },
+    identityKey,
+    identityFromPath,
     assetHash: hash,
-    get esmName() {
-      return currentEsmName(entry);
-    },
+    esmName,
     get publicPath() {
-      return clientPublicPath(currentEsmName(entry));
+      return clientPublicPath(esmName);
     },
-    exports,
-    fnArgs,
+    get exports() {
+      return currentExports().exports;
+    },
+    get fnArgs() {
+      return currentExports().fnArgs;
+    },
     type,
   };
-  getClientJSRegistry().set(identityKey, entry);
-  registerImport(entry.esmName, entry.publicPath);
+  getClientJSRegistry().set(esmName, entry);
+  registerImport(esmName, entry.publicPath);
 
   return {
-    get assetHash() {
-      return currentEsmName(entry).replace(/^client-/, '');
-    },
-    get esmName() {
-      return currentEsmName(entry);
-    },
+    assetHash: hash,
+    esmName,
     get publicPath() {
-      return clientPublicPath(currentEsmName(entry));
+      return clientPublicPath(esmName);
     },
     renderScriptTag: (loadScript) => {
-      const esmName = currentEsmName(entry);
-      const tagHash = esmName.replace(/^client-/, '');
       if (type === 'iife') {
         return html`<script src="${clientPublicPath(esmName)}"></script>`;
       }
 
       const t = typeof loadScript;
+      const { exports, fnArgs } = currentExports();
 
       if (t === 'string') {
         return html`
-          <script type="module" data-source-id="${tagHash}">
+          <script type="module" data-source-id="${hash}">
             import ${exports} from '${esmName}';
             (${html.raw(loadScript as string)})(${fnArgs});
           </script>
@@ -307,7 +326,7 @@ function registerClientJS(
       }
       if (t === 'function') {
         return html`
-          <script type="module" data-source-id="${tagHash}">
+          <script type="module" data-source-id="${hash}">
             import ${exports} from '${esmName}';
             (${html.raw(functionToString(loadScript))})(${fnArgs});
           </script>
@@ -315,7 +334,7 @@ function registerClientJS(
       }
 
       return html`
-        <script type="module" data-source-id="${tagHash}">
+        <script type="module" data-source-id="${hash}">
           import '${esmName}';
         </script>
       `;
@@ -325,9 +344,12 @@ function registerClientJS(
 
 /**
  * Register a client JS module for Vite to bundle.
- * Prefer `import.meta.resolve('./file.ts')`, a tsconfig alias, or a project-root path.
- * The import-map key is a stable identity of the resolved file. Vite/esbuild content-hash
- * the emitted filename; `publicPath` uses that URL from the asset manifest when present.
+ * Prefer a package export, tsconfig alias, or project-root path
+ * (`@scope/pkg/file.ts`, `~/app/client/foo.ts`, `app/client/foo.ts`) — those need no
+ * filesystem lookup, so Vite, Node, and Workers all derive the same public URL.
+ * Vite/esbuild content-hash the emitted filename; `publicPath` reads that URL from
+ * the asset manifest. Relative `./` / `../` paths must be resolved at the call site
+ * with `import.meta.resolve('./file.ts')`.
  */
 export async function buildClientJS(
   modulePathResolved: string,
@@ -336,12 +358,14 @@ export async function buildClientJS(
   return registerClientJS(modulePathResolved, options);
 }
 
+// Registered through the same public API an app uses. Package-export specifiers keep
+// module load free of `import.meta.resolve`, which workerd rejects after bundling.
 export const streamingClient = registerClientJS(
-  import.meta.resolve('./_hs/hyperspan-streaming.client.ts'),
+  '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts',
   { type: 'iife' }
 );
 export const actionsClient = registerClientJS(
-  import.meta.resolve('./_hs/hyperspan-actions.client.ts')
+  '@hyperspan/framework/client/_hs/hyperspan-actions.client.ts'
 );
 
 /**

@@ -1,9 +1,10 @@
 import { describe, expect, test, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { render } from '@hyperspan/html';
+import { assetHash } from '../utils';
 import { setAssetManifest } from './manifest';
 import {
   buildClientJS,
@@ -12,7 +13,6 @@ import {
   getClientJSEntries,
   registerPathAliases,
   resetClientJSEntriesForTests,
-  stableClientSourceKey,
   streamingClient,
 } from './js';
 
@@ -21,7 +21,7 @@ describe('buildClientJS', () => {
 
   beforeEach(() => {
     resetClientJSEntriesForTests();
-    setAssetManifest({ imports: {}, css: {}, clients: {}, clientSources: {} });
+    setAssetManifest({ imports: {}, css: {}, clients: {} });
     const dir = mkdtempSync(join(tmpdir(), 'hs-client-'));
     clientFile = join(dir, 'picker.ts');
     writeFileSync(
@@ -57,7 +57,6 @@ describe('buildClientJS', () => {
       imports: { [result.esmName]: hashed },
       css: {},
       clients: {},
-      clientSources: {},
     });
     expect(result.publicPath).toBe(hashed);
   });
@@ -96,7 +95,7 @@ describe('buildClientJS', () => {
     expect(tag).toContain('({ mountPicker }) => mountPicker()');
   });
 
-  test('package specifiers and import.meta.resolve of the same file share one hash', async () => {
+  test('package specifiers hash the same wherever the package is installed', async () => {
     const spec = '@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts';
     const first = await buildClientJS(spec, { type: 'iife' });
     resetClientJSEntriesForTests();
@@ -106,21 +105,42 @@ describe('buildClientJS', () => {
     expect(existsSync(getClientJSEntries()[0].absPath)).toBe(true);
   });
 
-  test('import.meta.resolve at the call site registers a real file', async () => {
+  // workerd rejects `import.meta.resolve` after bundling, which crashed Worker startup.
+  test('builtins register without resolving a path at module load', () => {
+    const src = readFileSync(new URL('./js.ts', import.meta.url), 'utf8');
+    const registrations = src.slice(src.indexOf('export const streamingClient'));
+
+    expect(registrations).toContain(
+      "'@hyperspan/framework/client/_hs/hyperspan-streaming.client.ts'"
+    );
+    expect(registrations).toContain(
+      "'@hyperspan/framework/client/_hs/hyperspan-actions.client.ts'"
+    );
+    expect(registrations).not.toContain('import.meta.resolve');
+  });
+
+  // Valid on Node/Bun, which can resolve paths at runtime. Flagged as a path identity
+  // so a Worker build can reject it instead of serving a 404 for a script in dist/.
+  test('import.meta.resolve at the call site registers a real file, flagged as a path identity', async () => {
     const result = await buildClientJS(import.meta.resolve('./_hs/hyperspan-streaming.client.ts'), {
       type: 'iife',
     });
 
-    expect(result.esmName).toBe(streamingClient.esmName);
     expect(result.publicPath).toMatch(/^\/_hs\/js\/client-[0-9a-f]{16}\.js$/);
     expect(getClientJSEntries()[0].type).toBe('iife');
     expect(existsSync(getClientJSEntries()[0].absPath)).toBe(true);
     expect(getClientJSEntries()[0].absPath).toMatch(/hyperspan-streaming\.client\.ts$/);
+    expect(getClientJSEntries()[0].identityFromPath).toBe(true);
   });
 
-  test('relative paths must be resolved at the call site', async () => {
-    await expect(buildClientJS('../client/picker.ts')).rejects.toThrow(/import\.meta\.resolve/);
-    await expect(buildClientJS('./picker.ts')).rejects.toThrow(/import\.meta\.resolve/);
+  test('specifier identities are not flagged as path identities', async () => {
+    await buildClientJS('@hyperspan/framework/client/_hs/hyperspan-actions.client.ts');
+    expect(getClientJSEntries()[0].identityFromPath).toBe(false);
+  });
+
+  test('relative paths are rejected in favor of an alias', async () => {
+    await expect(buildClientJS('../client/picker.ts')).rejects.toThrow(/tsconfig alias/);
+    await expect(buildClientJS('./picker.ts')).rejects.toThrow(/tsconfig alias/);
   });
 
   test('type iife renders a classic script tag', async () => {
@@ -175,19 +195,16 @@ describe('buildClientJS', () => {
     expect(second.esmName).toBe(result.esmName);
   });
 
-  test('missing files use a build-time hash from clientSources', async () => {
-    const ghost = '/definitely-missing-hyperspan-root/app/client/gone.ts';
-    const builtName = 'client-from-build0123';
-    setAssetManifest({
-      imports: { [builtName]: `/_hs/js/${builtName}.js` },
-      css: {},
-      clients: {},
-      clientSources: { [stableClientSourceKey(ghost)]: builtName },
-    });
+  // A Worker has no filesystem: registration must not read the source to get a URL.
+  test('missing source files still resolve to the built URL', async () => {
+    const spec = 'app/client/gone.ts';
+    const esmName = `client-${assetHash(spec)}`;
+    const hashed = `/_hs/js/${esmName}-a1b2c3d4.js`;
+    setAssetManifest({ imports: { [esmName]: hashed }, css: {}, clients: {} });
 
-    const result = await buildClientJS(ghost);
-    expect(result.esmName).toBe(builtName);
-    expect(result.publicPath).toBe(`/_hs/js/${builtName}.js`);
+    const result = await buildClientJS(spec);
+    expect(result.esmName).toBe(esmName);
+    expect(result.publicPath).toBe(hashed);
   });
 });
 

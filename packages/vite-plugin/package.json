@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/vite-plugin",
-  "version": "2.0.0-alpha.15",
+  "version": "2.0.0-alpha.16",
   "description": "Vite plugin for Hyperspan apps",
   "type": "module",
   "public": true,
@@ -28,8 +28,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/adapter-node": "^2.0.0-alpha.15",
-    "@hyperspan/framework": "^2.0.0-alpha.15",
+    "@hyperspan/adapter-node": "^2.0.0-alpha.16",
+    "@hyperspan/framework": "^2.0.0-alpha.16",
     "fast-glob": "^3.3.3",
     "jiti": "^2.7.0",
     "tiny-jsonc": "^1.0.2"

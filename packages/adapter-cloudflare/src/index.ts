@@ -6,6 +6,8 @@ import {
   type FetchHandlerOptions,
 } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
+import { getPathIdentityClientJS } from '@hyperspan/framework/client/js';
+import { assertWorkerPortableClientJS } from './deploy/assert-worker-portable-client-js';
 import { syncWranglerCssAliases } from './deploy/sync-wrangler-css-aliases';
 
 type CloudflareAdapterOptions = FetchHandlerOptions & {
@@ -65,6 +67,8 @@ import { createCloudflareDeployEntry } from '@hyperspan/adapter-cloudflare';`,
 `,
       }),
     afterBuild({ root, appDir }) {
+      assertWorkerPortableClientJS(getPathIdentityClientJS());
+
       const css = syncWranglerCssAliases(root, { appDir });
       if (css.updated) {
         console.log(

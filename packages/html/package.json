@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/html",
-  "version": "2.0.0-alpha.15",
+  "version": "2.0.0-alpha.16",
   "description": "Hyperspan HTML Templates",
   "type": "module",
   "main": "src/html.ts",

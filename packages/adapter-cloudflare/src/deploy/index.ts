@@ -3,6 +3,7 @@ export {
   extractCssImportsFromSource,
   expandCssImportSpecifiers,
 } from './discover-css-imports';
+export { assertWorkerPortableClientJS } from './assert-worker-portable-client-js';
 export {
   syncWranglerCssAliases,
   resolveCssStubPath,

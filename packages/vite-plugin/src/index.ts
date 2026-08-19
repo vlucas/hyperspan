@@ -24,13 +24,11 @@ import {
   buildRegisteredClientJS,
   syncClientJSManifestEntries,
   clientJSRollupInput,
+  publicJsUrl,
+  clientImportKeyFromBundleEntry,
 } from './client-js';
 import { importMetaResolvePlugin } from './import-meta-resolve';
-import {
-  getClientJSEntries,
-  getClientJSSourceMap,
-  registerPathAliases,
-} from '@hyperspan/framework/client/js';
+import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 import { applyWebResponseToNode, incomingRequestUrl, nodeToWebRequest } from './node-http';
@@ -56,7 +54,7 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   let viteDevServer: ViteDevServer | null = null;
   let hsConfig: HS.Config;
   let serverInstance: HS.Server | null = null;
-  let manifest: AssetManifest = { imports: {}, css: {}, clients: {}, clientSources: {} };
+  let manifest: AssetManifest = { imports: {}, css: {}, clients: {} };
   let fetchHandler: ((req: Request) => Promise<Response>) | null = null;
   let command: 'build' | 'serve' = 'serve';
 
@@ -82,13 +80,15 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
           rolldownOptions: {
             input: clientJSRollupInput(),
             output: {
+              // Client scripts are content-addressed: identical bundles collapse to one
+              // file and the identity is carried by the manifest, not the filename.
               entryFileNames: (chunkInfo) =>
                 chunkInfo.name.startsWith('client-')
-                  ? `_hs/js/${chunkInfo.name}-[hash].js`
+                  ? `_hs/js/client-[hash].js`
                   : 'assets/[name]-[hash].js',
               assetFileNames: (assetInfo) =>
-                (assetInfo.name ?? '').startsWith('client-')
-                  ? '_hs/js/[name]-[hash][extname]'
+                (assetInfo.name ?? '').replace(/\.js$/, '').startsWith('client-')
+                  ? '_hs/js/client-[hash][extname]'
                   : 'assets/[name]-[hash][extname]',
             },
           },
@@ -173,21 +173,12 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         ...manifest.imports,
         ...getAssetManifest().imports,
       };
-      const clients: AssetManifest['clients'] = {
-        ...manifest.clients,
-        ...Object.fromEntries(
-          getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
-        ),
-      };
-      const clientSources: AssetManifest['clientSources'] = {
-        ...manifest.clientSources,
-        ...getClientJSSourceMap(),
-      };
+      const clients: AssetManifest['clients'] = { ...manifest.clients };
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
-        const publicPath = `/${fileName}`;
-        const clientName = clientImportKeyFromBundleEntry(fileName, chunk);
+        const clientName = clientImportKeyFromBundleEntry(chunk);
         if (clientName) {
+          const publicPath = publicJsUrl(fileName);
           imports[clientName] = publicPath;
           clients[clientName] = publicPath;
         }
@@ -201,7 +192,7 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         ) {
           const islandName = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
           if (!clientName) {
-            imports[islandName] = publicPath;
+            imports[islandName] = `/${fileName.replace(/\\/g, '/')}`;
           }
         }
 
@@ -217,11 +208,12 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
         }
       }
 
+      syncHashedClientManifest(imports, clients);
+
       manifest = {
         ...manifest,
-        imports: { ...imports, ...getAssetManifest().imports },
+        imports: { ...getAssetManifest().imports, ...imports },
         clients,
-        clientSources,
       };
       setAssetManifest(manifest);
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
@@ -235,10 +227,10 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
           console.error('[Hyperspan] Failed to discover routes/CSS during build:', err);
         }
       }
-      manifest = {
-        ...manifest,
-        imports: { ...manifest.imports, ...getAssetManifest().imports },
-      };
+      const imports = { ...getAssetManifest().imports, ...manifest.imports };
+      const clients = { ...manifest.clients };
+      syncHashedClientManifest(imports, clients);
+      manifest = { ...manifest, imports, clients };
       setAssetManifest(manifest);
       emitManifestFile(root, manifest, resolvedConfig.build.outDir);
     },
@@ -274,10 +266,10 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
 
       const clientImports = await buildRegisteredClientJS(root, resolvedConfig.build.outDir);
       if (Object.keys(clientImports).length > 0) {
-        manifest = {
-          ...manifest,
-          imports: { ...manifest.imports, ...clientImports },
-        };
+        const imports = { ...manifest.imports, ...clientImports };
+        const clients = { ...manifest.clients, ...clientImports };
+        syncHashedClientManifest(imports, clients);
+        manifest = { ...manifest, imports, clients };
       }
 
       const cssByRoute: Record<string, string[]> = { ...(manifest.css ?? {}) };
@@ -428,7 +420,6 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
       clients: Object.fromEntries(
         getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
       ),
-      clientSources: getClientJSSourceMap(),
     };
     setAssetManifest(manifest);
   }
@@ -683,16 +674,18 @@ async function serveStatic(
   }
 }
 
-function clientImportKeyFromBundleEntry(
-  fileName: string,
-  chunk: { type?: string; name?: string }
-): string | null {
-  if (chunk.name?.startsWith('client-')) {
-    return chunk.name.replace(/\.js$/, '');
+function syncHashedClientManifest(
+  imports: Record<string, string>,
+  clients: AssetManifest['clients']
+): void {
+  for (const entry of getClientJSEntries()) {
+    const hashed = imports[entry.esmName];
+    if (hashed) {
+      const path = publicJsUrl(hashed);
+      imports[entry.esmName] = path;
+      clients[entry.esmName] = path;
+    }
   }
-  const base = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
-  const match = base.match(/^(client-[0-9a-f]{16})(?:-[a-zA-Z0-9]+)?$/);
-  return match?.[1] ?? null;
 }
 
 function emitManifestFile(root: string, manifest: AssetManifest, buildOutDir = 'dist') {

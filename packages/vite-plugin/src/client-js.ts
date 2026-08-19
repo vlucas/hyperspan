@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, ViteDevServer } from 'vite';
@@ -9,7 +9,44 @@ import {
   type ClientJSEntry,
 } from '@hyperspan/framework/client/js';
 import { registerImport } from '@hyperspan/framework/client/manifest';
+import { assetHash } from '@hyperspan/framework/utils';
 import { resolveModuleAliases } from './tsconfig-aliases';
+
+/**
+ * Client scripts already emitted by the main Vite client build, keyed by `esmName`.
+ * Route discovery runs after that build and must not rebuild them under a second
+ * content hash, which would leave two files and an ambiguous manifest.
+ */
+const BUILT_CLIENT_JS = new Map<string, string>();
+
+export function getBuiltClientJS(): Record<string, string> {
+  return Object.fromEntries(BUILT_CLIENT_JS);
+}
+
+function isBuiltClientJS(esmName: string): boolean {
+  return BUILT_CLIENT_JS.has(esmName);
+}
+
+/** Point every identity for one file at the single file that was emitted for it. */
+function setBuiltClientUrl(esmNames: string[], publicPath: string): void {
+  for (const esmName of esmNames) {
+    BUILT_CLIENT_JS.set(esmName, publicPath);
+  }
+}
+
+/** Public URL for a bundled client file. */
+export function publicJsUrl(fileName: string): string {
+  return `/${fileName.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+}
+
+/**
+ * Identity of a built client script, taken from the name it was emitted under.
+ * Never parsed out of the filename: filenames are content-addressed, so a
+ * `client-<hash>` filename holds a hash of the bundle, not of the identity.
+ */
+export function clientImportKeyFromBundleEntry(chunk: { name?: string }): string | null {
+  return chunk.name?.startsWith('client-') ? chunk.name.replace(/\.js$/, '') : null;
+}
 
 function publicClientJSPath(id: string): string | null {
   const path = id.split('?')[0].replace(/\\/g, '/');
@@ -36,13 +73,10 @@ function clientEsmNameFromPublicUrl(id: string): string | null {
     return null;
   }
 
+  // Dev serves each identity under its own name; built files are content-addressed
+  // and served as static assets, so only a registered identity resolves here.
   const base = fileName.slice(0, -3);
-  if (getClientJSEntryByEsmName(base)) {
-    return base;
-  }
-
-  const withViteHash = base.match(/^(client-[0-9a-f]{16})(?:-[a-zA-Z0-9]+)?$/);
-  return withViteHash?.[1] ?? null;
+  return getClientJSEntryByEsmName(base) ? base : null;
 }
 
 export function resolveClientJSSource(id: string): string | null {
@@ -58,14 +92,48 @@ export function resolveClientJSSource(id: string): string | null {
   return existingClientFile(entry);
 }
 
+/** One resolved file, plus every identity registered for it. */
+export type ClientJSFileGroup = {
+  absPath: string;
+  /** Identity the file is built under. */
+  canonical: string;
+  /** Every identity that resolves to this file, including the canonical one. */
+  esmNames: string[];
+};
+
+/**
+ * Client entries grouped by resolved file. One file can carry several identities —
+ * `buildClientJS('app/client/x.ts')` and `buildClientJS('~/app/client/x.ts')` are two
+ * specifiers for one file — and each must appear in the manifest, but the file itself
+ * has to be bundled and emitted exactly once. Sorted so the canonical identity does
+ * not move between builds.
+ */
+export function clientJSFileGroups(type?: ClientJSEntry['type']): ClientJSFileGroup[] {
+  const byFile = new Map<string, string[]>();
+
+  for (const entry of getClientJSEntries()) {
+    if (type && entry.type !== type) continue;
+    const absPath = existingClientFile(entry);
+    if (!absPath) continue;
+    const esmNames = byFile.get(absPath);
+    if (esmNames) {
+      esmNames.push(entry.esmName);
+    } else {
+      byFile.set(absPath, [entry.esmName]);
+    }
+  }
+
+  return [...byFile.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([absPath, esmNames]) => {
+      const sorted = [...esmNames].sort();
+      return { absPath, canonical: sorted[0], esmNames: sorted };
+    });
+}
+
 /** Rollup input for ESM `buildClientJS` entries (IIFE clients are emitted as assets). */
 export function clientJSRollupInput(): Record<string, string> {
-  return Object.fromEntries(
-    getClientJSEntries()
-      .filter((entry) => entry.type === 'module')
-      .map((entry) => [entry.esmName, existingClientFile(entry)] as const)
-      .filter((item): item is [string, string] => Boolean(item[1]))
-  );
+  return Object.fromEntries(clientJSFileGroups('module').map((g) => [g.canonical, g.absPath]));
 }
 
 /**
@@ -95,6 +163,15 @@ export async function bundleClientJSDev(
 }
 
 /**
+ * Content-addressed output name. Identical bundles collapse to a single file, and a
+ * rebuild of unchanged code reuses the name. The identity lives in the manifest, not
+ * in the filename, so one file can serve several identities.
+ */
+function hashedClientFileName(code: string): string {
+  return `_hs/js/client-${assetHash(code)}.js`;
+}
+
+/**
  * Bundle a `buildClientJS(..., { type: 'iife' })` entry as a classic script (no import/export).
  */
 export async function bundleIifeClientJS(
@@ -106,7 +183,8 @@ export async function bundleIifeClientJS(
 
 export function clientJSPlugin(): Plugin {
   let command: 'build' | 'serve' = 'serve';
-  const emitted = new Map<string, string>();
+  /** Emitted chunk ref by identity group, resolved to a filename in generateBundle. */
+  const emitted = new Map<string, { ref: string; esmNames: string[] }>();
 
   return {
     name: 'hyperspan-client-js',
@@ -121,37 +199,42 @@ export function clientJSPlugin(): Plugin {
     },
 
     async buildStart() {
-      emitted.clear();
+      // Route discovery starts a nested dev server, whose buildStart must not
+      // discard what the production client build already emitted.
       if (command !== 'build') return;
+      emitted.clear();
+      BUILT_CLIENT_JS.clear();
 
-      for (const entry of getClientJSEntries()) {
-        const absPath = existingClientFile(entry);
-        if (entry.type === 'iife' || !absPath) continue;
+      for (const group of clientJSFileGroups('module')) {
         const ref = this.emitFile({
           type: 'chunk',
-          id: absPath,
-          name: entry.esmName,
+          id: group.absPath,
+          name: group.canonical,
         });
-        emitted.set(entry.esmName, ref);
+        emitted.set(group.canonical, { ref, esmNames: group.esmNames });
       }
 
-      for (const entry of getClientJSEntries()) {
-        const absPath = existingClientFile(entry);
-        if (entry.type !== 'iife' || !absPath) continue;
-        const code = await bundleIifeClientJS(absPath, { minify: true });
-        const ref = this.emitFile({
-          type: 'asset',
-          name: entry.esmName,
-          originalFileName: `${entry.esmName}.js`,
-          source: code,
-        });
-        emitted.set(entry.esmName, ref);
+      const emittedFiles = new Set<string>();
+      for (const group of clientJSFileGroups('iife')) {
+        const code = await bundleIifeClientJS(group.absPath, { minify: true });
+        // Explicit fileName: `[hash]` placeholders are not applied consistently to
+        // emitted assets, which produced extensionless files.
+        const fileName = hashedClientFileName(code);
+        // Same name means same content, so a second emit would be a duplicate file.
+        if (!emittedFiles.has(fileName)) {
+          emittedFiles.add(fileName);
+          this.emitFile({ type: 'asset', fileName, name: group.canonical, source: code });
+        }
+        setBuiltClientUrl(group.esmNames, publicJsUrl(fileName));
       }
     },
 
     generateBundle() {
-      for (const [esmName, ref] of emitted) {
-        registerImport(esmName, `/${this.getFileName(ref)}`);
+      for (const [, { ref, esmNames }] of emitted) {
+        setBuiltClientUrl(esmNames, publicJsUrl(this.getFileName(ref)));
+      }
+      for (const [esmName, publicPath] of BUILT_CLIENT_JS) {
+        registerImport(esmName, publicPath);
       }
     },
 
@@ -178,33 +261,36 @@ export function syncClientJSManifestEntries(entries: ClientJSEntry[]): void {
   }
 }
 
+/**
+ * Build client scripts registered after the main Vite client build (route discovery).
+ * Entries the main build already emitted are reused, not rebuilt.
+ */
 export async function buildRegisteredClientJS(
   root: string,
   buildOutDir: string
 ): Promise<Record<string, string>> {
-  const entries = getClientJSEntries()
-    .map((entry) => {
-      const absPath = existingClientFile(entry);
-      return absPath ? { ...entry, absPath } : null;
-    })
-    .filter((entry): entry is ClientJSEntry => entry !== null);
-  if (entries.length === 0) {
-    return {};
+  const pending = (type: ClientJSEntry['type']) =>
+    clientJSFileGroups(type).filter((group) => !group.esmNames.every(isBuiltClientJS));
+
+  const iifeGroups = pending('iife');
+  const esmGroups = pending('module');
+  if (iifeGroups.length === 0 && esmGroups.length === 0) {
+    return getBuiltClientJS();
   }
 
   const outDir = isAbsolute(buildOutDir) ? buildOutDir : join(root, buildOutDir);
-  const iifeEntries = entries.filter((entry) => entry.type === 'iife');
-  const esmEntries = entries.filter((entry) => entry.type === 'module');
   const imports: Record<string, string> = {};
 
-  for (const entry of iifeEntries) {
-    const publicPath = await writeHashedIifeClientJS(entry.absPath, entry.esmName, outDir);
-    imports[entry.esmName] = publicPath;
+  for (const group of iifeGroups) {
+    const publicPath = await writeHashedIifeClientJS(group.absPath, outDir);
+    for (const esmName of group.esmNames) {
+      imports[esmName] = publicPath;
+    }
   }
 
-  if (esmEntries.length > 0) {
+  if (esmGroups.length > 0) {
     const { build } = await import('vite');
-    const input = Object.fromEntries(esmEntries.map((entry) => [entry.esmName, entry.absPath]));
+    const input = Object.fromEntries(esmGroups.map((group) => [group.canonical, group.absPath]));
 
     const buildResult = await build({
       root,
@@ -221,7 +307,7 @@ export async function buildRegisteredClientJS(
         },
         rolldownOptions: {
           output: {
-            entryFileNames: '_hs/js/[name]-[hash].js',
+            entryFileNames: '_hs/js/client-[hash].js',
             exports: 'named',
           },
         },
@@ -231,52 +317,35 @@ export async function buildRegisteredClientJS(
       },
     });
 
+    const byCanonical = new Map(esmGroups.map((group) => [group.canonical, group.esmNames]));
     const results = Array.isArray(buildResult) ? buildResult : [buildResult];
     for (const result of results) {
       if (!result || !('output' in result)) continue;
       for (const item of result.output) {
-        if (item.type === 'chunk' && item.name.startsWith('client-')) {
-          imports[item.name] = `/${item.fileName}`.replace(/\\/g, '/');
+        if (item.type !== 'chunk') continue;
+        for (const esmName of byCanonical.get(item.name) ?? []) {
+          imports[esmName] = publicJsUrl(item.fileName);
         }
       }
     }
 
-    for (const entry of esmEntries) {
-      imports[entry.esmName] ??= `/_hs/js/${entry.esmName}.js`;
+    for (const group of esmGroups) {
+      for (const esmName of group.esmNames) {
+        imports[esmName] ??= `/_hs/js/${esmName}.js`;
+      }
     }
   }
 
-  return imports;
+  return { ...getBuiltClientJS(), ...imports };
 }
 
-async function writeHashedIifeClientJS(
-  absPath: string,
-  esmName: string,
-  outDir: string
-): Promise<string> {
-  const esbuild = await import('esbuild');
-  const jsDir = join(outDir, '_hs/js');
-  mkdirSync(jsDir, { recursive: true });
-  const result = await esbuild.build({
-    absWorkingDir: dirname(absPath),
-    entryPoints: { [esmName]: absPath },
-    bundle: true,
-    format: 'iife',
-    platform: 'browser',
-    write: true,
-    minify: true,
-    outdir: jsDir,
-    entryNames: '[name]-[hash]',
-    logLevel: 'silent',
-    metafile: true,
-  });
-  const output = Object.keys(result.metafile?.outputs ?? {}).find((filePath) =>
-    basename(filePath).startsWith(`${esmName}-`)
-  );
-  if (!output) {
-    throw new Error(`[Hyperspan] Failed to emit hashed IIFE client script: ${absPath}`);
-  }
-  return `/_hs/js/${basename(output)}`;
+async function writeHashedIifeClientJS(absPath: string, outDir: string): Promise<string> {
+  const code = await bundleIifeClientJS(absPath, { minify: true });
+  const fileName = hashedClientFileName(code);
+  const outFile = join(outDir, fileName);
+  mkdirSync(dirname(outFile), { recursive: true });
+  writeFileSync(outFile, code);
+  return publicJsUrl(fileName);
 }
 
 export function isClientJSRequest(url: string): boolean {
