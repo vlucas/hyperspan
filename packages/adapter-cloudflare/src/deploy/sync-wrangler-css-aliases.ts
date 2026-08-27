@@ -99,6 +99,10 @@ export function syncWranglerCssAliases(
   const content = readFileSync(configPath, 'utf-8');
   const block = formatAliasBlock(specifiers, stubPath);
   const { content: nextContent, appended } = replaceOrAppendBlock(content, block);
+  if (nextContent === content) {
+    return { updated: false, aliasCount: specifiers.length, configPath };
+  }
+
   writeFileSync(configPath, nextContent);
 
   if (appended) {

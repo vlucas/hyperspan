@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html } from './html';
 import { CSS_PUBLIC_PATH } from './client/css';
 import { getImportMap, getRouteCss } from './client/manifest';
 import { actionsClient, streamingClient } from './client/js';

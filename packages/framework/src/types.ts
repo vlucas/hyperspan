@@ -1,4 +1,4 @@
-import { HSHtml } from '@hyperspan/html';
+import { HSHtml } from './html';
 import * as z from 'zod';
 
 /**

@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import { createRoute, createServer, createContext, initServerRoutes } from './server';
 import { createAction } from './actions';
-import { html, placeholder } from '@hyperspan/html';
+import { html, placeholder } from './html';
 import type { Hyperspan as HS } from './types';
 
 test('route fetch() returns a Response', async () => {

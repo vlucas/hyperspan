@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/adapter-cloudflare",
-  "version": "2.0.0-alpha.16",
+  "version": "2.0.0-alpha.19",
   "description": "Cloudflare Workers adapter for Hyperspan",
   "type": "module",
   "public": true,
@@ -32,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.16",
+    "@hyperspan/framework": "^2.0.0-alpha.19",
     "fast-glob": "^3.3.3"
   },
   "peerDependencies": {

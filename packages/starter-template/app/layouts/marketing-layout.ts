@@ -1,9 +1,12 @@
-import { html } from '@hyperspan/html';
+import { html } from '@hyperspan/framework/html';
 import { hyperspanScriptTags, hyperspanStyleTags } from '@hyperspan/framework/layout';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import '../styles/globals.css';
 
-export default function MarketingLayout(context: HS.Context, { title, content }: { title: string; content: any }) {
+export default function MarketingLayout(
+  context: HS.Context,
+  { title, content }: { title: string; content: any }
+) {
   return html`
     <!doctype html>
     <html class="w-full h-full" lang="en">

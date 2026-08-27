@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { render } from '@hyperspan/html';
+import { render } from './html';
 import { hyperspanScriptTags } from './layout';
 import { streamingClient } from './client/js';
 

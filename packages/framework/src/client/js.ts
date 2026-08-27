@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { html } from '@hyperspan/html';
+import { html } from '../html';
 import { assetHash as assetHashFn } from '../utils';
 import { getImportMap, registerImport, resolveImport } from './manifest';
 import type { Hyperspan as HS } from '../types';

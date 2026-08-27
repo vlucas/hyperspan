@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html } from './html';
 import { createRoute, HTTPResponseException, returnHTMLResponse } from './server';
 import * as z from 'zod';
 import type { Hyperspan as HS } from './types';

@@ -12,7 +12,7 @@ describe('discover-css-imports', () => {
   test('extractCssImportsFromSource finds side-effect CSS imports', () => {
     const source = `
       import '../styles/globals.css';
-      import { html } from '@hyperspan/html';
+      import { html } from '@hyperspan/framework/html';
       import "~/app/styles/test.css";
     `;
 

@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import { createAction } from './actions';
 import { createRoute } from './server';
-import { html, render, placeholder, type HSHtml } from '@hyperspan/html';
+import { html, render, placeholder, type HSHtml } from './html';
 import { createContext } from './server';
 import * as z from 'zod';
 

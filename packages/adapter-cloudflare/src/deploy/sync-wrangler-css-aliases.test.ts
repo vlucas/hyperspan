@@ -56,4 +56,17 @@ id = "abc"
     expect(content).not.toContain('"old.css"');
     expect(content).toContain('"app/styles/globals.css"');
   });
+
+  test('does not rewrite wrangler.toml when aliases are already current', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hs-wrangler-sync-'));
+    writeFileSync(join(root, 'wrangler.toml'), `name = "test-worker"\nmain = "./dist/server.ts"\n`);
+
+    const first = syncWranglerCssAliases(root, { specifiers: ['app/styles/globals.css'] });
+    expect(first.updated).toBe(true);
+
+    const before = readFileSync(join(root, 'wrangler.toml'), 'utf-8');
+    const second = syncWranglerCssAliases(root, { specifiers: ['app/styles/globals.css'] });
+    expect(second.updated).toBe(false);
+    expect(readFileSync(join(root, 'wrangler.toml'), 'utf-8')).toBe(before);
+  });
 });

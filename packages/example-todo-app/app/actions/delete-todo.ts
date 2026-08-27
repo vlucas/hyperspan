@@ -1,5 +1,5 @@
 import { createAction } from '@hyperspan/framework/actions';
-import { html } from '@hyperspan/html';
+import { html } from '@hyperspan/framework/html';
 import * as z from 'zod';
 import { deleteTodo } from '~/src/lib/db';
 

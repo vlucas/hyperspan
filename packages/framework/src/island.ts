@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html } from './html';
 
 type IslandComponent = {
   __HS_ISLAND?: {

@@ -3,10 +3,10 @@ import degit from 'degit';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import packageJson from '../package.json';
-import { loadConfig } from './server';
+import { createAppJiti } from '@hyperspan/vite-plugin/tsconfig-aliases';
+import { loadConfig, registerAppLoaders } from './server';
 
 const program = new Command();
 
@@ -108,13 +108,18 @@ program
 
     console.log('[Hyperspan] Starting production server...');
 
-    const serverEntry = join(process.cwd(), 'dist/server.ts');
+    const root = process.cwd();
+    const serverEntry = join(root, 'dist/server.ts');
     if (!fs.existsSync(serverEntry)) {
       console.error('[Hyperspan] dist/server.ts not found. Run hyperspan build first.');
       process.exit(1);
     }
 
-    const mod = await import(pathToFileURL(serverEntry).href);
+    registerAppLoaders(root);
+    const jiti = createAppJiti(root);
+    const mod = (await jiti.import(serverEntry)) as {
+      start?: (options: { port?: number }) => Promise<unknown>;
+    };
     if (typeof mod.start !== 'function') {
       console.error(
         '[Hyperspan] dist/server.ts has no start() — use Wrangler for Cloudflare Workers.'

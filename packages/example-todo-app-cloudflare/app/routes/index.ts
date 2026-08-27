@@ -1,4 +1,4 @@
-import { html } from '@hyperspan/html';
+import { html } from '@hyperspan/framework/html';
 import { createRoute } from '@hyperspan/framework';
 import { buildClientJS } from '@hyperspan/framework/client/js';
 import AppLayout from '~/app/layouts/app-layout';

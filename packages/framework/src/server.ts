@@ -1,13 +1,5 @@
 import './ssr/install-server-dom-mock';
-import {
-  HSHtml,
-  html,
-  isHSHtml,
-  renderStream,
-  renderAsync,
-  render,
-  _typeOf,
-} from '@hyperspan/html';
+import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from './html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
 import { buildUrl, parsePath, removeUndefined } from './utils';

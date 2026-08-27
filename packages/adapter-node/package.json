@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/adapter-node",
-  "version": "2.0.0-alpha.16",
+  "version": "2.0.0-alpha.19",
   "description": "Node.js adapter for Hyperspan",
   "type": "module",
   "public": true,
@@ -20,7 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.16"
+    "@hyperspan/framework": "^2.0.0-alpha.19"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

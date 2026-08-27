@@ -30,10 +30,14 @@ const log = debug('hyperspan:server');
 
 let loadersRegistered = false;
 
-function ensureLoaders() {
+/**
+ * Register Node resolve hooks for tsconfig `paths` (e.g. `~/`) and CSS stubs.
+ * Must run before importing a generated `dist/server.ts` in production.
+ */
+export function registerAppLoaders(root: string = process.cwd()) {
   if (loadersRegistered) return;
   loadersRegistered = true;
-  const aliases = resolveModuleAliases(CWD);
+  const aliases = resolveModuleAliases(root);
 
   registerHooks({
     resolve(specifier, context, nextResolve) {
@@ -66,7 +70,7 @@ function ensureLoaders() {
 }
 
 export async function loadConfig(): Promise<HS.Config> {
-  ensureLoaders();
+  registerAppLoaders();
   const configFile = join(CWD, 'hyperspan.config.ts');
   const jiti = createAppJiti(CWD);
   try {
@@ -87,7 +91,7 @@ export async function loadConfig(): Promise<HS.Config> {
  * Used by `hyperspan start` (production Node adapter).
  */
 export async function createHyperspanServer(startConfig: startConfig = {}): Promise<HS.Server> {
-  ensureLoaders();
+  registerAppLoaders();
 
   console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
@@ -130,7 +134,7 @@ export async function addDirectoryAsRoutes(
   relativeDirectory: string,
   startConfig: startConfig = {}
 ) {
-  ensureLoaders();
+  registerAppLoaders();
 
   const appDir = server._config.appDir || './app';
   const directoryPath = join(CWD, appDir, relativeDirectory);

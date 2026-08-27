@@ -5,7 +5,7 @@ import { assetHash } from '@hyperspan/framework/utils';
 import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
-import { html } from '@hyperspan/html';
+import { html } from '@hyperspan/framework/html';
 import { h } from 'preact';
 import { render as preactRenderToString } from 'preact-render-to-string';
 import {

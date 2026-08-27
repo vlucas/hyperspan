@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { render } from '@hyperspan/html';
+import { render } from '../html';
 import { assetHash } from '../utils';
 import { setAssetManifest } from './manifest';
 import {
