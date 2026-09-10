@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "2.0.0-alpha.19",
+  "version": "2.0.0-alpha.20",
   "description": "Hyperspan Plugin for Preact",
   "type": "module",
   "main": "src/index.ts",
@@ -31,7 +31,7 @@
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.19",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.20",
     "preact": "^10.28.3",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
@@ -39,8 +39,8 @@
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@hyperspan/framework": "^2.0.0-alpha.19",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.19",
+    "@hyperspan/framework": "^2.0.0-alpha.20",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.20",
     "preact": "^10.28.3",
     "vite": "^8.0.0"
   },

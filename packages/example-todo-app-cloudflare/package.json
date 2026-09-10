@@ -1,7 +1,7 @@
 {
   "name": "example-todo-app-cloudflare",
   "description": "Hyperspan todo app example for Cloudflare Workers",
-  "version": "2.0.0-alpha.19",
+  "version": "2.0.0-alpha.20",
   "private": true,
   "type": "module",
   "scripts": {
@@ -23,11 +23,11 @@
     "wrangler": "^4.28.0"
   },
   "dependencies": {
-    "@hyperspan/adapter-cloudflare": "^2.0.0-alpha.19",
-    "@hyperspan/framework": "^2.0.0-alpha.19",
-    "@hyperspan/plugin-preact": "^2.0.0-alpha.19",
-    "@hyperspan/vite-plugin": "^2.0.0-alpha.19",
-    "hyperspan": "^2.0.0-alpha.19",
+    "@hyperspan/adapter-cloudflare": "^2.0.0-alpha.20",
+    "@hyperspan/framework": "^2.0.0-alpha.20",
+    "@hyperspan/plugin-preact": "^2.0.0-alpha.20",
+    "@hyperspan/vite-plugin": "^2.0.0-alpha.20",
+    "hyperspan": "^2.0.0-alpha.20",
     "preact": "^10.29.0",
     "tailwindcss": "^4.2.2"
   },
