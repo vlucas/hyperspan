@@ -140,11 +140,13 @@ export default createConfig({
 });
 ```
 
-For local Vite, `cloudflareAdapter()` points the host at `@hyperspan/adapter-cloudflare/dev`, which loads bindings with Wrangler’s `getPlatformProxy` (prefers `wrangler.dev.jsonc` / `wrangler.dev.toml` when present). Wire `env` in `beforeServerCreate`.
+For local Vite, `cloudflareAdapter()` points the host at `@hyperspan/adapter-cloudflare/dev`, which loads bindings with Wrangler’s `getPlatformProxy` (prefers `wrangler.dev.jsonc` when present). Wire `env` in `beforeServerCreate`.
 
-```toml
-# wrangler.toml
-main = "./dist/server.ts"
+```jsonc
+// wrangler.jsonc
+{
+  "main": "./dist/server.ts"
+}
 ```
 
 CSS imports in layouts (e.g. `import '../styles/globals.css'`) are for Vite build-time only — Tailwind compiles them into `dist/assets/`. At Worker runtime, styles come from the manifest via `hyperspanStyleTags()`.

@@ -108,6 +108,7 @@ export function createAppJiti(root: string): Jiti {
   const tsconfigFile = findTsconfig(root);
   return createJiti(root, {
     interopDefault: true,
+    jsx: true,
     tsconfigPaths: tsconfigFile ?? true,
   });
 }

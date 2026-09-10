@@ -10,9 +10,16 @@ import {
 } from './sync-wrangler-css-aliases';
 
 describe('sync-wrangler-css-aliases', () => {
-  test('appends alias block when markers are missing', () => {
+  test('appends alias block to wrangler.jsonc when markers are missing', () => {
     const root = mkdtempSync(join(tmpdir(), 'hs-wrangler-sync-'));
-    writeFileSync(join(root, 'wrangler.toml'), `name = "test-worker"\nmain = "./dist/server.ts"\n`);
+    writeFileSync(
+      join(root, 'wrangler.jsonc'),
+      `{
+  "name": "test-worker",
+  "main": "./dist/server.ts"
+}
+`
+    );
 
     const stubPath = resolveCssStubPath(root);
     const result = syncWranglerCssAliases(root, {
@@ -22,51 +29,59 @@ describe('sync-wrangler-css-aliases', () => {
     expect(result.updated).toBe(true);
     expect(result.aliasCount).toBe(2);
 
-    const content = readFileSync(join(root, 'wrangler.toml'), 'utf-8');
-    expect(content).toContain('name = "test-worker"');
+    const content = readFileSync(join(root, 'wrangler.jsonc'), 'utf-8');
+    expect(content).toContain('"name": "test-worker"');
     expect(content).toContain(MARKER_START);
     expect(content).toContain(MARKER_END);
-    expect(content).toContain(`"../styles/globals.css" = "${stubPath}"`);
-    expect(content).toContain(`"app/styles/globals.css" = "${stubPath}"`);
+    expect(content).toContain(`"../styles/globals.css": "${stubPath}"`);
+    expect(content).toContain(`"app/styles/globals.css": "${stubPath}"`);
   });
 
-  test('replaces existing alias block and preserves other config', () => {
+  test('replaces existing alias block in wrangler.jsonc and preserves other config', () => {
     const root = mkdtempSync(join(tmpdir(), 'hs-wrangler-sync-'));
     writeFileSync(
-      join(root, 'wrangler.toml'),
-      `name = "test-worker"
-main = "./dist/server.ts"
-
-${MARKER_START}
-[alias]
-"old.css" = "./old.css"
-${MARKER_END}
-
-[[kv_namespaces]]
-binding = "TODO_KV"
-id = "abc"
+      join(root, 'wrangler.jsonc'),
+      `{
+  "name": "test-worker",
+  "main": "./dist/server.ts",
+  ${MARKER_START}
+  "alias": {
+    "old.css": "./old.css"
+  },
+  ${MARKER_END}
+  "kv_namespaces": [
+    { "binding": "TODO_KV", "id": "abc" }
+  ]
+}
 `
     );
 
     syncWranglerCssAliases(root, { specifiers: ['app/styles/globals.css'] });
 
-    const content = readFileSync(join(root, 'wrangler.toml'), 'utf-8');
-    expect(content).toContain('name = "test-worker"');
-    expect(content).toContain('binding = "TODO_KV"');
+    const content = readFileSync(join(root, 'wrangler.jsonc'), 'utf-8');
+    expect(content).toContain('"name": "test-worker"');
+    expect(content).toContain('"binding": "TODO_KV"');
     expect(content).not.toContain('"old.css"');
     expect(content).toContain('"app/styles/globals.css"');
   });
 
-  test('does not rewrite wrangler.toml when aliases are already current', () => {
+  test('does not rewrite wrangler.jsonc when aliases are already current', () => {
     const root = mkdtempSync(join(tmpdir(), 'hs-wrangler-sync-'));
-    writeFileSync(join(root, 'wrangler.toml'), `name = "test-worker"\nmain = "./dist/server.ts"\n`);
+    writeFileSync(
+      join(root, 'wrangler.jsonc'),
+      `{
+  "name": "test-worker",
+  "main": "./dist/server.ts"
+}
+`
+    );
 
     const first = syncWranglerCssAliases(root, { specifiers: ['app/styles/globals.css'] });
     expect(first.updated).toBe(true);
 
-    const before = readFileSync(join(root, 'wrangler.toml'), 'utf-8');
+    const before = readFileSync(join(root, 'wrangler.jsonc'), 'utf-8');
     const second = syncWranglerCssAliases(root, { specifiers: ['app/styles/globals.css'] });
     expect(second.updated).toBe(false);
-    expect(readFileSync(join(root, 'wrangler.toml'), 'utf-8')).toBe(before);
+    expect(readFileSync(join(root, 'wrangler.jsonc'), 'utf-8')).toBe(before);
   });
 });

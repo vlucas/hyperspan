@@ -1,6 +1,8 @@
 import { test, describe, expect } from 'vitest';
 import { h } from 'preact';
-import { buildIslandHtml, renderPreactSSR, renderPreactIsland } from './index';
+import { useState } from 'preact/hooks';
+import { buildIslandHtml } from '@hyperspan/vite-plugin/islands';
+import { renderPreactSSR, renderPreactIsland } from './index';
 
 // ---------------------------------------------------------------------------
 // Simple Preact components defined inline — no .tsx compilation needed
@@ -90,6 +92,14 @@ describe('renderPreactSSR', () => {
   test('escapes dangerous characters in prop values', () => {
     const output = renderPreactSSR(Hello, { name: '<script>alert(1)</script>' });
     expect(output).not.toContain('<script>alert');
+  });
+
+  test('renders components that use hooks (same Preact as the renderer)', () => {
+    function Counter({ count: initial = 0 }: { count?: number }) {
+      const [count] = useState(initial);
+      return h('p', null, `Count: ${count}`);
+    }
+    expect(renderPreactSSR(Counter, { count: 3 })).toContain('Count: 3');
   });
 });
 

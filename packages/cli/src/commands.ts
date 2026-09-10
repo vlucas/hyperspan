@@ -5,8 +5,7 @@ import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { createServer } from 'vite';
 import packageJson from '../package.json';
-import { createAppJiti } from '@hyperspan/vite-plugin/tsconfig-aliases';
-import { loadConfig, registerAppLoaders } from './server';
+import { loadConfig } from './server';
 
 const program = new Command();
 
@@ -95,7 +94,7 @@ program
 program
   .command('start')
   .option('--dir <path>', 'directory of your hyperspan project', './')
-  .option('--port <number>', 'port to listen on', '3000')
+  .option('--port <number>', 'port to listen on')
   .description('Start the production Node server')
   .action(async function (options) {
     process.chdir(options.dir);
@@ -115,18 +114,32 @@ program
       process.exit(1);
     }
 
-    registerAppLoaders(root);
-    const jiti = createAppJiti(root);
-    const mod = (await jiti.import(serverEntry)) as {
+    const configFile = join(root, 'vite.config.ts');
+    if (!fs.existsSync(configFile)) {
+      console.error('Error: vite.config.ts not found. See MIGRATION-v2.md');
+      process.exit(1);
+    }
+
+    // Vite SSR so TSX/Vue/Svelte islands in app routes can load. jiti cannot compile them.
+    const vite = await createServer({
+      configFile,
+      root,
+      server: { middlewareMode: true },
+      appType: 'custom',
+    });
+    const mod = (await vite.ssrLoadModule(serverEntry)) as {
       start?: (options: { port?: number }) => Promise<unknown>;
     };
     if (typeof mod.start !== 'function') {
+      await vite.close().catch(() => undefined);
       console.error(
         '[Hyperspan] dist/server.ts has no start() — use Wrangler for Cloudflare Workers.'
       );
       process.exit(1);
     }
-    await mod.start({ port: Number(options.port) });
+    await mod.start({
+      port: options.port != null ? Number(options.port) : undefined,
+    });
   });
 
 program

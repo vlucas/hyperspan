@@ -118,4 +118,16 @@ describe('tsconfig aliases', () => {
     const config = createAppJiti(root)(join(root, 'hyperspan.config.ts')) as { value: number };
     expect(config.value).toBe(42);
   });
+
+  test('createAppJiti can load TSX modules', () => {
+    const root = writeApp(
+      {},
+      {
+        'widget.tsx': `export const label = 'ok';\nexport default function Widget() { return <span>{label}</span>; }\n`,
+      }
+    );
+
+    const mod = createAppJiti(root)(join(root, 'widget.tsx')) as { label: string };
+    expect(mod.label).toBe('ok');
+  });
 });

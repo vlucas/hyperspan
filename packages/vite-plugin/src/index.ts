@@ -1,5 +1,6 @@
-import { join, isAbsolute } from 'node:path';
+import { join, isAbsolute, dirname } from 'node:path';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import fg from 'fast-glob';
 import type { Plugin, ViteDevServer, ResolvedConfig } from 'vite';
 import {
@@ -17,6 +18,8 @@ import type { Hyperspan as HS } from '@hyperspan/framework';
 import {
   assertIslandPluginLoaded,
   getIslandFramework,
+  islandImportQueryPlugin,
+  discoverIslandClientEntries,
   resolveRegisteredIslandVitePlugins,
 } from './islands';
 import {
@@ -42,6 +45,43 @@ const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
 const DEV_BINDINGS_ID = 'virtual:hyperspan-dev-bindings';
 const RESOLVED_DEV_BINDINGS_ID = '\0' + DEV_BINDINGS_ID;
 
+/** Plugin packages may live outside the app via `file:` links; Vite must serve their client runtimes. */
+export function hyperspanPackageDirs(projectRoot: string): string[] {
+  const require = createRequire(join(projectRoot, 'package.json'));
+  const dirs: string[] = [];
+  for (const name of [
+    '@hyperspan/plugin-preact',
+    '@hyperspan/plugin-vue',
+    '@hyperspan/plugin-svelte',
+    '@hyperspan/vite-plugin',
+    '@hyperspan/framework',
+  ]) {
+    const dir = resolveInstalledPackageDir(require, name);
+    if (dir) dirs.push(dir);
+  }
+  return dirs;
+}
+
+function resolveInstalledPackageDir(
+  require: { resolve: (id: string) => string },
+  name: string
+): string | undefined {
+  try {
+    return dirname(require.resolve(`${name}/package.json`));
+  } catch {
+    try {
+      let dir = dirname(require.resolve(name));
+      while (dir !== dirname(dir)) {
+        if (existsSync(join(dir, 'package.json'))) return dir;
+        dir = dirname(dir);
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function loadHyperspanConfigSync(root: string, configFile?: string): void {
   const file = configFile ?? join(root, 'hyperspan.config.ts');
   if (!existsSync(file)) return;
@@ -58,6 +98,11 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
   let fetchHandler: ((req: Request) => Promise<Response>) | null = null;
   let command: 'build' | 'serve' = 'serve';
 
+  // Load hyperspan.config.ts here so island Vite plugins are in the returned
+  // array. Adding them from the config() hook is too late for Vite SSR.
+  loadHyperspanConfigSync(root, options.configFile);
+  const islandPlugins = resolveRegisteredIslandVitePlugins();
+
   const corePlugin: Plugin = {
     name: 'hyperspan',
     enforce: 'pre',
@@ -65,27 +110,50 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
     config(config) {
       const projectRoot = config.root ? String(config.root) : process.cwd();
       registerPathAliases(resolveModuleAliases(projectRoot));
-      loadHyperspanConfigSync(projectRoot, options.configFile);
-      const islandPlugins = resolveRegisteredIslandVitePlugins();
+      if (projectRoot !== root) {
+        loadHyperspanConfigSync(projectRoot, options.configFile);
+      }
       return {
         appType: 'custom' as const,
-        plugins: islandPlugins,
         publicDir: config.publicDir ?? 'public',
         envPrefix: ['APP_PUBLIC_', 'VITE_'],
         resolve: {
           alias: resolveModuleAliases(projectRoot),
+          dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime', 'vue', 'svelte'],
         },
         build: {
           manifest: true,
           rolldownOptions: {
-            input: clientJSRollupInput(),
+            preserveEntrySignatures: 'strict',
+            // Island hydrate scripts import these via the page import map.
+            // Bundling a second copy makes Preact hooks / Vue / Svelte no-ops.
+            external: (id: string, importer?: string) => {
+              if (!importer || !importer.includes('island=')) return false;
+              return (
+                id === 'preact' ||
+                id.startsWith('preact/') ||
+                id === 'vue' ||
+                id.startsWith('vue/') ||
+                id === 'svelte' ||
+                id.startsWith('svelte/') ||
+                id === 'react' ||
+                id === 'react-dom' ||
+                id.startsWith('@vue/')
+              );
+            },
+            input: {
+              ...clientJSRollupInput(),
+              ...discoverIslandClientEntries(projectRoot),
+            },
             output: {
               // Client scripts are content-addressed: identical bundles collapse to one
               // file and the identity is carried by the manifest, not the filename.
               entryFileNames: (chunkInfo) =>
                 chunkInfo.name.startsWith('client-')
                   ? `_hs/js/client-[hash].js`
-                  : 'assets/[name]-[hash].js',
+                  : chunkInfo.name.startsWith('island-')
+                    ? `_hs/js/islands/${chunkInfo.name}.js`
+                    : 'assets/[name]-[hash].js',
               assetFileNames: (assetInfo) =>
                 (assetInfo.name ?? '').replace(/\.js$/, '').startsWith('client-')
                   ? '_hs/js/client-[hash][extname]'
@@ -95,10 +163,16 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
         },
         ssr: {
           // Bundle Hyperspan packages so CJS deps like `debug` are handled by Vite.
-          noExternal: [/^@hyperspan\//],
+          // Bundle Preact with its renderer so island SSR does not load two copies.
+          noExternal: [/^@hyperspan\//, 'preact', 'preact/hooks', 'preact-render-to-string'],
         },
         optimizeDeps: {
           exclude: ['@hyperspan/framework', '@hyperspan/html', '@hyperspan/vite-plugin'],
+        },
+        server: {
+          fs: {
+            allow: [projectRoot, ...hyperspanPackageDirs(projectRoot)],
+          },
         },
       };
     },
@@ -497,7 +571,13 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
     }
   }
 
-  return [importMetaResolvePlugin(), corePlugin, clientJSPlugin()];
+  return [
+    islandImportQueryPlugin(),
+    ...islandPlugins,
+    importMetaResolvePlugin(),
+    corePlugin,
+    clientJSPlugin(),
+  ];
 }
 
 async function loadHyperspanConfig(root: string, configFile?: string): Promise<HS.Config> {
@@ -623,16 +703,21 @@ async function materializeCssForProduction(
 }
 
 function collectCssUrls(viteServer: ViteDevServer, filePath: string): string[] {
-  const mod =
-    viteServer.moduleGraph.getModuleById(filePath) ||
-    [...viteServer.moduleGraph.idToModuleMap.values()].find((m) => m.file === filePath);
+  const modules = [...viteServer.moduleGraph.idToModuleMap.values()].filter((module) => {
+    const id = module.id?.split('?')[0];
+    return module.file === filePath || id === filePath;
+  });
+  const byId = viteServer.moduleGraph.getModuleById(filePath);
+  if (byId && !modules.includes(byId)) {
+    modules.push(byId);
+  }
 
-  if (!mod) return [];
+  if (modules.length === 0) return [];
 
   const css: string[] = [];
   const seen = new Set<string>();
 
-  function walk(module: typeof mod | undefined) {
+  function walk(module: (typeof modules)[number] | undefined) {
     if (!module?.id || seen.has(module.id)) return;
     seen.add(module.id);
 
@@ -648,12 +733,18 @@ function collectCssUrls(viteServer: ViteDevServer, filePath: string): string[] {
       }
     }
 
-    for (const imported of module.importedModules) {
-      walk(imported);
+    const imported = [
+      ...module.importedModules,
+      ...((module as { ssrImportedModules?: Set<typeof module> }).ssrImportedModules ?? []),
+    ];
+    for (const child of imported) {
+      walk(child);
     }
   }
 
-  walk(mod);
+  for (const module of modules) {
+    walk(module);
+  }
   return [...new Set(css)];
 }
 

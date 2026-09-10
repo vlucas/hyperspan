@@ -162,7 +162,10 @@ export function createNodeDeployEntry(ctx: DeployEntryContext): DeployEntry {
   return {
     async start(options: { port?: number } = {}) {
       const server = await ctx.createHyperspanServer({ env: process.env });
-      return startNodeServer(server, { port: options.port ?? 3000, publicDir: './dist' });
+      return startNodeServer(server, {
+        port: options.port ?? (Number(process.env.PORT) || 3000),
+        publicDir: './dist',
+      });
     },
   };
 }

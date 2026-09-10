@@ -7,8 +7,8 @@ import { discoverCssImportSpecifiers } from './discover-css-imports';
 export const CSS_STUB_RELATIVE_PATH =
   './node_modules/@hyperspan/adapter-cloudflare/stubs/empty.css';
 
-export const MARKER_START = '# >>> hyperspan:css-aliases (auto-generated — do not edit)';
-export const MARKER_END = '# <<< hyperspan:css-aliases';
+export const MARKER_START = '// >>> hyperspan:css-aliases (auto-generated — do not edit)';
+export const MARKER_END = '// <<< hyperspan:css-aliases';
 
 export type SyncWranglerCssAliasesOptions = {
   appDir?: string;
@@ -28,23 +28,17 @@ export function resolveCssStubPath(root: string): string {
 }
 
 function findWranglerConfig(root: string): string | null {
-  for (const name of ['wrangler.toml', 'wrangler.jsonc']) {
-    const path = join(root, name);
-    if (existsSync(path)) {
-      return path;
-    }
-  }
-  return null;
+  const path = join(root, 'wrangler.jsonc');
+  return existsSync(path) ? path : null;
 }
 
 function formatAliasBlock(specifiers: string[], stubPath: string): string {
   if (specifiers.length === 0) {
-    return `${MARKER_START}\n# No CSS imports discovered in app sources.\n${MARKER_END}`;
+    return `${MARKER_START}\n// No CSS imports discovered in app sources.\n${MARKER_END}`;
   }
 
-  const lines = specifiers.map((specifier) => `"${specifier}" = "${stubPath}"`);
-
-  return `${MARKER_START}\n[alias]\n${lines.join('\n')}\n${MARKER_END}`;
+  const entries = specifiers.map((specifier) => `    "${specifier}": "${stubPath}"`).join(',\n');
+  return `${MARKER_START}\n  "alias": {\n${entries}\n  },\n${MARKER_END}`;
 }
 
 function replaceOrAppendBlock(
@@ -55,20 +49,31 @@ function replaceOrAppendBlock(
   const endIdx = content.indexOf(MARKER_END);
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const existingBlock = content.slice(startIdx, endIdx + MARKER_END.length);
+    if (existingBlock === block) {
+      return { content, appended: false };
+    }
     const before = content.slice(0, startIdx).replace(/\s+$/, '');
     const after = content.slice(endIdx + MARKER_END.length).replace(/^\s+/, '');
-    const middle = block;
-    const parts = [before, middle, after].filter((part) => part.length > 0);
-    return { content: parts.join('\n\n') + '\n', appended: false };
+    const parts = [before, block, after].filter((part) => part.length > 0);
+    return { content: parts.join('\n') + '\n', appended: false };
   }
 
   const trimmed = content.replace(/\s+$/, '');
-  const separator = trimmed.length > 0 ? '\n\n' : '';
-  return { content: trimmed + separator + block + '\n', appended: true };
+  if (trimmed.endsWith('}')) {
+    const beforeClose = trimmed.slice(0, -1).replace(/\s+$/, '');
+    const needsComma =
+      beforeClose.length > 1 && !beforeClose.endsWith('{') && !beforeClose.endsWith(',');
+    const comma = needsComma ? ',' : '';
+    const separator = beforeClose.endsWith('{') ? '\n' : `\n${comma}\n`;
+    return { content: `${beforeClose}${separator}${block}\n}\n`, appended: true };
+  }
+
+  return { content: `${trimmed}\n\n${block}\n`, appended: true };
 }
 
 /**
- * Update wrangler.toml with CSS import aliases pointing to the shipped empty stub.
+ * Update wrangler.jsonc with CSS import aliases pointing to the shipped empty stub.
  */
 export function syncWranglerCssAliases(
   root: string,
@@ -81,19 +86,10 @@ export function syncWranglerCssAliases(
   const configPath = findWranglerConfig(root);
   if (!configPath) {
     console.warn(
-      '[Hyperspan] No wrangler.toml found — add the following block after creating wrangler.toml:\n'
+      '[Hyperspan] No wrangler.jsonc found — add the following block after creating wrangler.jsonc:\n'
     );
     console.warn(formatAliasBlock(specifiers, stubPath));
     return { updated: false, aliasCount: specifiers.length };
-  }
-
-  if (configPath.endsWith('.jsonc')) {
-    console.warn(
-      '[Hyperspan] wrangler.jsonc detected — automatic CSS alias sync supports wrangler.toml only.'
-    );
-    console.warn('Add aliases manually or switch to wrangler.toml:\n');
-    console.warn(formatAliasBlock(specifiers, stubPath));
-    return { updated: false, aliasCount: specifiers.length, configPath };
   }
 
   const content = readFileSync(configPath, 'utf-8');
@@ -106,7 +102,7 @@ export function syncWranglerCssAliases(
   writeFileSync(configPath, nextContent);
 
   if (appended) {
-    console.log('[Hyperspan] Added hyperspan:css-aliases block to wrangler.toml');
+    console.log('[Hyperspan] Added hyperspan:css-aliases block to wrangler.jsonc');
   }
 
   return { updated: true, aliasCount: specifiers.length, configPath };

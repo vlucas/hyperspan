@@ -10,12 +10,9 @@ export type ResolveCloudflareDevEnvOptions = {
  * Prefer a local-only Wrangler config when present (no containers / lighter bindings).
  */
 export function findWranglerConfigPath(root: string): string | undefined {
-  return [
-    join(root, 'wrangler.dev.jsonc'),
-    join(root, 'wrangler.dev.toml'),
-    join(root, 'wrangler.toml'),
-    join(root, 'wrangler.jsonc'),
-  ].find((path) => existsSync(path));
+  return [join(root, 'wrangler.dev.jsonc'), join(root, 'wrangler.jsonc')].find((path) =>
+    existsSync(path)
+  );
 }
 
 type PlatformProxy = {
@@ -61,7 +58,7 @@ export async function resolveDevEnv(
   } catch (err) {
     console.warn(
       '[Hyperspan] Could not load Cloudflare bindings via Wrangler for Vite/dev.',
-      'Install wrangler and ensure a wrangler.toml (or wrangler.dev.jsonc) exists.',
+      'Install wrangler and ensure a wrangler.jsonc (or wrangler.dev.jsonc) exists.',
       '\n',
       err
     );

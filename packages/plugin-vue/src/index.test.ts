@@ -1,6 +1,8 @@
 import { test, describe, expect } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { buildIslandHtml, renderVueSSR, renderVueIsland } from './index';
+import { createJiti } from 'jiti';
+import { buildIslandHtml } from '@hyperspan/vite-plugin/islands';
+import { renderVueSSR, renderVueIsland } from './index';
 
 // ---------------------------------------------------------------------------
 // Simple Vue components defined inline — no .vue compilation needed
@@ -222,5 +224,13 @@ describe('renderVueIsland', () => {
     expect(result.content).toContain('data-loading="lazy"');
     expect(result.content).toContain('<template>');
     expect(result.content).toContain('Hello World!');
+  });
+});
+
+describe('jiti can load the plugin', () => {
+  test('vuePlugin is importable without parsing invalid declare global syntax', async () => {
+    const jiti = createJiti(import.meta.url, { interopDefault: true });
+    const mod = (await jiti.import('./index.ts')) as { vuePlugin: () => unknown };
+    expect(typeof mod.vuePlugin).toBe('function');
   });
 });

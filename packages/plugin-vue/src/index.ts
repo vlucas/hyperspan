@@ -1,6 +1,8 @@
-import './types.d';
+/// <reference path="./types.d.ts" />
 import type { Plugin } from 'vite';
-import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { assetHash } from '@hyperspan/framework/utils';
 import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
@@ -10,6 +12,13 @@ import {
   islandPluginResolveId,
   splitIslandId,
   registerClientChunkAliases,
+  registerIslandClientUrl,
+  registerRuntimeSpecifier,
+  isSsrTransform,
+  externalClientIslandRuntime,
+  isRuntimeSpecifier,
+  viteFsUrl,
+  buildIslandHtmlSource,
 } from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
 import {
@@ -21,24 +30,12 @@ import {
 
 const log = debug('hyperspan:plugin-vue');
 
-export function buildIslandHtml(
-  jsId: string,
-  componentName: string,
-  esmName: string,
-  jsContent: string,
-  ssrContent: string,
-  options: { loading?: string; exportKind?: 'default' | 'named' } = {}
-): string {
-  const importStmt =
-    options.exportKind === 'named'
-      ? `import { ${componentName} } from "${esmName}";`
-      : `import ${componentName} from "${esmName}";`;
-  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">${importStmt}${jsContent}</script>`;
-  if (options.loading === 'lazy') {
-    return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
-  }
-  return `<div id="${jsId}">${ssrContent}</div>\n${scriptTag}`;
-}
+const VUE_ISLAND = {
+  framework: 'vue',
+  ext: '.vue',
+  specifiers: ['vue', 'vue/dist/vue.esm-bundler.js'] as const,
+  runtimePrefixes: ['vue', '@vue'] as const,
+} as const;
 
 export async function renderVueSSR(
   Component: unknown,
@@ -98,49 +95,103 @@ async function compileVueSFC(
 }
 
 export function vueIslandPlugin(): Plugin {
+  const vueClientPath = resolve(dirname(fileURLToPath(import.meta.url)), './vue-client.ts');
+  let root = process.cwd();
+  const { framework, ext, specifiers } = VUE_ISLAND;
+  const resolveIslandId = islandPluginResolveId(framework, ext);
+
   return {
     name: 'hyperspan-vue',
     enforce: 'pre',
 
-    resolveId: islandPluginResolveId('vue', '.vue'),
+    config() {
+      return {
+        define: {
+          __VUE_OPTIONS_API__: true,
+          __VUE_PROD_DEVTOOLS__: false,
+          __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
+        },
+        resolve: {
+          alias: {
+            vue: 'vue/dist/vue.esm-bundler.js',
+          },
+        },
+      };
+    },
+
+    configResolved(config) {
+      root = config.root;
+    },
+
+    resolveId(id, importer, options) {
+      const ssr = Boolean(options?.ssr) || this.environment?.name === 'ssr';
+      const isRuntime = (specifier: string) =>
+        isRuntimeSpecifier(specifier, VUE_ISLAND.runtimePrefixes);
+      if (
+        !ssr &&
+        (this.environment?.mode === 'dev' || this.meta.watchMode) &&
+        importer &&
+        isIslandModule(importer, framework, ext) &&
+        isRuntime(id)
+      ) {
+        return vueClientPath;
+      }
+      const external = externalClientIslandRuntime(
+        id,
+        importer,
+        options,
+        framework,
+        ext,
+        isRuntime
+      );
+      if (external) return external;
+      return resolveIslandId.call(this, id, importer, options);
+    },
 
     configureServer() {
-      const clientUrl = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
-      registerImport('vue', clientUrl);
-      registerImport('vue/dist/vue.esm-bundler.js', clientUrl);
+      const productionUrl = `${JS_ISLAND_PUBLIC_PATH}/vue-client.js`;
+      const devUrl = viteFsUrl(vueClientPath);
+      for (const spec of specifiers) {
+        registerRuntimeSpecifier(spec, productionUrl, { devUrl });
+      }
     },
 
     generateBundle(_options, bundle) {
-      registerClientChunkAliases(bundle, (fileName) => fileName.includes('vue-client'), [
-        'vue',
-        'vue/dist/vue.esm-bundler.js',
-      ]);
+      registerClientChunkAliases(bundle, (fileName) => fileName.includes('vue-client'), specifiers);
     },
 
-    async transform(code, id) {
-      if (!isIslandModule(id, 'vue', '.vue')) return;
+    buildStart() {
+      if (this.meta.watchMode) return;
+      try {
+        this.emitFile({
+          type: 'chunk',
+          id: vueClientPath,
+          fileName: '_hs/js/islands/vue-client.js',
+        });
+      } catch {
+        // Serve mode — client is resolved via import map / Vite deps instead.
+      }
+    },
+
+    async transform(code, id, options) {
+      if (!isIslandModule(id, framework, ext)) return;
 
       log('transform vue island', id);
       const cleanId = splitIslandId(id).path;
       const jsId = assetHash(cleanId);
-      const esmName = `island-${assetHash(cleanId)}`;
+      const esmName = registerIslandClientUrl(cleanId, framework, root);
       const componentName = '__hs_vue_component';
+      const ssr = isSsrTransform(this, options);
 
-      const ssrCode = await compileVueSFC(code, cleanId, jsId, true);
-      registerImport(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
+      const compiled = await compileVueSFC(code, cleanId, jsId, ssr);
+      if (!ssr) {
+        return { code: compiled, map: null };
+      }
 
       const moduleCode = `// hyperspan:processed
-function __hs_buildIslandHtml(jsId, componentName, esmName, jsContent, ssrContent, options) {
-  options = options || {};
-  const importStmt = 'import ' + componentName + ' from "' + esmName + '";';
-  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">\${importStmt}\${jsContent}</script>\`;
-  if (options.loading === 'lazy') {
-    return \`<div id="\${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\\n\${scriptTag}</template></div>\`;
-  }
-  return \`<div id="\${jsId}">\${ssrContent}</div>\\n\${scriptTag}\`;
-}
+${buildIslandHtmlSource}
 
-${ssrCode}
+${compiled}
 const ${componentName} = __sfc__;
 
 function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
@@ -172,7 +223,12 @@ ${componentName}.__HS_ISLAND = {
 }
 
 export function vuePlugin(): HS.Plugin {
-  registerIslandPlugin('vue', { vitePlugin: vueIslandPlugin });
+  registerIslandPlugin({
+    framework: VUE_ISLAND.framework,
+    ext: VUE_ISLAND.ext,
+    specifiers: VUE_ISLAND.specifiers,
+    vitePlugin: vueIslandPlugin,
+  });
   return () => {
     log('vuePlugin loaded');
   };

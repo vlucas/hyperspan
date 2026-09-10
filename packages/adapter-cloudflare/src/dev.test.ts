@@ -5,11 +5,11 @@ import { describe, expect, test } from 'vitest';
 import { findWranglerConfigPath } from './dev';
 
 describe('findWranglerConfigPath', () => {
-  test('prefers wrangler.dev.jsonc over wrangler.toml', () => {
+  test('prefers wrangler.dev.jsonc over wrangler.jsonc', () => {
     const root = join(tmpdir(), `hs-cf-dev-${Date.now()}`);
     mkdirSync(root, { recursive: true });
     try {
-      writeFileSync(join(root, 'wrangler.toml'), 'name = "x"\n');
+      writeFileSync(join(root, 'wrangler.jsonc'), '{}\n');
       writeFileSync(join(root, 'wrangler.dev.jsonc'), '{}\n');
       expect(findWranglerConfigPath(root)).toBe(join(root, 'wrangler.dev.jsonc'));
     } finally {
@@ -17,12 +17,12 @@ describe('findWranglerConfigPath', () => {
     }
   });
 
-  test('falls back to wrangler.toml', () => {
-    const root = join(tmpdir(), `hs-cf-dev-toml-${Date.now()}`);
+  test('uses wrangler.jsonc when dev config is absent', () => {
+    const root = join(tmpdir(), `hs-cf-dev-jsonc-${Date.now()}`);
     mkdirSync(root, { recursive: true });
     try {
-      writeFileSync(join(root, 'wrangler.toml'), 'name = "x"\n');
-      expect(findWranglerConfigPath(root)).toBe(join(root, 'wrangler.toml'));
+      writeFileSync(join(root, 'wrangler.jsonc'), '{}\n');
+      expect(findWranglerConfigPath(root)).toBe(join(root, 'wrangler.jsonc'));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

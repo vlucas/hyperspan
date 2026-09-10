@@ -2,7 +2,9 @@ import { test, describe, expect, beforeAll, afterAll } from 'vitest';
 import { join, dirname } from 'node:path';
 import { writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { buildIslandHtml, renderSvelteSSR, renderSvelteIsland } from './index';
+import { createJiti } from 'jiti';
+import { buildIslandHtml } from '@hyperspan/vite-plugin/islands';
+import { renderSvelteSSR, renderSvelteIsland } from './index';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -208,5 +210,13 @@ describe('renderSvelteIsland', () => {
     expect(content).toContain('data-loading="lazy"');
     expect(content).toContain('<template>');
     expect(content).toContain('Hello World!');
+  });
+});
+
+describe('jiti can load the plugin', () => {
+  test('sveltePlugin is importable without parsing invalid declare global syntax', async () => {
+    const jiti = createJiti(import.meta.url, { interopDefault: true });
+    const mod = (await jiti.import('./index.ts')) as { sveltePlugin: () => unknown };
+    expect(typeof mod.sveltePlugin).toBe('function');
   });
 });

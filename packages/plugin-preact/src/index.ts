@@ -2,43 +2,53 @@ import type { Plugin } from 'vite';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assetHash } from '@hyperspan/framework/utils';
-import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { html } from '@hyperspan/framework/html';
 import { h } from 'preact';
 import { render as preactRenderToString } from 'preact-render-to-string';
+
+export { render as renderToString } from 'preact-render-to-string';
 import {
   registerIslandPlugin,
   isIslandModule,
   islandPluginResolveId,
   splitIslandId,
   registerClientChunkAliases,
+  registerIslandClientUrl,
+  registerRuntimeSpecifier,
+  isSsrTransform,
+  externalClientIslandRuntime,
+  isRuntimeSpecifier,
+  viteFsUrl,
+  buildIslandHtmlSource,
+  type IslandExportKind,
 } from '@hyperspan/vite-plugin/islands';
+import {
+  preactSingletonAliases,
+  resolvePackageDir,
+  resolvePreactSpecifier,
+} from './resolve-package';
 import debug from 'debug';
 
 const log = debug('hyperspan:plugin-preact');
 
-export type IslandExportKind = 'default' | 'named';
+const PREACT_ISLAND = {
+  framework: 'preact',
+  ext: '.tsx',
+  specifiers: [
+    'preact',
+    'preact/hooks',
+    'preact/jsx-runtime',
+    'preact/jsx-dev-runtime',
+    'preact/compat',
+    'react',
+    'react-dom',
+  ] as const,
+  runtimePrefixes: ['preact', 'react', 'react-dom', 'preact-render-to-string'] as const,
+} as const;
 
-export function buildIslandHtml(
-  jsId: string,
-  componentName: string,
-  esmName: string,
-  jsContent: string,
-  ssrContent: string,
-  options: { loading?: string; exportKind?: IslandExportKind } = {}
-): string {
-  const importStmt =
-    options.exportKind === 'named'
-      ? `import { ${componentName} } from "${esmName}";`
-      : `import ${componentName} from "${esmName}";`;
-  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">${importStmt}${jsContent}</script>`;
-  if (options.loading === 'lazy') {
-    return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
-  }
-  return `<div id="${jsId}">${ssrContent}</div>\n${scriptTag}`;
-}
+export type { IslandExportKind };
 
 export function renderPreactSSR(Component: unknown, props: Record<string, unknown> = {}): string {
   return preactRenderToString(h(Component as Parameters<typeof h>[0], props));
@@ -135,40 +145,73 @@ function __hs_renderIsland_${componentName}(jsContent = '', ssrContent = '', opt
 `;
 }
 
-const PREACT_CLIENT_SPECIFIERS = [
-  'preact',
-  'preact/hooks',
-  'preact/jsx-runtime',
-  'preact/jsx-dev-runtime',
-  'preact/compat',
-  'react',
-  'react-dom',
-] as const;
+const PREACT_CLIENT_SPECIFIERS = PREACT_ISLAND.specifiers;
 
 /**
  * Vite plugin for Preact islands.
  */
 export function preactIslandPlugin(): Plugin {
+  const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const preactClientPath = resolve(dirname(fileURLToPath(import.meta.url)), './preact-client.ts');
+  let root = process.cwd();
+  const { framework, ext } = PREACT_ISLAND;
+  const resolveIslandId = islandPluginResolveId(framework, ext);
 
   return {
     name: 'hyperspan-preact',
     enforce: 'pre',
 
-    config() {
+    config(config) {
+      const projectRoot = config.root ? String(config.root) : process.cwd();
+      const prerender = resolvePackageDir(pluginRoot, 'preact-render-to-string');
       return {
+        resolve: {
+          dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime'],
+        },
+        ssr: {
+          noExternal: ['preact', 'preact/hooks', 'preact-render-to-string'],
+          resolve: {
+            alias: {
+              ...preactSingletonAliases(projectRoot, pluginRoot),
+              ...(prerender ? { 'preact-render-to-string': prerender } : {}),
+            },
+          },
+        },
         optimizeDeps: {
           include: ['preact', 'preact/hooks', 'preact/jsx-runtime'],
         },
       };
     },
 
-    resolveId: islandPluginResolveId('preact', '.tsx'),
+    configResolved(config) {
+      root = config.root;
+    },
+
+    async resolveId(id, importer, options) {
+      const island = await resolveIslandId.call(this, id, importer, options);
+      if (island) return island;
+      const ssr = Boolean(options?.ssr) || this.environment?.name === 'ssr';
+      if (!ssr) {
+        const isRuntime = (specifier: string) =>
+          isRuntimeSpecifier(specifier, PREACT_ISLAND.runtimePrefixes);
+        if (
+          (this.environment?.mode === 'dev' || this.meta.watchMode) &&
+          importer &&
+          isIslandModule(importer, framework, ext) &&
+          isRuntime(id)
+        ) {
+          return preactClientPath;
+        }
+        return externalClientIslandRuntime(id, importer, { ssr: false }, framework, ext, isRuntime);
+      }
+      return resolvePreactSpecifier(id, root, pluginRoot);
+    },
 
     configureServer() {
-      const clientUrl = '/islands/preact-client.js';
+      const productionUrl = '/islands/preact-client.js';
+      const devUrl = viteFsUrl(preactClientPath);
       for (const spec of PREACT_CLIENT_SPECIFIERS) {
-        registerImport(spec, clientUrl);
+        registerRuntimeSpecifier(spec, productionUrl, { devUrl });
       }
     },
 
@@ -181,21 +224,31 @@ export function preactIslandPlugin(): Plugin {
       );
     },
 
-    async transform(code, id) {
-      if (!isIslandModule(id, 'preact', '.tsx')) return;
+    async transform(code, id, options) {
+      if (!isIslandModule(id, framework, ext)) return;
 
       log('transform island', id);
       const cleanId = splitIslandId(id).path;
-      const esmName = `island-${assetHash(cleanId)}`;
+      const esmName = registerIslandClientUrl(cleanId, framework, root);
       const exports = discoverPreactExports(code);
 
       if (exports.length === 0) {
         throw new Error(
-          `No component exports found in ${cleanId}. Export a default or named Preact component and import with \`with { island: 'preact' }\`.`
+          `No component exports found in ${cleanId}. Export a default or named Preact component and import with \`with { island: '${framework}' }\`.`
         );
       }
 
-      registerImport(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
+      if (!isSsrTransform(this, options)) {
+        const esbuild = await import('esbuild');
+        const result = await esbuild.transform(code, {
+          loader: 'tsx',
+          jsx: 'transform',
+          jsxFactory: 'h',
+          jsxFragment: 'Fragment',
+          sourcefile: cleanId,
+        });
+        return { code: result.code, map: result.map || null };
+      }
 
       const attachments = exports
         .map((exp) => buildIslandAttachment(exp, cleanId, esmName))
@@ -204,7 +257,7 @@ export function preactIslandPlugin(): Plugin {
       const moduleCode = `// hyperspan:processed
 import { h as __hs_h, render as __hs_render, hydrate as __hs_hydrate } from 'preact';
 import { render as __hs_renderToString } from 'preact-render-to-string';
-import { buildIslandHtml as __hs_buildIslandHtml } from '@hyperspan/plugin-preact';
+${buildIslandHtmlSource}
 
 ${code}
 ${attachments}
@@ -232,7 +285,12 @@ ${attachments}
  * Hyperspan config plugin — register in hyperspan.config.ts plugins array.
  */
 export function preactPlugin(): HS.Plugin {
-  registerIslandPlugin('preact', { vitePlugin: preactIslandPlugin });
+  registerIslandPlugin({
+    framework: PREACT_ISLAND.framework,
+    ext: PREACT_ISLAND.ext,
+    specifiers: PREACT_ISLAND.specifiers,
+    vitePlugin: preactIslandPlugin,
+  });
   return () => {
     log('preactPlugin loaded');
   };

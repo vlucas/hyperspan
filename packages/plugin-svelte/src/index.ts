@@ -1,6 +1,9 @@
+/// <reference path="./types.d.ts" />
 import type { Plugin } from 'vite';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { assetHash } from '@hyperspan/framework/utils';
-import { registerImport, JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
+import { JS_ISLAND_PUBLIC_PATH } from '@hyperspan/framework/client/js';
 import { renderIsland } from '@hyperspan/framework';
 import type { Hyperspan as HS } from '@hyperspan/framework';
 import { compile } from 'svelte/compiler';
@@ -10,42 +13,34 @@ import {
   islandPluginResolveId,
   splitIslandId,
   registerClientChunkAliases,
+  registerIslandClientUrl,
+  registerRuntimeSpecifier,
+  isSsrTransform,
+  externalClientIslandRuntime,
+  isRuntimeSpecifier,
+  viteFsUrl,
+  buildIslandHtmlSource,
 } from '@hyperspan/vite-plugin/islands';
 import debug from 'debug';
-import './types.d';
 
 const log = debug('hyperspan:plugin-svelte');
 
-const SVELTE_SPECIFIERS = [
-  'svelte',
-  'svelte/store',
-  'svelte/motion',
-  'svelte/transition',
-  'svelte/animate',
-  'svelte/easing',
-  'svelte/internal',
-  'svelte/internal/disclose-version',
-  'svelte/internal/client',
-] as const;
-
-export function buildIslandHtml(
-  jsId: string,
-  componentName: string,
-  esmName: string,
-  jsContent: string,
-  ssrContent: string,
-  options: { loading?: string; exportKind?: 'default' | 'named' } = {}
-): string {
-  const importStmt =
-    options.exportKind === 'named'
-      ? `import { ${componentName} } from "${esmName}";`
-      : `import ${componentName} from "${esmName}";`;
-  const scriptTag = `<script type="module" id="${jsId}_script" data-source-id="${jsId}">${importStmt}${jsContent}</script>`;
-  if (options.loading === 'lazy') {
-    return `<div id="${jsId}">${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\n${scriptTag}</template></div>`;
-  }
-  return `<div id="${jsId}">${ssrContent}</div>\n${scriptTag}`;
-}
+const SVELTE_ISLAND = {
+  framework: 'svelte',
+  ext: '.svelte',
+  specifiers: [
+    'svelte',
+    'svelte/store',
+    'svelte/motion',
+    'svelte/transition',
+    'svelte/animate',
+    'svelte/easing',
+    'svelte/internal',
+    'svelte/internal/disclose-version',
+    'svelte/internal/client',
+  ] as const,
+  runtimePrefixes: ['svelte'] as const,
+} as const;
 
 export async function renderSvelteSSR(
   Component: unknown,
@@ -69,16 +64,49 @@ function extractComponentName(ssrCode: string): string | null {
 }
 
 export function svelteIslandPlugin(): Plugin {
+  const svelteClientPath = resolve(dirname(fileURLToPath(import.meta.url)), './svelte-client.ts');
+  let root = process.cwd();
+  const { framework, ext, specifiers } = SVELTE_ISLAND;
+  const resolveIslandId = islandPluginResolveId(framework, ext);
+
   return {
     name: 'hyperspan-svelte',
     enforce: 'pre',
 
-    resolveId: islandPluginResolveId('svelte', '.svelte'),
+    configResolved(config) {
+      root = config.root;
+    },
+
+    resolveId(id, importer, options) {
+      const ssr = Boolean(options?.ssr) || this.environment?.name === 'ssr';
+      const isRuntime = (specifier: string) =>
+        isRuntimeSpecifier(specifier, SVELTE_ISLAND.runtimePrefixes);
+      if (
+        !ssr &&
+        (this.environment?.mode === 'dev' || this.meta.watchMode) &&
+        importer &&
+        isIslandModule(importer, framework, ext) &&
+        isRuntime(id)
+      ) {
+        return svelteClientPath;
+      }
+      const external = externalClientIslandRuntime(
+        id,
+        importer,
+        options,
+        framework,
+        ext,
+        isRuntime
+      );
+      if (external) return external;
+      return resolveIslandId.call(this, id, importer, options);
+    },
 
     configureServer() {
-      const clientUrl = `${JS_ISLAND_PUBLIC_PATH}/svelte-client.js`;
-      for (const spec of SVELTE_SPECIFIERS) {
-        registerImport(spec, clientUrl);
+      const productionUrl = `${JS_ISLAND_PUBLIC_PATH}/svelte-client.js`;
+      const devUrl = viteFsUrl(svelteClientPath);
+      for (const spec of specifiers) {
+        registerRuntimeSpecifier(spec, productionUrl, { devUrl });
       }
     },
 
@@ -86,42 +114,53 @@ export function svelteIslandPlugin(): Plugin {
       registerClientChunkAliases(
         bundle,
         (fileName) => fileName.includes('svelte-client'),
-        SVELTE_SPECIFIERS
+        specifiers
       );
     },
 
-    async transform(code, id) {
-      if (!isIslandModule(id, 'svelte', '.svelte')) return;
+    buildStart() {
+      if (this.meta.watchMode) return;
+      try {
+        this.emitFile({
+          type: 'chunk',
+          id: svelteClientPath,
+          fileName: '_hs/js/islands/svelte-client.js',
+        });
+      } catch {
+        // Serve mode — client is resolved via import map / Vite deps instead.
+      }
+    },
+
+    async transform(code, id, options) {
+      if (!isIslandModule(id, framework, ext)) return;
 
       log('transform svelte island', id);
       const cleanId = splitIslandId(id).path;
       const jsId = assetHash(cleanId);
-      const esmName = `island-${assetHash(cleanId)}`;
+      const esmName = registerIslandClientUrl(cleanId, framework, root);
+      const ssr = isSsrTransform(this, options);
 
-      const ssrResult = compile(code, { filename: cleanId, generate: 'server' });
-      const ssrCode = ssrResult.js.code;
-      const componentName = extractComponentName(ssrCode);
+      const compiled = compile(code, {
+        filename: cleanId,
+        generate: ssr ? 'server' : 'client',
+      });
+      const compiledCode = compiled.js.code;
+      const componentName = extractComponentName(compiledCode);
 
       if (!componentName) {
         throw new Error(
-          `No default export found in ${cleanId}. Export a default Svelte component and import with \`with { island: 'svelte' }\`.`
+          `No default export found in ${cleanId}. Export a default Svelte component and import with \`with { island: '${framework}' }\`.`
         );
       }
 
-      registerImport(esmName, `${JS_ISLAND_PUBLIC_PATH}/${esmName}.js`);
+      if (!ssr) {
+        return { code: compiledCode, map: compiled.js.map ?? null };
+      }
 
       const moduleCode = `// hyperspan:processed
-function __hs_buildIslandHtml(jsId, componentName, esmName, jsContent, ssrContent, options) {
-  options = options || {};
-  const importStmt = 'import ' + componentName + ' from "' + esmName + '";';
-  const scriptTag = \`<script type="module" id="\${jsId}_script" data-source-id="\${jsId}">\${importStmt}\${jsContent}</script>\`;
-  if (options.loading === 'lazy') {
-    return \`<div id="\${jsId}">\${ssrContent}</div><div data-loading="lazy" style="height:1px;width:1px;overflow:hidden;"><template>\\n\${scriptTag}</template></div>\`;
-  }
-  return \`<div id="\${jsId}">\${ssrContent}</div>\\n\${scriptTag}\`;
-}
+${buildIslandHtmlSource}
 
-${ssrCode}
+${compiledCode}
 
 function __hs_renderIsland(jsContent = '', ssrContent = '', options = {}) {
   return __hs_buildIslandHtml("${jsId}", "${componentName}", "${esmName}", jsContent, ssrContent, options);
@@ -148,7 +187,12 @@ ${componentName}.__HS_ISLAND = {
 }
 
 export function sveltePlugin(): HS.Plugin {
-  registerIslandPlugin('svelte', { vitePlugin: svelteIslandPlugin });
+  registerIslandPlugin({
+    framework: SVELTE_ISLAND.framework,
+    ext: SVELTE_ISLAND.ext,
+    specifiers: SVELTE_ISLAND.specifiers,
+    vitePlugin: svelteIslandPlugin,
+  });
   return () => {
     log('sveltePlugin loaded');
   };
