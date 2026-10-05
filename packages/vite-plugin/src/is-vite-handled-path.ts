@@ -1,6 +1,6 @@
 /** Pathname extensions Vite should serve in middleware mode (not Hyperspan routes). */
 const VITE_ASSET_EXT =
-  /\.(tsx?|jsx?|mjs|cjs|css|vue|svelte|svg|png|jpe?g|gif|webp|woff2?|ttf|eot|ico|map)$/i;
+  /\.(tsx?|jsx?|mjs|cjs|json|css|vue|svelte|svg|png|jpe?g|gif|webp|woff2?|ttf|eot|ico|map)$/i;
 
 /**
  * Whether a request URL should be left to Vite (HMR, modules, static assets)
