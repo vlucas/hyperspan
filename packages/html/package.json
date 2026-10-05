@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/html",
-  "version": "2.0.0-alpha.20",
+  "version": "2.0.0",
   "description": "Hyperspan HTML Templates",
   "type": "module",
   "main": "src/html.ts",
@@ -14,7 +14,7 @@
   "public": true,
   "publishConfig": {
     "access": "public",
-    "tag": "alpha"
+    "tag": "latest"
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
