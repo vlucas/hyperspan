@@ -113,9 +113,6 @@ export async function writeServerEntry(options: {
   const { root, outDir, appDir, configFile, adapter } = options;
 
   const routeSpecs = await collectRouteModuleSpecs(root, appDir);
-  if (routeSpecs.length === 0) {
-    return;
-  }
 
   const configPath = configFile ?? join(root, 'hyperspan.config.ts');
   const configImportPath = relative(outDir, configPath).replace(/\\/g, '/');

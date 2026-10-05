@@ -35,6 +35,7 @@ import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/cl
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
 import { applyWebResponseToNode, incomingRequestUrl, nodeToWebRequest } from './node-http';
+import { isViteHandledPath } from './is-vite-handled-path';
 
 export type HyperspanVitePluginOptions = {
   configFile?: string;
@@ -44,6 +45,8 @@ const MANIFEST_VIRTUAL_ID = 'virtual:hyperspan-manifest';
 const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
 const DEV_BINDINGS_ID = 'virtual:hyperspan-dev-bindings';
 const RESOLVED_DEV_BINDINGS_ID = '\0' + DEV_BINDINGS_ID;
+
+export { isViteHandledPath } from './is-vite-handled-path';
 
 /** Plugin packages may live outside the app via `file:` links; Vite must serve their client runtimes. */
 export function hyperspanPackageDirs(projectRoot: string): string[] {
@@ -515,23 +518,10 @@ export function clearDevBindingsForTests() { devBindings = undefined; }
     viteServer.middlewares.use(async (req, res, next) => {
       const url = req.url ?? '/';
 
-      // Let Vite handle its own modules, HMR, and transformed assets (CSS, etc.)
-      if (
-        url.startsWith('/@') ||
-        url.startsWith('/__vite') ||
-        url.startsWith('/node_modules') ||
-        url.includes('.tsx') ||
-        url.includes('.ts') ||
-        url.includes('.js') ||
-        url.includes('.mjs') ||
-        url.includes('.css') ||
-        url.includes('.vue') ||
-        url.includes('.svelte') ||
-        url.includes('.svg') ||
-        url.includes('.png') ||
-        url.includes('.jpg') ||
-        url.includes('.woff')
-      ) {
+      // Let Vite handle its own modules, HMR, and transformed assets (CSS, etc.).
+      // Match on pathname only — query strings must not skip Hyperspan routes
+      // (e.g. /search?ext=.js or /docs/introducing-typescript).
+      if (isViteHandledPath(url)) {
         return next();
       }
 

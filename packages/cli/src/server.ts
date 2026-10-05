@@ -25,7 +25,6 @@ type startConfig = {
   development?: boolean;
 };
 
-const CWD = process.cwd();
 const log = debug('hyperspan:server');
 
 let loadersRegistered = false;
@@ -71,8 +70,9 @@ export function registerAppLoaders(root: string = process.cwd()) {
 
 export async function loadConfig(): Promise<HS.Config> {
   registerAppLoaders();
-  const configFile = join(CWD, 'hyperspan.config.ts');
-  const jiti = createAppJiti(CWD);
+  const root = process.cwd();
+  const configFile = join(root, 'hyperspan.config.ts');
+  const jiti = createAppJiti(root);
   try {
     const config = createConfig(jiti(configFile) as Partial<HS.Config>);
     config.deployAdapter ??= nodeAdapter();
@@ -92,19 +92,20 @@ export async function loadConfig(): Promise<HS.Config> {
  */
 export async function createHyperspanServer(startConfig: startConfig = {}): Promise<HS.Server> {
   registerAppLoaders();
+  const root = process.cwd();
 
   console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
 
   // Load build manifest if present (production)
-  const manifestPath = join(CWD, 'dist/manifest.json');
+  const manifestPath = join(root, 'dist/manifest.json');
   if (existsSync(manifestPath)) {
     const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
     setAssetManifest(manifest);
   }
 
   // Prefer built assets directory when present
-  if (existsSync(join(CWD, 'dist'))) {
+  if (existsSync(join(root, 'dist'))) {
     config.publicDir = './dist';
   }
 
@@ -135,9 +136,10 @@ export async function addDirectoryAsRoutes(
   startConfig: startConfig = {}
 ) {
   registerAppLoaders();
+  const root = process.cwd();
 
   const appDir = server._config.appDir || './app';
-  const directoryPath = join(CWD, appDir, relativeDirectory);
+  const directoryPath = join(root, appDir, relativeDirectory);
 
   if (!existsSync(directoryPath)) {
     return;
@@ -151,7 +153,8 @@ export async function addDirectoryAsRoutes(
     await Promise.all(
       files.map(async (filePath) => {
         try {
-          const relativeFilePath = filePath.split(join(CWD, appDir, relativeDirectory)).pop() || '';
+          const relativeFilePath =
+            filePath.split(join(root, appDir, relativeDirectory)).pop() || '';
           if (!isValidRoutePath(relativeFilePath)) {
             return null;
           }
@@ -161,7 +164,7 @@ export async function addDirectoryAsRoutes(
 
           let productionManifest;
           try {
-            const manifestPath = join(CWD, 'dist/manifest.json');
+            const manifestPath = join(root, 'dist/manifest.json');
             if (existsSync(manifestPath)) {
               productionManifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
             }
@@ -176,7 +179,7 @@ export async function addDirectoryAsRoutes(
 
           const path = route._path();
 
-          routeMap.push({ route: path, file: filePath.replace(CWD, '') });
+          routeMap.push({ route: path, file: filePath.replace(root, '') });
           return route;
         } catch (error) {
           console.error(`[Hyperspan] Error loading route: ${filePath}`);

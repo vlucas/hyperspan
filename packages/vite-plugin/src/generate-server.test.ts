@@ -138,26 +138,20 @@ describe('generate-server', () => {
     expect(source).not.toContain('export async function start(');
   });
 
-  test('writeServerEntry writes a fully custom renderServerEntry string', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hs-write-server-custom-'));
+  test('writeServerEntry writes dist/server.ts even with zero routes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hs-write-server-empty-'));
     mkdirSync(join(root, 'app/routes'), { recursive: true });
     mkdirSync(join(root, 'dist'), { recursive: true });
-    writeFileSync(join(root, 'app/routes/index.ts'), 'export default {}');
-
-    const customAdapter: Adapter = {
-      name: 'custom',
-      renderServerEntry: () => 'export default { fetch() { return new Response("ok"); } }\n',
-    };
+    writeFileSync(join(root, 'hyperspan.config.ts'), 'export default {};\n');
 
     await writeServerEntry({
       root,
       outDir: join(root, 'dist'),
       appDir: './app',
-      adapter: customAdapter,
     });
 
-    expect(readFileSync(join(root, 'dist/server.ts'), 'utf8')).toBe(
-      'export default { fetch() { return new Response("ok"); } }\n'
-    );
+    const source = readFileSync(join(root, 'dist/server.ts'), 'utf8');
+    expect(source).toContain('export async function start(');
+    expect(source).toContain('const __hs_routeModules = [');
   });
 });
