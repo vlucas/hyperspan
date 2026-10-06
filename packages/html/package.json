@@ -3,15 +3,20 @@
   "version": "2.0.0",
   "description": "Hyperspan HTML Templates",
   "type": "module",
-  "main": "src/html.ts",
-  "types": "src/html.ts",
+  "main": "./dist/html.js",
+  "types": "./src/html.ts",
   "exports": {
     ".": {
       "types": "./src/html.ts",
-      "default": "./src/html.ts"
+      "default": "./dist/html.js"
     }
   },
   "public": true,
+  "files": [
+    "dist",
+    "src",
+    "LICENSE.txt"
+  ],
   "publishConfig": {
     "access": "public",
     "tag": "latest"
@@ -29,11 +34,10 @@
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "build": "node --import tsx ./build.ts",
-    "clean": "rm -rf dist",
+    "build": "node ../../scripts/build-node-packages.mjs html",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "prepack": "npm run clean && npm run build"
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",

@@ -31,6 +31,7 @@ import {
   clientImportKeyFromBundleEntry,
 } from './client-js';
 import { importMetaResolvePlugin } from './import-meta-resolve';
+import { CSS_PUBLIC_PATH } from '@hyperspan/framework/client/css';
 import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
 import { writeServerEntry, resolveDeployAdapter } from './generate-server';
 import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
@@ -118,7 +119,8 @@ export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
       }
       return {
         appType: 'custom' as const,
-        publicDir: config.publicDir ?? 'public',
+        // Do not set publicDir. Vite defaults it to "public", and returning
+        // "public" here overrides a user or plugin `publicDir: false`.
         envPrefix: ['APP_PUBLIC_', 'VITE_'],
         resolve: {
           alias: resolveModuleAliases(projectRoot),
@@ -654,8 +656,10 @@ async function materializeCssForProduction(
   const { createHash } = await import('node:crypto');
   const buildOutDir = config.build.outDir || 'dist';
   const outDir = isAbsolute(buildOutDir) ? buildOutDir : join(projectRoot, buildOutDir);
-  const assetsDir = join(outDir, 'assets');
-  mkdirSync(assetsDir, { recursive: true });
+  // Compiled route CSS sits with the other client assets (`/_hs/js`), not in
+  // Vite's `assets/` folder and not in `public/` (which `publicDir: false` skips).
+  const cssDir = join(outDir, CSS_PUBLIC_PATH.replace(/^\//, ''));
+  mkdirSync(cssDir, { recursive: true });
 
   const result: string[] = [];
   for (const url of cssUrls) {
@@ -681,10 +685,10 @@ async function materializeCssForProduction(
         (file || url)
           .split('/')
           .pop()
-          ?.replace(/\.css$/, '') || 'style';
+          ?.replace(/\.(css|scss|sass|less)$/i, '') || 'style';
       const outName = `${base}-${hash}.css`;
-      writeFileSync(join(assetsDir, outName), cssText);
-      result.push(`/assets/${outName}`);
+      writeFileSync(join(cssDir, outName), cssText);
+      result.push(`${CSS_PUBLIC_PATH}/${outName}`);
     } catch (err) {
       console.warn(`[Hyperspan] Could not materialize CSS ${url}:`, err);
     }

@@ -7,7 +7,9 @@
   ],
   "version": "2.0.0",
   "scripts": {
-    "test": "vitest run",
+    "build": "node scripts/build-node-packages.mjs",
+    "prepare": "node scripts/build-node-packages.mjs",
+    "test": "node scripts/build-node-packages.mjs && vitest run",
     "test:bun": "bun test",
     "publish:packages": "node scripts/publish-packages.mjs"
   },

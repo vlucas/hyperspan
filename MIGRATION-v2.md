@@ -149,7 +149,7 @@ For local Vite, `cloudflareAdapter()` points the host at `@hyperspan/adapter-clo
 }
 ```
 
-CSS imports in layouts (e.g. `import '../styles/globals.css'`) are for Vite build-time only — Tailwind compiles them into `dist/assets/`. At Worker runtime, styles come from the manifest via `hyperspanStyleTags()`.
+CSS imports in layouts (e.g. `import '../styles/globals.css'`) are for Vite build-time only — Tailwind compiles them into `dist/_hs/css/`. At Worker runtime, styles come from the manifest via `hyperspanStyleTags()`.
 
 `hyperspan build` runs the deploy adapter’s `afterBuild` hook, which syncs Wrangler CSS aliases.
 

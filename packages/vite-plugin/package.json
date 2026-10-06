@@ -4,27 +4,33 @@
   "description": "Vite plugin for Hyperspan apps",
   "type": "module",
   "public": true,
+  "files": [
+    "dist",
+    "src"
+  ],
   "publishConfig": {
     "access": "public",
     "tag": "latest"
   },
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "default": "./dist/index.js"
     },
     "./islands": {
       "types": "./src/islands.ts",
-      "default": "./src/islands.ts"
+      "default": "./dist/islands.js"
     },
     "./tsconfig-aliases": {
       "types": "./src/tsconfig-aliases.ts",
-      "default": "./src/tsconfig-aliases.ts"
+      "default": "./dist/tsconfig-aliases.js"
     }
   },
   "scripts": {
+    "build": "node ../../scripts/build-node-packages.mjs vite-plugin",
+    "prepack": "npm run build",
     "test": "vitest run"
   },
   "dependencies": {
