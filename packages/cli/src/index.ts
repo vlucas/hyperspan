@@ -1,3 +1,2 @@
-#!/usr/bin/env bun
-
-import './commands';
+#!/usr/bin/env node
+import './commands.js';

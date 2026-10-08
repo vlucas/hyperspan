@@ -2,17 +2,15 @@ import { Command } from 'commander';
 import degit from 'degit';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
+import { join } from 'node:path';
+import { createServer } from 'vite';
 import packageJson from '../package.json';
-import { createHyperspanServer } from './server';
-import { startBunServer } from './runtimes/bun';
+import { loadConfig } from './server';
 
 const program = new Command();
 
 program.name('hyperspan').description('CLI for @hyperspan/framework').version(packageJson.version);
 
-/**
- * Create a new hyperspan project
- */
 program
   .command('create')
   .description('Create a new hyperspan project')
@@ -29,57 +27,126 @@ program
     await emitter.clone(`${name}`);
     console.log(`[Hyperspan] project created in ${name}`);
     console.log(`[Hyperspan] Installing dependencies...`);
-    execSync(`cd ${name} && bun install`, { stdio: 'pipe' });
-    console.log(`[Hyperspan] Dependencies installed!`);
+    execSync(`cd ${name} && npm install`, { stdio: 'inherit' });
     console.log(`[Hyperspan] Start your server (copy & paste):`);
-    console.log(`\n\ncd ${name} && bun run dev`);
+    console.log(`\n\ncd ${name} && npm run dev`);
   });
 
-/**
- * Start the server
- */
 program
-  .command('start')
-  .alias('dev')
+  .command('dev')
   .option('--dir <path>', 'directory of your hyperspan project', './')
-  .description('Start the server')
+  .description('Start the Vite dev server')
   .action(async function (options) {
-    const IS_DEV_MODE = process.argv.includes('dev');
+    process.chdir(options.dir);
+    process.env.NODE_ENV = 'development';
 
-    // Developer mode (extra logging, etc.)
-    if (IS_DEV_MODE) {
-      console.log('[Hyperspan] Developer mode enabled 🛠️');
-      const nodeEnv = process.env.NODE_ENV;
-      if (!nodeEnv || nodeEnv === 'production') {
-        process.env.NODE_ENV = 'development';
-      }
-    }
-
-    // Ensure we are in a hyperspan project
-    const serverFile = `${options.dir}/app/routes`;
-
-    if (!fs.existsSync(serverFile)) {
+    if (!fs.existsSync('app/routes')) {
       console.error('Error: Could not find app/routes - Are you in a Hyperspan project directory?');
       process.exit(1);
     }
 
     console.log('\n========================================');
-    console.log('[Hyperspan] Starting...');
+    console.log('[Hyperspan] Starting dev server...');
 
-    const server = await createHyperspanServer({ development: IS_DEV_MODE });
-    const httpServer = startBunServer(server);
+    const configFile = join(process.cwd(), 'vite.config.ts');
+    if (!fs.existsSync(configFile)) {
+      console.error('Error: vite.config.ts not found. See MIGRATION-v2.md');
+      process.exit(1);
+    }
 
-    console.log(
-      `[Hyperspan] Server started on http://localhost:${httpServer.port} (Press Ctrl+C to stop)`
-    );
+    const vite = await createServer({ configFile });
+    await vite.listen();
+    vite.printUrls();
     console.log('========================================\n');
+  });
+
+program
+  .command('build')
+  .option('--dir <path>', 'directory of your hyperspan project', './')
+  .description('Build the project for production')
+  .action(async function (options) {
+    try {
+      process.chdir(options.dir);
+      process.env.NODE_ENV = 'production';
+
+      const { build } = await import('vite');
+      await build({
+        configFile: join(process.cwd(), 'vite.config.ts'),
+      });
+
+      const config = await loadConfig();
+      if (config.deployAdapter?.afterBuild) {
+        await config.deployAdapter.afterBuild({
+          root: process.cwd(),
+          appDir: config.appDir ?? './app',
+          outDir: join(process.cwd(), 'dist'),
+        });
+      }
+
+      console.log('[Hyperspan] Build complete → dist/');
+    } catch (err) {
+      console.error(err);
+      process.exit(1);
+    }
+    process.exit(0);
+  });
+
+program
+  .command('start')
+  .option('--dir <path>', 'directory of your hyperspan project', './')
+  .option('--port <number>', 'port to listen on')
+  .description('Start the production Node server')
+  .action(async function (options) {
+    process.chdir(options.dir);
+    process.env.NODE_ENV = 'production';
+
+    if (!fs.existsSync('app/routes')) {
+      console.error('Error: Could not find app/routes - Are you in a Hyperspan project directory?');
+      process.exit(1);
+    }
+
+    console.log('[Hyperspan] Starting production server...');
+
+    const root = process.cwd();
+    const serverEntry = join(root, 'dist/server.ts');
+    if (!fs.existsSync(serverEntry)) {
+      console.error('[Hyperspan] dist/server.ts not found. Run hyperspan build first.');
+      process.exit(1);
+    }
+
+    const configFile = join(root, 'vite.config.ts');
+    if (!fs.existsSync(configFile)) {
+      console.error('Error: vite.config.ts not found. See MIGRATION-v2.md');
+      process.exit(1);
+    }
+
+    // Vite SSR so TSX/Vue/Svelte islands in app routes can load. jiti cannot compile them.
+    const vite = await createServer({
+      configFile,
+      root,
+      server: { middlewareMode: true },
+      appType: 'custom',
+    });
+    const mod = (await vite.ssrLoadModule(serverEntry)) as {
+      start?: (options: { port?: number }) => Promise<unknown>;
+    };
+    if (typeof mod.start !== 'function') {
+      await vite.close().catch(() => undefined);
+      console.error(
+        '[Hyperspan] dist/server.ts has no start() — use Wrangler for Cloudflare Workers.'
+      );
+      process.exit(1);
+    }
+    await mod.start({
+      port: options.port != null ? Number(options.port) : undefined,
+    });
   });
 
 program
   .command('build:ssg')
   .option('--dir <path>', 'directory of your hyperspan project', './')
   .description('Build the project for SSG')
-  .action(async (options) => {
+  .action(async () => {
     console.error('Error: SSG build not implemented yet... :(');
     process.exit(1);
   });

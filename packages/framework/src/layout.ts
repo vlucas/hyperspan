@@ -1,19 +1,24 @@
-import { html } from '@hyperspan/html';
-import { JS_IMPORT_MAP, buildClientJS } from './client/js';
-import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from './client/css';
+import { html } from './html';
+import { CSS_PUBLIC_PATH } from './client/css';
+import { getImportMap, getRouteCss } from './client/manifest';
+import { actionsClient, streamingClient } from './client/js';
 import type { Hyperspan as HS } from './types';
 
-const clientStreamingJS = await buildClientJS(
-  import.meta.resolve('./client/_hs/hyperspan-streaming.client')
-);
-
 /**
- * Output the importmap for the client so we can use ESModules on the client to load JS files on demand
+ * Output the importmap for the client so we can use ESModules on the client to load JS files on demand.
+ *
+ * The streaming client MUST be loaded as a classic <script>, not type=module.
+ * Browsers defer all ESM until the document finishes parsing, which would hold
+ * every streaming chunk until the whole page is done. A dynamically inserted
+ * classic script runs as soon as it downloads.
  */
 export function hyperspanScriptTags() {
+  const imports = getImportMap();
+  const streamingPath = streamingClient.publicPath;
+
   return html`
     <script type="importmap">
-      {"imports": ${Object.fromEntries(JS_IMPORT_MAP)}}
+      {"imports": ${imports}}
     </script>
     <script id="hyperspan-streaming-script">
       // [Hyperspan] Streaming - Load the client streaming JS module only when the first chunk is loaded
@@ -25,7 +30,7 @@ export function hyperspanScriptTags() {
           if (!window._hscLoading) {
             window._hscLoading = true;
             const script = document.createElement('script');
-            script.src = '${clientStreamingJS.publicPath}';
+            script.src = '${streamingPath}';
             document.body.appendChild(script);
           }
         };
@@ -39,11 +44,23 @@ export function hyperspanScriptTags() {
  */
 export function hyperspanStyleTags(context: HS.Context) {
   const styleTags = [];
-  const cssImports = context.route.cssImports ?? CSS_ROUTE_MAP.get(context.route.path) ?? [];
+  const cssImports = context.route.cssImports?.length
+    ? context.route.cssImports
+    : getRouteCss(context.route.path);
 
   for (const cssFile of cssImports) {
-    styleTags.push(html` <link rel="stylesheet" href="${CSS_PUBLIC_PATH}/${cssFile}" /> `);
+    // Absolute Vite/dev URLs (e.g. /app/styles/globals.css) are used as-is;
+    // hashed build artifacts are served under /_hs/css/.
+    const href = cssFile.startsWith('/') ? cssFile : `${CSS_PUBLIC_PATH}/${cssFile}`;
+    styleTags.push(html` <link rel="stylesheet" href="${href}" /> `);
   }
 
   return styleTags;
+}
+
+/**
+ * Render the actions client script tag (used by createAction).
+ */
+export function hyperspanActionsScriptTag() {
+  return html`<script type="module" src="${actionsClient.publicPath}"></script>`;
 }

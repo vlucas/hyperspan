@@ -1,39 +1,51 @@
 {
   "name": "@hyperspan/plugin-preact",
-  "version": "1.0.4",
+  "version": "2.0.1",
   "description": "Hyperspan Plugin for Preact",
+  "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "public": true,
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
-  "keywords": [],
   "homepage": "https://www.hyperspan.dev/docs/clientjs/islands",
   "bugs": {
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "test": "bun test"
+    "test": "vitest run"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.8",
+    "@hyperspan/vite-plugin": "^2.0.1",
+    "preact": "^10.28.3",
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@hyperspan/html": "^1.0.0",
-    "@hyperspan/framework": "^1.0.1"
+    "@hyperspan/framework": "^2.0.1",
+    "@hyperspan/vite-plugin": "^2.0.1",
+    "preact": "^10.28.3",
+    "vite": "^8.0.0"
   },
   "dependencies": {
     "debug": "^4.4.3",
-    "preact": "^10.28.3",
     "preact-render-to-string": "^6.6.5"
   }
 }

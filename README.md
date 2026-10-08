@@ -8,6 +8,40 @@ shipping minimal JavaScript to the client.
 
 Visit: [Hyperspan.dev](https://www.hyperspan.dev)
 
+## Deployment adapters
+
+Pass a deployment adapter to `deployAdapter`. Island plugins go in `plugins`. Omit `deployAdapter` to deploy to Node.
+
+```ts
+import { createConfig } from '@hyperspan/framework';
+import { cloudflareAdapter } from '@hyperspan/adapter-cloudflare';
+import { preactPlugin } from '@hyperspan/plugin-preact';
+
+export default createConfig({
+  deployAdapter: cloudflareAdapter(),
+  plugins: [preactPlugin()],
+});
+```
+
+```ts
+export default createConfig({
+  plugins: [preactPlugin()],
+  // deployAdapter omitted → Node
+});
+```
+
+`hyperspan build` generates `dist/server.ts` via the deploy adapter’s `renderServerEntry(template)`. Each adapter fills template slots (`beforeFileContent` for imports, `afterFileContent` for the platform entry) — Node/Bun export `start()`, Cloudflare exports a Worker `fetch` default.
+
+| Adapter                             | `deployAdapter`          | Entry     |
+| ----------------------------------- | ------------------------ | --------- |
+| `@hyperspan/adapter-node` (default) | omit, or `nodeAdapter()` | `start()` |
+| `@hyperspan/adapter-bun`            | `bunAdapter()`           | `start()` |
+| `@hyperspan/adapter-cloudflare`     | `cloudflareAdapter()`    | `fetch()` |
+
+Use `beforeServerCreate({ env })` to wire platform bindings. On Node/Bun, `env` is `process.env`. On Cloudflare, `cloudflareAdapter()` loads Wrangler bindings during `hyperspan dev` and the Worker `env` in production.
+
+For Cloudflare, `cloudflareAdapter()` also syncs Wrangler CSS aliases after `hyperspan build`.
+
 ## Packages in this repo
 
 - `@hyperspan/html` - Streaming HTML templates, useable in any project

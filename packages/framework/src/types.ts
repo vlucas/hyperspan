@@ -1,4 +1,4 @@
-import { HSHtml } from '@hyperspan/html';
+import { HSHtml } from './html';
 import * as z from 'zod';
 
 /**
@@ -63,13 +63,78 @@ export namespace Hyperspan {
     disableStreaming?: DisableStreamingFn;
   };
 
+  export type AdapterAfterBuildContext = {
+    root: string;
+    appDir: string;
+    outDir: string;
+  };
+
+  export type ServerCreateContext = {
+    env: unknown;
+  };
+
+  export type DeployEntryContext = {
+    createHyperspanServer: (ctx: ServerCreateContext) => Promise<Server>;
+    config: Config;
+  };
+
+  export type DeployEntry = {
+    start?(options?: { port?: number }): unknown | Promise<unknown>;
+    fetch?(request: Request, env?: unknown, ctx?: unknown): Response | Promise<Response>;
+  };
+
+  /** Optional snippets interpolated into generated `dist/server.ts`. Null/omitted slots emit nothing. */
+  export type ServerEntrySlots = {
+    beforeFileContent?: string | null;
+    beforeCreateServer?: string | null;
+    afterCreateServer?: string | null;
+    beforeRoutes?: string | null;
+    afterRoutes?: string | null;
+    afterFileContent?: string | null;
+  };
+
+  export type ServerEntryTemplate = (slots?: ServerEntrySlots) => string;
+
+  export type Adapter = {
+    /** Diagnostic name, e.g. `node`, `cloudflare`. */
+    name: string;
+    /**
+     * Native ESM specifier exporting `resolveDevEnv(root)`.
+     * Imported by the Vite plugin so platform SDKs like wrangler load correctly.
+     */
+    devModule?: string;
+    resolveDevEnv?(root: string): Promise<unknown>;
+    /**
+     * Render generated `dist/server.ts` from the shared bootstrap template.
+     * Fill slots (especially `afterFileContent`) for the platform entry.
+     */
+    renderServerEntry(template: ServerEntryTemplate): string | Promise<string>;
+    afterBuild?(ctx: AdapterAfterBuildContext): void | Promise<void>;
+  };
+
+  /** Runtime adapter object (`nodeAdapter()`, `cloudflareAdapter()`, …). */
+  export type DeployAdapter = Adapter;
+
   export type Config = {
     appDir: string;
     publicDir: string;
-    plugins: Array<Hyperspan.Plugin>; // Loaders for client islands
+    /** Island plugins (`preactPlugin()`, `sveltePlugin()`, …). */
+    plugins: Array<Hyperspan.Plugin>;
+    /**
+     * Deployment adapter. Pass `cloudflareAdapter()` or `bunAdapter()`.
+     * Omit (or pass `nodeAdapter()`) to deploy to Node.
+     */
+    deployAdapter: Adapter;
+    /**
+     * Called before the server is created, with platform bindings.
+     * - Vite/`hyperspan dev`: adapter `devModule` `resolveDevEnv(root)` when present; else `process.env`
+     * - Node/Bun production entry: `process.env`
+     * - Cloudflare Workers entry: Worker `env` bindings
+     */
+    beforeServerCreate?: (ctx: ServerCreateContext) => void | Promise<void>;
     // For customizing the routes and adding your own...
-    beforeRoutesAdded?: (server: Hyperspan.Server) => void;
-    afterRoutesAdded?: (server: Hyperspan.Server) => void;
+    beforeRoutesAdded?: (server: Hyperspan.Server) => void | Promise<void>;
+    afterRoutesAdded?: (server: Hyperspan.Server) => void | Promise<void>;
     responseOptions?: ResponseOptions;
   };
 
@@ -119,11 +184,23 @@ export namespace Hyperspan {
     merge: (response: Response) => Promise<Response>;
   };
 
+  export type UrlDiff = {
+    pathname?: string | null;
+    searchParams?: Record<string, string | number | boolean | null | undefined> | null;
+    hash?: string | null;
+  };
+
+  export type UrlOptions = {
+    /** When true, start from pathname only (drop current query string and hash). */
+    clean?: boolean;
+  };
+
   export interface Context {
     vars: Record<string, any>;
     route: RouteConfig;
     req: HSRequest;
     res: HSResponse;
+    url: (diff?: UrlDiff, options?: UrlOptions) => string;
   }
 
   export type ClientIslandOptions = {
@@ -353,7 +430,7 @@ export namespace Hyperspan {
    * Client JS Module = ESM Module + Public Path + Render Script Tag
    */
   export type ClientJSBuildResult = {
-    assetHash: string; // Asset hash of the module path
+    assetHash: string; // Identity of the resolved path; production file hash comes from Vite
     esmName: string; // Filename of the built JavaScript file without the extension
     publicPath: string; // Full public path of the built JavaScript file
     /**
@@ -374,6 +451,15 @@ export namespace Hyperspan {
     formErrors: unknown[];
   }
 }
+
+export type DeployAdapter = Hyperspan.DeployAdapter;
+export type ServerCreateContext = Hyperspan.ServerCreateContext;
+export type Adapter = Hyperspan.Adapter;
+export type AdapterAfterBuildContext = Hyperspan.AdapterAfterBuildContext;
+export type DeployEntry = Hyperspan.DeployEntry;
+export type DeployEntryContext = Hyperspan.DeployEntryContext;
+export type ServerEntrySlots = Hyperspan.ServerEntrySlots;
+export type ServerEntryTemplate = Hyperspan.ServerEntryTemplate;
 
 declare global {
   interface DocumentEventMap {

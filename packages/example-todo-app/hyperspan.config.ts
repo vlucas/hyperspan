@@ -1,4 +1,5 @@
 import { createConfig } from '@hyperspan/framework';
+import { preactPlugin } from '@hyperspan/plugin-preact';
 
 /**
  * Hyperspan config
@@ -7,4 +8,5 @@ import { createConfig } from '@hyperspan/framework';
 export default createConfig({
   appDir: './app',
   publicDir: './public',
+  plugins: [preactPlugin()],
 });

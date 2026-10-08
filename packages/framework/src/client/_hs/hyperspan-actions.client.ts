@@ -59,62 +59,56 @@ function setActionLoading(hsActionTag: HTMLElement | null, loading: boolean) {
   }
 }
 
-const actionFormObserver = new MutationObserver((list) => {
-  list.forEach((mutation) => {
-    mutation.addedNodes.forEach((node) => {
-      if (node && ('closest' in node || node instanceof HTMLFormElement)) {
-        bindHSActionForm(
-          (node as HTMLElement).closest('hs-action') as HSAction,
-          node instanceof HTMLFormElement
-            ? node
-            : ((node as HTMLElement | HTMLFormElement).querySelector('form') as HTMLFormElement)
-        );
-      }
-    });
-  });
-});
-
 /**
- * Server action component to handle the client-side form submission and HTML replacement
+ * Server action component — holds the action URL; form submit is handled via delegation.
  */
-class HSAction extends HTMLElement {
-  constructor() {
-    super();
-  }
-
-  connectedCallback() {
-    actionFormObserver.observe(this, { childList: true, subtree: true });
-    bindHSActionForm(this, this.querySelector('form') as HTMLFormElement);
-  }
-}
+class HSAction extends HTMLElement {}
 window.customElements.define('hs-action', HSAction);
 
-/**
- * Bind the form inside an hs-action element to the action URL and submit handler
- */
-function bindHSActionForm(hsActionElement: HSAction, form: HTMLFormElement) {
-  if (!hsActionElement || !form) {
+let actionDelegationInitialized = false;
+
+/** One document-level handler so morphs never leave forms without listeners or stack duplicates. */
+function initHSActionFormDelegation() {
+  if (actionDelegationInitialized) {
     return;
   }
+  actionDelegationInitialized = true;
 
-  form.setAttribute('action', hsActionElement.getAttribute('url') || '');
-  const submitHandler = (e: Event) => {
-    e.preventDefault();
-    formSubmitToRoute(e, form as HTMLFormElement, {
-      afterResponse: () => bindHSActionForm(hsActionElement, form),
-    });
-    form.removeEventListener('submit', submitHandler);
-  };
-  form.addEventListener('submit', submitHandler);
+  document.addEventListener(
+    'submit',
+    (e) => {
+      const form = e.target;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const hsAction = form.closest('hs-action');
+      if (!hsAction) {
+        return;
+      }
+
+      e.preventDefault();
+
+      const url = hsAction.getAttribute('url') || '';
+      if (url) {
+        form.setAttribute('action', url);
+      }
+
+      formSubmitToRoute(form);
+    },
+    true
+  );
 }
+
+initHSActionFormDelegation();
 
 /**
  * Submit form data to route and replace contents with response
  */
-type TFormSubmitOptons = { afterResponse: () => any };
-function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOptons) {
+function formSubmitToRoute(form: HTMLFormElement) {
   const formData = new FormData(form);
-  const formUrl = form.getAttribute('action') || '';
+  const hsActionTag = form.closest('hs-action') as HTMLElement | null;
+  const formUrl = hsActionTag?.getAttribute('url') || form.getAttribute('action') || '';
   const method = form.getAttribute('method')?.toUpperCase() || 'POST';
   const confirmMessage = form.getAttribute('data-confirm') || '';
   const headers = {
@@ -129,7 +123,6 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
     }
   }
 
-  const hsActionTag = form.closest('hs-action') as HTMLElement | null;
   const eventTarget: EventTarget = hsActionTag || document;
   const fetchDetail: HS.ActionFetchDetail = {
     form,
@@ -185,7 +178,6 @@ function formSubmitToRoute(e: Event, form: HTMLFormElement, opts: TFormSubmitOpt
 
     dispatchActionEvent(eventTarget, HS_ACTION_AFTER_SWAP, swapDetail);
 
-    opts.afterResponse && opts.afterResponse();
     lazyLoadScripts();
   }
 

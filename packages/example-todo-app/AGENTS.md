@@ -13,7 +13,7 @@ This is a [Hyperspan](https://www.hyperspan.dev/docs/install) application using 
 **Key directories:**
 
 - `app/routes/` — File-based routing. Each file exports a `createRoute()` handler and maps directly to a URL path.
-- `app/components/` — Interactive island components (only use Preact `.tsx` for this application)
+- Interactive **islands** — any `.tsx` / `.svelte` / `.vue` file imported with `with { island: 'preact' | 'svelte' | 'vue' }`. Render with `renderIsland()` from `@hyperspan/framework`. Enable the matching plugin in `hyperspan.config.ts` (e.g. `preactPlugin()`).
 - `app/layouts/` — Reusable server-side HTML layout wrappers
 - `app/styles/` — Global and per-page CSS (Tailwind v4). Import CSS files directly in TypeScript and Hyperspan will automatically bundle CSS for that route.
 - `app/actions/` — Server actions. One per file. Each file exports a `createAction()` handler from `@hyperspan/framework/actions`. Renders a form with HTML and has built-in validation with Zod v4 schemas. `createAction().post((c: HS.Context) => { ... })` handler can return an HTML template, redirect, or return any other appropriate `Response` object. Errors thrown here are automatically caught and displayed to the user in the `createAction().form((c: HS.Context, { data, error }) => HSHTML)` via the `error` property.

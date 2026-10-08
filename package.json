@@ -1,8 +1,21 @@
 {
   "name": "hyperspan",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.0.0"
+  "version": "2.0.1",
+  "scripts": {
+    "build": "node scripts/build-node-packages.mjs",
+    "prepare": "node scripts/build-node-packages.mjs",
+    "test": "node scripts/build-node-packages.mjs && vitest run",
+    "test:bun": "bun test",
+    "publish:packages": "node scripts/publish-packages.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
+  }
 }

@@ -1,53 +1,85 @@
 {
   "name": "@hyperspan/framework",
-  "version": "1.0.29",
+  "version": "2.0.1",
   "description": "Hyperspan Web Framework",
-  "main": "src/server.ts",
-  "types": "src/server.ts",
+  "type": "module",
+  "main": "./dist/server.js",
+  "types": "./src/server.ts",
   "public": true,
+  "files": [
+    "dist",
+    "src",
+    "LICENSE.txt"
+  ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "default": "./dist/index.js"
     },
     "./server": {
       "types": "./src/server.ts",
-      "default": "./src/server.ts"
+      "default": "./dist/server.js"
     },
     "./middleware": {
       "types": "./src/middleware.ts",
-      "default": "./src/middleware.ts"
+      "default": "./dist/middleware.js"
     },
     "./utils": {
       "types": "./src/utils.ts",
-      "default": "./src/utils.ts"
+      "default": "./dist/utils.js"
+    },
+    "./routes": {
+      "types": "./src/register-routes.ts",
+      "default": "./dist/register-routes.js"
     },
     "./layout": {
       "types": "./src/layout.ts",
-      "default": "./src/layout.ts"
+      "default": "./dist/layout.js"
+    },
+    "./dev-bindings": {
+      "types": "./src/dev-bindings.ts",
+      "default": "./dist/dev-bindings.js"
     },
     "./client/css": {
       "types": "./src/client/css.ts",
-      "default": "./src/client/css.ts"
+      "default": "./dist/client/css.js"
     },
     "./client/js": {
       "types": "./src/client/js.ts",
-      "default": "./src/client/js.ts"
+      "default": "./dist/client/js.js"
+    },
+    "./client/manifest": {
+      "types": "./src/client/manifest.ts",
+      "default": "./dist/client/manifest.js"
     },
     "./actions": {
       "types": "./src/actions.ts",
-      "default": "./src/actions.ts"
+      "default": "./dist/actions.js"
+    },
+    "./html": {
+      "types": "./src/html.ts",
+      "default": "./dist/html.js"
     },
     "./ssr/install-server-dom-mock": {
       "types": "./src/ssr/install-server-dom-mock.ts",
-      "default": "./src/ssr/install-server-dom-mock.ts"
+      "default": "./dist/ssr/install-server-dom-mock.js"
     },
     "./ssr/mock-dom": {
       "types": "./src/ssr/mock-dom.ts",
-      "default": "./src/ssr/mock-dom.ts"
+      "default": "./dist/ssr/mock-dom.js"
+    },
+    "./client/_hs/hyperspan-streaming.client.ts": {
+      "default": "./src/client/_hs/hyperspan-streaming.client.ts"
+    },
+    "./client/_hs/hyperspan-actions.client.ts": {
+      "default": "./src/client/_hs/hyperspan-actions.client.ts"
+    },
+    "./client/_hs/hyperspan-scripts.client.ts": {
+      "default": "./src/client/_hs/hyperspan-scripts.client.ts"
     }
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
@@ -55,7 +87,7 @@
   "keywords": [
     "framework",
     "node",
-    "bun",
+    "vite",
     "web framework",
     "javascript",
     "typescript",
@@ -71,17 +103,19 @@
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "test": "bun test"
+    "build": "node ../../scripts/build-node-packages.mjs framework",
+    "prepack": "npm run build",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.1",
     "@types/debug": "^4.1.12",
     "@types/node": "^24.10.0",
     "prettier": "^3.5.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@hyperspan/html": "^1.0.1",
+    "@hyperspan/html": "^2.0.1",
     "debug": "^4.4.3",
     "isbot": "^5.1.32",
     "zod": "^4.4.3"
