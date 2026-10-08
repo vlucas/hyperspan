@@ -116,7 +116,7 @@ import { createFetchHandler, createApp, setAssetManifest } from '@hyperspan/fram
    ```bash
    npm install hyperspan @hyperspan/framework @hyperspan/vite-plugin
    ```
-   Or pin a specific version: `^2.0.0`
+   Or pin a specific version: `^2.0.1`
 2. **Add `vite.config.ts`** (copy from starter template).
 3. **Update `package.json` scripts** to use `npm run dev/build/start`.
 4. **Run `npm run build`** before deploying.

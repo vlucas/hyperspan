@@ -1,6 +1,6 @@
 {
   "name": "@hyperspan/adapter-node",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Node.js adapter for Hyperspan",
   "type": "module",
   "public": true,
@@ -26,7 +26,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hyperspan/framework": "^2.0.0"
+    "@hyperspan/framework": "^2.0.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
