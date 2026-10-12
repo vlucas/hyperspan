@@ -330,32 +330,37 @@ export namespace Hyperspan {
    */
   /** Raw form field values when an action has no schema */
   export type ActionFormValues = Record<string, string | string[]>;
+  /**
+   * Any Zod schema. Zod constrains generic schema parameters with `z.core.$ZodType`,
+   * and TypeScript 7 resolves Zod object schemas against that base type.
+   */
+  export type AnyZodSchema = z.core.$ZodType;
   /** Infer validated action data from an optional schema */
-  export type InferActionData<S extends z.ZodType | undefined> = S extends z.ZodType
+  export type InferActionData<S extends AnyZodSchema | undefined> = S extends AnyZodSchema
     ? z.output<S>
     : ActionFormValues;
   // Form renderer
   export type ActionFormResponse = HSHtml | void | null | Promise<HSHtml | void | null>;
-  export type ActionFormProps<S extends z.ZodType | undefined = undefined> = {
+  export type ActionFormProps<S extends AnyZodSchema | undefined = undefined> = {
     data?: Partial<InferActionData<S>>;
     error?: ZodValidationError;
   };
-  export type ActionForm<S extends z.ZodType | undefined = undefined> = (
+  export type ActionForm<S extends AnyZodSchema | undefined = undefined> = (
     c: Context,
     props: ActionFormProps<S>
   ) => ActionFormResponse;
   // Form handler
   export type ActionFormHandlerReturn = RouteHandlerReturn;
-  export type ActionFormHandlerProps<S extends z.ZodType | undefined = undefined> = {
+  export type ActionFormHandlerProps<S extends AnyZodSchema | undefined = undefined> = {
     data: InferActionData<S>;
     error?: ZodValidationError | Error;
   };
-  export type ActionFormHandler<S extends z.ZodType | undefined = undefined> = (
+  export type ActionFormHandler<S extends AnyZodSchema | undefined = undefined> = (
     c: Context,
     props: ActionFormHandlerProps<S>
   ) => ActionFormHandlerReturn | Promise<ActionFormHandlerReturn>;
   // Action API
-  export interface Action<S extends z.ZodType | undefined = undefined> {
+  export interface Action<S extends AnyZodSchema | undefined = undefined> {
     _kind: 'hsAction';
     _config: Partial<Hyperspan.RouteConfig>;
     _serverConfig?: Hyperspan.Config;

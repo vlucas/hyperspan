@@ -22,12 +22,12 @@ const log = debug('hyperspan:actions');
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export function createAction<S extends z.ZodType>(params: {
+export function createAction<S extends HS.AnyZodSchema>(params: {
   name: string;
   schema: S;
 }): HS.Action<S>;
 export function createAction(params: { name: string; schema?: undefined }): HS.Action<undefined>;
-export function createAction<S extends z.ZodType>(params: {
+export function createAction<S extends HS.AnyZodSchema>(params: {
   name: string;
   schema?: S;
 }): HS.Action<S | undefined> {
