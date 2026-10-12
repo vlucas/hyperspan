@@ -1,0 +1,47 @@
+{
+  "name": "@hyperspan/adapter-cloudflare",
+  "version": "2.0.1",
+  "description": "Cloudflare Workers adapter for Hyperspan",
+  "type": "module",
+  "public": true,
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./dev": {
+      "types": "./src/dev.ts",
+      "default": "./src/dev.ts"
+    },
+    "./polyfills": {
+      "types": "./src/polyfills.ts",
+      "default": "./src/polyfills.ts"
+    }
+  },
+  "files": [
+    "src",
+    "stubs"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hyperspan/framework": "^2.0.1",
+    "fast-glob": "^3.3.3"
+  },
+  "peerDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250508.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.28.0"
+  }
+}

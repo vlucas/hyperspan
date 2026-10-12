@@ -16,8 +16,9 @@ lerna-debug.log*
 .pnpm-debug.log*
 *.tsbuildinfo
 
-# We are using Bun, NOT NPM
-package-lock.json
+# Hyperspan build output
+dist/
+
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 

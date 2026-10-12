@@ -1,12 +1,25 @@
 {
   "name": "@hyperspan/html",
-  "version": "1.0.4",
+  "version": "2.0.1",
   "description": "Hyperspan HTML Templates",
-  "main": "dist/html.js",
-  "types": "src/html.ts",
+  "type": "module",
+  "main": "./dist/html.js",
+  "types": "./src/html.ts",
+  "exports": {
+    ".": {
+      "types": "./src/html.ts",
+      "default": "./dist/html.js"
+    }
+  },
   "public": true,
+  "files": [
+    "dist",
+    "src",
+    "LICENSE.txt"
+  ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "author": "Vance Lucas <vance@vancelucas.com>",
   "license": "BSD-3-Clause",
@@ -21,20 +34,21 @@
     "url": "https://github.com/vlucas/hyperspan/issues"
   },
   "scripts": {
-    "build": "bun ./build.ts",
-    "clean": "rm -rf dist",
-    "test": "bun test",
+    "build": "node ../../scripts/build-node-packages.mjs html",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "prepack": "bun run clean && bun run build"
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vlucas/hyperspan.git"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.11",
+    "esbuild": "^0.25.9",
     "prettier": "^3.2.5",
-    "typescript": "^5.0.0"
+    "tsx": "^4.20.5",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.10"
   },
   "dependencies": {}
 }

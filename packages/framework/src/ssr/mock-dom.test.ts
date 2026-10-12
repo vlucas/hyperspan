@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { MOCK_DOM_MARK, installMockDom, stubElement } from './mock-dom';
 
 describe('stubElement', () => {

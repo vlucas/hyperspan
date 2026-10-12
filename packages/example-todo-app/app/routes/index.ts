@@ -1,10 +1,13 @@
-import { html } from '@hyperspan/html';
+import { html } from '@hyperspan/framework/html';
 import { createRoute } from '@hyperspan/framework';
+import { buildClientJS } from '@hyperspan/framework/client/js';
 import AppLayout from '~/app/layouts/app-layout';
 import addTodoAction from '~/app/actions/add-todo';
 import deleteTodoAction from '~/app/actions/delete-todo';
 import toggleTodoAction from '~/app/actions/toggle-todo';
 import { getTodos } from '~/src/lib/db';
+
+const todoStatsClient = await buildClientJS('~/app/client/todo-stats.ts');
 
 export default createRoute().get(async (context) => {
   const todos = await getTodos();
@@ -58,6 +61,9 @@ export default createRoute().get(async (context) => {
             </p>
           `
         : ''}
+
+      <p id="todo-client-stats" class="text-xs text-slate-400 text-center mt-2"></p>
+      ${todoStatsClient.renderScriptTag(({ mountTodoStats }) => mountTodoStats())}
     </main>
   `;
 

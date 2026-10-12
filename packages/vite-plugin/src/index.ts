@@ -1,0 +1,812 @@
+import { join, isAbsolute, dirname } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import fg from 'fast-glob';
+import type { Plugin, ViteDevServer, ResolvedConfig } from 'vite';
+import {
+  createConfig,
+  createServer,
+  createFetchHandler,
+  initServerRoutes,
+  setAssetManifest,
+  registerRouteModule,
+  getAssetManifest,
+} from '@hyperspan/framework';
+import type { AssetManifest } from '@hyperspan/framework';
+import { isValidRoutePath } from '@hyperspan/framework/utils';
+import type { Hyperspan as HS } from '@hyperspan/framework';
+import {
+  assertIslandPluginLoaded,
+  getIslandFramework,
+  islandImportQueryPlugin,
+  discoverIslandClientEntries,
+  resolveRegisteredIslandVitePlugins,
+} from './islands';
+import {
+  clientJSPlugin,
+  buildRegisteredClientJS,
+  syncClientJSManifestEntries,
+  clientJSRollupInput,
+  publicJsUrl,
+  clientImportKeyFromBundleEntry,
+} from './client-js';
+import { importMetaResolvePlugin } from './import-meta-resolve';
+import { CSS_PUBLIC_PATH } from '@hyperspan/framework/client/css';
+import { getClientJSEntries, registerPathAliases } from '@hyperspan/framework/client/js';
+import { writeServerEntry, resolveDeployAdapter } from './generate-server';
+import { createAppJiti, resolveModuleAliases } from './tsconfig-aliases';
+import { applyWebResponseToNode, incomingRequestUrl, nodeToWebRequest } from './node-http';
+import { isViteHandledPath } from './is-vite-handled-path';
+
+export type HyperspanVitePluginOptions = {
+  configFile?: string;
+};
+
+const MANIFEST_VIRTUAL_ID = 'virtual:hyperspan-manifest';
+const RESOLVED_MANIFEST_VIRTUAL_ID = '\0' + MANIFEST_VIRTUAL_ID;
+const DEV_BINDINGS_ID = 'virtual:hyperspan-dev-bindings';
+const RESOLVED_DEV_BINDINGS_ID = '\0' + DEV_BINDINGS_ID;
+
+export { isViteHandledPath } from './is-vite-handled-path';
+
+/** Plugin packages may live outside the app via `file:` links; Vite must serve their client runtimes. */
+export function hyperspanPackageDirs(projectRoot: string): string[] {
+  const require = createRequire(join(projectRoot, 'package.json'));
+  const dirs: string[] = [];
+  for (const name of [
+    '@hyperspan/plugin-preact',
+    '@hyperspan/plugin-vue',
+    '@hyperspan/plugin-svelte',
+    '@hyperspan/vite-plugin',
+    '@hyperspan/framework',
+  ]) {
+    const dir = resolveInstalledPackageDir(require, name);
+    if (dir) dirs.push(dir);
+  }
+  return dirs;
+}
+
+function resolveInstalledPackageDir(
+  require: { resolve: (id: string) => string },
+  name: string
+): string | undefined {
+  try {
+    return dirname(require.resolve(`${name}/package.json`));
+  } catch {
+    try {
+      let dir = dirname(require.resolve(name));
+      while (dir !== dirname(dir)) {
+        if (existsSync(join(dir, 'package.json'))) return dir;
+        dir = dirname(dir);
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function loadHyperspanConfigSync(root: string, configFile?: string): void {
+  const file = configFile ?? join(root, 'hyperspan.config.ts');
+  if (!existsSync(file)) return;
+  createAppJiti(root)(file);
+}
+
+export function hyperspan(options: HyperspanVitePluginOptions = {}): Plugin[] {
+  let root = process.cwd();
+  let resolvedConfig: ResolvedConfig;
+  let viteDevServer: ViteDevServer | null = null;
+  let hsConfig: HS.Config;
+  let serverInstance: HS.Server | null = null;
+  let manifest: AssetManifest = { imports: {}, css: {}, clients: {} };
+  let fetchHandler: ((req: Request) => Promise<Response>) | null = null;
+  let command: 'build' | 'serve' = 'serve';
+
+  // Load hyperspan.config.ts here so island Vite plugins are in the returned
+  // array. Adding them from the config() hook is too late for Vite SSR.
+  loadHyperspanConfigSync(root, options.configFile);
+  const islandPlugins = resolveRegisteredIslandVitePlugins();
+
+  const corePlugin: Plugin = {
+    name: 'hyperspan',
+    enforce: 'pre',
+
+    config(config) {
+      const projectRoot = config.root ? String(config.root) : process.cwd();
+      registerPathAliases(resolveModuleAliases(projectRoot));
+      if (projectRoot !== root) {
+        loadHyperspanConfigSync(projectRoot, options.configFile);
+      }
+      return {
+        appType: 'custom' as const,
+        // Do not set publicDir. Vite defaults it to "public", and returning
+        // "public" here overrides a user or plugin `publicDir: false`.
+        envPrefix: ['APP_PUBLIC_', 'VITE_'],
+        resolve: {
+          alias: resolveModuleAliases(projectRoot),
+          dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime', 'vue', 'svelte'],
+        },
+        build: {
+          manifest: true,
+          rolldownOptions: {
+            preserveEntrySignatures: 'strict',
+            // Island hydrate scripts import these via the page import map.
+            // Bundling a second copy makes Preact hooks / Vue / Svelte no-ops.
+            external: (id: string, importer?: string) => {
+              if (!importer || !importer.includes('island=')) return false;
+              return (
+                id === 'preact' ||
+                id.startsWith('preact/') ||
+                id === 'vue' ||
+                id.startsWith('vue/') ||
+                id === 'svelte' ||
+                id.startsWith('svelte/') ||
+                id === 'react' ||
+                id === 'react-dom' ||
+                id.startsWith('@vue/')
+              );
+            },
+            input: {
+              ...clientJSRollupInput(),
+              ...discoverIslandClientEntries(projectRoot),
+            },
+            output: {
+              // Client scripts are content-addressed: identical bundles collapse to one
+              // file and the identity is carried by the manifest, not the filename.
+              entryFileNames: (chunkInfo) =>
+                chunkInfo.name.startsWith('client-')
+                  ? `_hs/js/client-[hash].js`
+                  : chunkInfo.name.startsWith('island-')
+                    ? `_hs/js/islands/${chunkInfo.name}.js`
+                    : 'assets/[name]-[hash].js',
+              assetFileNames: (assetInfo) =>
+                (assetInfo.name ?? '').replace(/\.js$/, '').startsWith('client-')
+                  ? '_hs/js/client-[hash][extname]'
+                  : 'assets/[name]-[hash][extname]',
+            },
+          },
+        },
+        ssr: {
+          // Bundle Hyperspan packages so CJS deps like `debug` are handled by Vite.
+          // Bundle Preact with its renderer so island SSR does not load two copies.
+          noExternal: [/^@hyperspan\//, 'preact', 'preact/hooks', 'preact-render-to-string'],
+        },
+        optimizeDeps: {
+          exclude: ['@hyperspan/framework', '@hyperspan/html', '@hyperspan/vite-plugin'],
+        },
+        server: {
+          fs: {
+            allow: [projectRoot, ...hyperspanPackageDirs(projectRoot)],
+          },
+        },
+      };
+    },
+
+    configResolved(config) {
+      resolvedConfig = config;
+      root = config.root;
+      command = config.command;
+    },
+
+    async buildStart() {
+      try {
+        hsConfig = await loadHyperspanConfig(root, options.configFile);
+        // Defer dev server rebuild until configureServer sets viteDevServer so
+        // beforeServerCreate runs in the SSR module graph (visible to routes/actions).
+        if (
+          resolvedConfig.command === 'serve' &&
+          !process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY &&
+          viteDevServer
+        ) {
+          await rebuildServer();
+        }
+        // Production build: route/CSS discovery runs in closeBundle via a
+        // temporary Vite SSR server (buildStart has no module graph yet).
+      } catch (err) {
+        reportLoadFailure('Loading the Hyperspan config and routes', err);
+      }
+    },
+
+    resolveId(id, _importer, options) {
+      if (id === MANIFEST_VIRTUAL_ID) {
+        return RESOLVED_MANIFEST_VIRTUAL_ID;
+      }
+      if (
+        command === 'serve' &&
+        (id === DEV_BINDINGS_ID || id === '@hyperspan/framework/dev-bindings')
+      ) {
+        return RESOLVED_DEV_BINDINGS_ID;
+      }
+
+      const framework = getIslandFramework(id, options?.attributes as Record<string, string>);
+      if (framework) {
+        assertIslandPluginLoaded(framework, id);
+      }
+    },
+
+    load(id) {
+      if (id === RESOLVED_MANIFEST_VIRTUAL_ID) {
+        return `export default ${JSON.stringify(manifest)};`;
+      }
+      if (id === RESOLVED_DEV_BINDINGS_ID) {
+        return `
+let devBindings;
+export function setDevBindings(env) { devBindings = env; }
+export function getDevBindings() { return devBindings; }
+export function clearDevBindingsForTests() { devBindings = undefined; }
+`;
+      }
+    },
+
+    configureServer(server) {
+      viteDevServer = server;
+      if (process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY) {
+        return;
+      }
+      setupDevMiddleware(server);
+      rebuildServer().catch((err) => reportLoadFailure('Loading routes', err));
+    },
+
+    generateBundle(_outputOptions, bundle) {
+      const imports: Record<string, string> = {
+        ...manifest.imports,
+        ...getAssetManifest().imports,
+      };
+      const clients: AssetManifest['clients'] = { ...manifest.clients };
+
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        const clientName = clientImportKeyFromBundleEntry(chunk);
+        if (clientName) {
+          const publicPath = publicJsUrl(fileName);
+          imports[clientName] = publicPath;
+          clients[clientName] = publicPath;
+        }
+
+        if (chunk.type !== 'chunk') continue;
+
+        if (
+          fileName.includes('islands/island-') ||
+          fileName.includes('_hs/js/islands/island-') ||
+          fileName.includes('_hs/js/client-')
+        ) {
+          const islandName = fileName.split('/').pop()?.replace(/\.js$/, '') ?? '';
+          if (!clientName) {
+            imports[islandName] = `/${fileName.replace(/\\/g, '/')}`;
+          }
+        }
+
+        if ('viteMetadata' in chunk) {
+          const importedCss = (chunk as { viteMetadata?: { importedCss?: Set<string> } })
+            .viteMetadata?.importedCss;
+          if (importedCss) {
+            for (const cssFile of importedCss) {
+              const cssPath = `/${cssFile}`;
+              manifest.css['*'] = [...new Set([...(manifest.css['*'] ?? []), cssPath])];
+            }
+          }
+        }
+      }
+
+      syncHashedClientManifest(imports, clients);
+
+      manifest = {
+        ...manifest,
+        imports: { ...getAssetManifest().imports, ...imports },
+        clients,
+      };
+      setAssetManifest(manifest);
+      emitManifestFile(root, manifest, resolvedConfig.build.outDir);
+    },
+
+    async closeBundle() {
+      if (resolvedConfig.command === 'build' && !process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY) {
+        try {
+          await discoverRoutesForBuild();
+        } catch (err) {
+          reportLoadFailure('Route and CSS discovery', err);
+        }
+      }
+      const imports = { ...getAssetManifest().imports, ...manifest.imports };
+      const clients = { ...manifest.clients };
+      syncHashedClientManifest(imports, clients);
+      manifest = { ...manifest, imports, clients };
+      setAssetManifest(manifest);
+      emitManifestFile(root, manifest, resolvedConfig.build.outDir);
+    },
+  };
+
+  /** Fail the build on a load error, or log it and keep the dev server up. */
+  function reportLoadFailure(stage: string, err: unknown): void {
+    if (command === 'build') {
+      console.error(`[Hyperspan] ${stage} failed. Stopping the build.`);
+      throw err;
+    }
+
+    console.error(
+      `[Hyperspan] ${stage} failed. The dev server is still running — fix the error and save to retry.`
+    );
+    console.error(err);
+  }
+
+  /**
+   * During `vite build`, spin up a middleware-mode Vite server so we can
+   * ssrLoadModule routes (handles CSS/TSX) and record CSS into the manifest.
+   */
+  async function discoverRoutesForBuild() {
+    const { createServer: createViteServer } = await import('vite');
+    // Prevent nested Vite instances from re-entering discovery on close.
+    process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY = '1';
+    // Reuse the app's vite.config (already includes this plugin + islands).
+    const ssrVite = await createViteServer({
+      configFile: typeof resolvedConfig.configFile === 'string' ? resolvedConfig.configFile : false,
+      root,
+      server: { middlewareMode: true, watch: null },
+      appType: 'custom',
+    });
+
+    try {
+      hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
+      if (hsConfig.beforeServerCreate) {
+        // Build discovery: process.env is enough; skip Wrangler proxy cost/side effects.
+        await hsConfig.beforeServerCreate({ env: process.env });
+      }
+      const tempServer = await createServer(hsConfig);
+      tempServer._routes = [];
+      await initServerRoutes(tempServer, hsConfig, (server) =>
+        loadRoutes(server, root, hsConfig, ssrVite)
+      );
+
+      const clientImports = await buildRegisteredClientJS(root, resolvedConfig.build.outDir);
+      if (Object.keys(clientImports).length > 0) {
+        const imports = { ...manifest.imports, ...clientImports };
+        const clients = { ...manifest.clients, ...clientImports };
+        syncHashedClientManifest(imports, clients);
+        manifest = { ...manifest, imports, clients };
+      }
+
+      const cssByRoute: Record<string, string[]> = { ...(manifest.css ?? {}) };
+      for (const route of tempServer._routes) {
+        const path = route._path();
+        const css = route._config.cssImports ?? [];
+        if (css.length) {
+          const prodCss = await materializeCssForProduction(ssrVite, css, root, resolvedConfig);
+          cssByRoute[path] = prodCss;
+        }
+      }
+
+      if (manifest.css['*']?.length) {
+        for (const route of tempServer._routes) {
+          const path = route._path();
+          cssByRoute[path] = [...new Set([...(cssByRoute[path] ?? []), ...manifest.css['*']])];
+        }
+      }
+
+      manifest = { ...manifest, css: cssByRoute };
+      setAssetManifest(manifest);
+      console.log(
+        `[Hyperspan] Discovered ${tempServer._routes.length} routes for production manifest`
+      );
+
+      const buildOutDir = isAbsolute(resolvedConfig.build.outDir)
+        ? resolvedConfig.build.outDir
+        : join(root, resolvedConfig.build.outDir);
+      await writeServerEntry({
+        root,
+        outDir: buildOutDir,
+        appDir: hsConfig.appDir ?? './app',
+        configFile:
+          typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+        adapter: hsConfig.deployAdapter,
+      });
+      console.log('[Hyperspan] Generated production server entry');
+    } finally {
+      // Give pending dep-scan work a moment so close doesn't race Vite internals.
+      await new Promise((r) => setTimeout(r, 50));
+      await ssrVite.close().catch(() => undefined);
+      delete process.env.HYPERSPAN_SKIP_BUILD_DISCOVERY;
+    }
+  }
+
+  async function syncDevBindingsToSsr(env: unknown): Promise<void> {
+    if (!viteDevServer) {
+      return;
+    }
+    const mod = await viteDevServer.ssrLoadModule('@hyperspan/framework/dev-bindings');
+    mod.setDevBindings(env);
+  }
+
+  async function loadRuntimeConfig(): Promise<HS.Config> {
+    // Vite SSR so hooks and routes share one module graph (jiti is a separate graph).
+    if (viteDevServer) {
+      const configFile = options.configFile ?? 'hyperspan.config.ts';
+      const mod = await viteDevServer.ssrLoadModule(configFile);
+      const config = createConfig(mod.default as Partial<HS.Config>);
+      config.deployAdapter = resolveDeployAdapter(config.deployAdapter);
+      return config;
+    }
+    return loadHyperspanConfig(root, options.configFile);
+  }
+
+  let rebuildInFlight: Promise<void> | null = null;
+
+  async function rebuildServer() {
+    if (rebuildInFlight) {
+      return rebuildInFlight;
+    }
+
+    rebuildInFlight = (async () => {
+      hsConfig = await loadRuntimeConfig();
+      const env = await resolveServerCreateEnv(hsConfig.deployAdapter, root);
+      await syncDevBindingsToSsr(env);
+      await hsConfig.beforeServerCreate?.({ env });
+      serverInstance = await createServer(hsConfig);
+      serverInstance._routes = [];
+      await initServerRoutes(serverInstance, hsConfig, (server) =>
+        loadRoutes(server, root, hsConfig, viteDevServer)
+      );
+      fetchHandler = createFetchHandler(serverInstance!, {
+        onNotMatched: async (request) => serveStatic(request, root, hsConfig.publicDir),
+      });
+      updateDevManifest();
+      await syncServerEntryForDev();
+    })().finally(() => {
+      rebuildInFlight = null;
+    });
+
+    return rebuildInFlight;
+  }
+
+  async function syncServerEntryForDev() {
+    if (!resolvedConfig || resolvedConfig.command !== 'serve') {
+      return;
+    }
+
+    try {
+      const outDir = isAbsolute(resolvedConfig.build.outDir)
+        ? resolvedConfig.build.outDir
+        : join(root, resolvedConfig.build.outDir || 'dist');
+      mkdirSync(outDir, { recursive: true });
+      await writeServerEntry({
+        root,
+        outDir,
+        appDir: hsConfig.appDir ?? './app',
+        configFile:
+          typeof options.configFile === 'string' ? join(root, options.configFile) : undefined,
+        adapter: hsConfig.deployAdapter,
+      });
+    } catch (err) {
+      console.warn('[Hyperspan] Could not sync production server entry:', err);
+    }
+  }
+
+  function isAppRouteFile(file: string): boolean {
+    const appDir = (hsConfig?.appDir ?? './app').replace(/^\.\//, '');
+    const normalized = file.replace(/\\/g, '/');
+    return normalized.includes(`/${appDir}/routes/`) || normalized.includes(`/${appDir}/actions/`);
+  }
+
+  function isHyperspanConfigFile(file: string): boolean {
+    const normalized = file.replace(/\\/g, '/');
+    const configFile = (options.configFile ?? 'hyperspan.config.ts').replace(/\\/g, '/');
+    return normalized.endsWith(configFile) || normalized.endsWith('/hyperspan.config.ts');
+  }
+
+  async function onWatchedFileEvent(file: string) {
+    if (isHyperspanConfigFile(file)) {
+      await rebuildServer();
+      return;
+    }
+    hsConfig = hsConfig ?? (await loadHyperspanConfig(root, options.configFile));
+    if (!isAppRouteFile(file)) {
+      return;
+    }
+    await rebuildServer();
+  }
+
+  function updateDevManifest() {
+    syncClientJSManifestEntries(getClientJSEntries());
+    const registered = getAssetManifest();
+    manifest = {
+      imports: { ...registered.imports, ...manifest.imports },
+      css: { ...registered.css, ...manifest.css },
+      clients: Object.fromEntries(
+        getClientJSEntries().map((entry) => [entry.esmName, entry.publicPath])
+      ),
+    };
+    setAssetManifest(manifest);
+  }
+
+  function setupDevMiddleware(viteServer: ViteDevServer) {
+    viteServer.middlewares.use(async (req, res, next) => {
+      const url = req.url ?? '/';
+
+      // Let Vite handle its own modules, HMR, and transformed assets (CSS, etc.).
+      // Match on pathname only — query strings must not skip Hyperspan routes
+      // (e.g. /search?ext=.js or /docs/introducing-typescript).
+      if (isViteHandledPath(url)) {
+        return next();
+      }
+
+      try {
+        if (!fetchHandler) {
+          await rebuildServer();
+        }
+
+        const body =
+          req.method !== 'GET' && req.method !== 'HEAD' ? await readNodeBody(req) : undefined;
+
+        const request = nodeToWebRequest(req, incomingRequestUrl(req, url), body);
+
+        const response = await fetchHandler!(request);
+
+        applyWebResponseToNode(response, res);
+
+        if (response.body) {
+          const reader = response.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+        }
+        res.end();
+      } catch (err) {
+        viteServer.ssrFixStacktrace(err as Error);
+        next(err);
+      }
+    });
+
+    for (const event of ['change', 'add', 'unlink'] as const) {
+      viteServer.watcher.on(event, (file) => {
+        void onWatchedFileEvent(file);
+      });
+    }
+  }
+
+  return [
+    islandImportQueryPlugin(),
+    ...islandPlugins,
+    importMetaResolvePlugin(),
+    corePlugin,
+    clientJSPlugin(),
+  ];
+}
+
+async function loadHyperspanConfig(root: string, configFile?: string): Promise<HS.Config> {
+  const jiti = createAppJiti(root);
+  const file = configFile ?? join(root, 'hyperspan.config.ts');
+  const config = createConfig(jiti(file) as Partial<HS.Config>);
+  config.deployAdapter = resolveDeployAdapter(config.deployAdapter);
+  return config;
+}
+
+/**
+ * Env passed to `beforeServerCreate` during Vite/dev.
+ * The deploy adapter may provide a native `devModule` that exports `resolveDevEnv`.
+ */
+async function resolveServerCreateEnv(
+  deployAdapter: HS.Config['deployAdapter'] | undefined,
+  root: string
+): Promise<unknown> {
+  if (deployAdapter?.devModule) {
+    try {
+      const mod = (await import(deployAdapter.devModule)) as {
+        resolveDevEnv?: (projectRoot: string) => Promise<unknown>;
+      };
+      if (typeof mod.resolveDevEnv === 'function') {
+        return await mod.resolveDevEnv(root);
+      }
+    } catch (err) {
+      console.warn(
+        `[Hyperspan] Could not load adapter dev module ${deployAdapter.devModule}.`,
+        '\n',
+        err
+      );
+    }
+  }
+  if (typeof deployAdapter?.resolveDevEnv === 'function') {
+    return deployAdapter.resolveDevEnv(root);
+  }
+  return process.env;
+}
+
+async function loadRoutes(
+  server: HS.Server,
+  root: string,
+  config: HS.Config,
+  viteServer: ViteDevServer | null
+): Promise<void> {
+  for (const dir of ['routes', 'actions'] as const) {
+    const directoryPath = join(root, config.appDir, dir);
+    if (!existsSync(directoryPath)) continue;
+
+    const files = await fg('**/*.{ts,tsx,js,jsx}', {
+      cwd: directoryPath,
+      absolute: true,
+      onlyFiles: true,
+    });
+
+    for (const filePath of files) {
+      const relativeFilePath = filePath.slice(directoryPath.length + 1);
+      if (!isValidRoutePath(relativeFilePath)) continue;
+
+      const mod = viteServer ? await viteServer.ssrLoadModule(filePath) : await import(filePath);
+      const route = registerRouteModule(
+        server,
+        relativeFilePath,
+        mod,
+        viteServer ? undefined : getAssetManifest()
+      );
+      if (route && viteServer) {
+        const cssUrls = collectCssUrls(viteServer, filePath);
+        if (cssUrls.length > 0) {
+          route._config.cssImports = cssUrls;
+        }
+      }
+    }
+  }
+}
+
+async function materializeCssForProduction(
+  viteServer: ViteDevServer,
+  cssUrls: string[],
+  projectRoot: string,
+  config: ResolvedConfig
+): Promise<string[]> {
+  const { createHash } = await import('node:crypto');
+  const buildOutDir = config.build.outDir || 'dist';
+  const outDir = isAbsolute(buildOutDir) ? buildOutDir : join(projectRoot, buildOutDir);
+  // Compiled route CSS sits with the other client assets (`/_hs/js`), not in
+  // Vite's `assets/` folder and not in `public/` (which `publicDir: false` skips).
+  const cssDir = join(outDir, CSS_PUBLIC_PATH.replace(/^\//, ''));
+  mkdirSync(cssDir, { recursive: true });
+
+  const result: string[] = [];
+  for (const url of cssUrls) {
+    try {
+      // Resolve to a file on disk when possible
+      const mod = [...viteServer.moduleGraph.urlToModuleMap.entries()].find(
+        ([u]) => u === url || u.startsWith(url)
+      )?.[1];
+      const file = mod?.file;
+      let cssText = '';
+      if (file && existsSync(file)) {
+        // Transform through Vite to apply Tailwind etc.
+        const transformed = await viteServer.transformRequest(url + '?direct');
+        cssText = transformed?.code ?? readFileSync(file, 'utf-8');
+      } else {
+        const transformed = await viteServer.transformRequest(url + '?direct');
+        cssText = transformed?.code ?? '';
+      }
+      if (!cssText) continue;
+
+      const hash = createHash('sha256').update(cssText).digest('hex').slice(0, 8);
+      const base =
+        (file || url)
+          .split('/')
+          .pop()
+          ?.replace(/\.(css|scss|sass|less)$/i, '') || 'style';
+      const outName = `${base}-${hash}.css`;
+      writeFileSync(join(cssDir, outName), cssText);
+      result.push(`${CSS_PUBLIC_PATH}/${outName}`);
+    } catch (err) {
+      console.warn(`[Hyperspan] Could not materialize CSS ${url}:`, err);
+    }
+  }
+  return result;
+}
+
+function collectCssUrls(viteServer: ViteDevServer, filePath: string): string[] {
+  const modules = [...viteServer.moduleGraph.idToModuleMap.values()].filter((module) => {
+    const id = module.id?.split('?')[0];
+    return module.file === filePath || id === filePath;
+  });
+  const byId = viteServer.moduleGraph.getModuleById(filePath);
+  if (byId && !modules.includes(byId)) {
+    modules.push(byId);
+  }
+
+  if (modules.length === 0) return [];
+
+  const css: string[] = [];
+  const seen = new Set<string>();
+
+  function walk(module: (typeof modules)[number] | undefined) {
+    if (!module?.id || seen.has(module.id)) return;
+    seen.add(module.id);
+
+    const id = module.id.split('?')[0];
+    if (id.endsWith('.css') || id.endsWith('.scss') || id.endsWith('.sass')) {
+      // Prefer the browser-servable URL Vite already knows
+      const url = module.url?.startsWith('/') ? module.url.split('?')[0] : undefined;
+      if (url) {
+        css.push(url);
+      } else if (module.file) {
+        const root = viteServer.config.root;
+        css.push('/' + module.file.slice(root.length + 1).replace(/\\/g, '/'));
+      }
+    }
+
+    const imported = [
+      ...module.importedModules,
+      ...((module as { ssrImportedModules?: Set<typeof module> }).ssrImportedModules ?? []),
+    ];
+    for (const child of imported) {
+      walk(child);
+    }
+  }
+
+  for (const module of modules) {
+    walk(module);
+  }
+  return [...new Set(css)];
+}
+
+async function serveStatic(
+  request: Request,
+  root: string,
+  publicDir: string
+): Promise<Response | undefined> {
+  const url = new URL(request.url);
+  if (url.pathname.includes('..')) return undefined;
+
+  const { readFile } = await import('node:fs/promises');
+  const filePath = join(root, publicDir, url.pathname);
+
+  try {
+    const data = await readFile(filePath);
+    const ext = url.pathname.split('.').pop() ?? '';
+    const types: Record<string, string> = {
+      css: 'text/css',
+      js: 'application/javascript',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      svg: 'image/svg+xml',
+      ico: 'image/x-icon',
+    };
+    return new Response(data, {
+      headers: { 'Content-Type': types[ext] ?? 'application/octet-stream' },
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function syncHashedClientManifest(
+  imports: Record<string, string>,
+  clients: AssetManifest['clients']
+): void {
+  for (const entry of getClientJSEntries()) {
+    const hashed = imports[entry.esmName];
+    if (hashed) {
+      const path = publicJsUrl(hashed);
+      imports[entry.esmName] = path;
+      clients[entry.esmName] = path;
+    }
+  }
+}
+
+function emitManifestFile(root: string, manifest: AssetManifest, buildOutDir = 'dist') {
+  const outDir = isAbsolute(buildOutDir) ? buildOutDir : join(root, buildOutDir);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+async function readNodeBody(req: import('node:http').IncomingMessage): Promise<Buffer | undefined> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+}
+
+export { MANIFEST_VIRTUAL_ID };
+export {
+  registerIslandPlugin,
+  isIslandPluginLoaded,
+  getIslandFramework,
+  isIslandModule,
+  islandPluginResolveId,
+  getRegisteredIslandFrameworks,
+} from './islands';
+export type { IslandFramework } from './islands';

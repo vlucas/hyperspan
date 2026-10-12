@@ -1,0 +1,36 @@
+{
+  "name": "@hyperspan/adapter-node",
+  "version": "2.0.1",
+  "description": "Node.js adapter for Hyperspan",
+  "type": "module",
+  "public": true,
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-node-packages.mjs adapter-node",
+    "prepack": "npm run build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hyperspan/framework": "^2.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

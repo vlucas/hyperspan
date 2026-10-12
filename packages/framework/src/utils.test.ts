@@ -1,5 +1,5 @@
-import { test, expect, describe } from 'bun:test';
-import { formDataToJSON, parsePath } from './utils';
+import { test, expect, describe } from 'vitest';
+import { buildUrl, formDataToJSON, parsePath } from './utils';
 
 describe('formDataToJSON', () => {
   test('formDataToJSON returns empty object for empty FormData', () => {
@@ -228,3 +228,73 @@ describe('parsePath', () => {
   });
 });
 
+describe('buildUrl', () => {
+  test('returns a new URL and does not mutate the base', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base, { searchParams: { page: 2 } });
+
+    expect(result).toBeInstanceOf(URL);
+    expect(result.pathname).toBe('/posts');
+    expect(result.search).toBe('?sort=asc&page=2');
+    expect(result.hash).toBe('#top');
+    expect(base.search).toBe('?sort=asc');
+    expect(base.hash).toBe('#top');
+  });
+
+  test('adds and overwrites search params', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base, { searchParams: { page: 2 } });
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/posts?sort=asc&page=2#top');
+  });
+
+  test('removes search params with null values', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc&page=1#top');
+    const result = buildUrl(base, { searchParams: { sort: null, page: 3 } });
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/posts?page=3#top');
+  });
+
+  test('clears all search params when searchParams is null', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base, { searchParams: null });
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/posts#top');
+  });
+
+  test('changes pathname and clears hash', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base, { pathname: '/archive', hash: null, searchParams: null });
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/archive');
+  });
+
+  test('preserves relative parts when diff is omitted', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base);
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/posts?sort=asc#top');
+  });
+
+  test('stringifies boolean and number search values', () => {
+    const base = new URL('http://localhost:3000/posts');
+    const result = buildUrl(base, { searchParams: { active: true, page: 2 } });
+
+    expect(result.searchParams.get('active')).toBe('true');
+    expect(result.searchParams.get('page')).toBe('2');
+  });
+
+  test('clean: true drops existing query and hash before applying diff', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc#top');
+    const result = buildUrl(base, { searchParams: { page: 2 } }, { clean: true });
+
+    expect(`${result.pathname}${result.search}${result.hash}`).toBe('/posts?page=2');
+  });
+
+  test('pathname null resets to root', () => {
+    const base = new URL('http://localhost:3000/posts?sort=asc');
+    const result = buildUrl(base, { pathname: null });
+
+    expect(result.pathname).toBe('/');
+  });
+});

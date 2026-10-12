@@ -1,6 +1,8 @@
-import { test, describe, expect } from 'bun:test';
+import { test, describe, expect } from 'vitest';
 import { h } from 'preact';
-import { buildIslandHtml, renderPreactSSR, renderPreactIsland } from './index';
+import { useState } from 'preact/hooks';
+import { buildIslandHtml } from '@hyperspan/vite-plugin/islands';
+import { renderPreactSSR, renderPreactIsland } from './index';
 
 // ---------------------------------------------------------------------------
 // Simple Preact components defined inline — no .tsx compilation needed
@@ -49,6 +51,14 @@ describe('buildIslandHtml', () => {
     expect(result).not.toContain('data-loading="lazy"');
     expect(result).not.toContain('<template>');
   });
+
+  test('named export uses brace import syntax', () => {
+    const result = buildIslandHtml(jsId, componentName, esmName, '', '<p>SSR</p>', {
+      exportKind: 'named',
+    });
+    expect(result).toContain(`import { ${componentName} } from "${esmName}"`);
+    expect(result).not.toContain(`import ${componentName} from "${esmName}"`);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -83,6 +93,14 @@ describe('renderPreactSSR', () => {
     const output = renderPreactSSR(Hello, { name: '<script>alert(1)</script>' });
     expect(output).not.toContain('<script>alert');
   });
+
+  test('renders components that use hooks (same Preact as the renderer)', () => {
+    function Counter({ count: initial = 0 }: { count?: number }) {
+      const [count] = useState(initial);
+      return h('p', null, `Count: ${count}`);
+    }
+    expect(renderPreactSSR(Counter, { count: 3 })).toContain('Count: 3');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -91,9 +109,7 @@ describe('renderPreactSSR', () => {
 
 describe('renderPreactIsland', () => {
   test('throws when component has no __HS_ISLAND property', () => {
-    expect(() => renderPreactIsland(Hello, {})).toThrow(
-      'was not loaded with an island plugin'
-    );
+    expect(() => renderPreactIsland(Hello, {})).toThrow(/not a Hyperspan island/i);
   });
 
   test('returns an html_safe object', () => {
@@ -179,10 +195,20 @@ describe('renderPreactIsland', () => {
     (Hello as any).__HS_ISLAND = {
       id: jsId,
       render: (props: any, options: any = {}) =>
-        buildIslandHtml(jsId, 'Hello', 'hello', 'console.log(1)', renderPreactSSR(Hello, props), options),
+        buildIslandHtml(
+          jsId,
+          'Hello',
+          'hello',
+          'console.log(1)',
+          renderPreactSSR(Hello, props),
+          options
+        ),
     };
 
-    const result = renderPreactIsland(Hello, { name: 'World' }, { ssr: true, loading: 'lazy' } as any);
+    const result = renderPreactIsland(Hello, { name: 'World' }, {
+      ssr: true,
+      loading: 'lazy',
+    } as any);
     expect(result.content).toContain('data-loading="lazy"');
     expect(result.content).toContain('<template>');
     expect(result.content).toContain('Hello World!');

@@ -1,17 +1,10 @@
 import './ssr/install-server-dom-mock';
-import {
-  HSHtml,
-  html,
-  isHSHtml,
-  renderStream,
-  renderAsync,
-  render,
-  _typeOf,
-} from '@hyperspan/html';
+import { HSHtml, html, isHSHtml, renderStream, renderAsync, render, _typeOf } from './html';
 import { isbot } from 'isbot';
 import { executeMiddleware } from './middleware';
-import { parsePath, removeUndefined } from './utils';
+import { buildUrl, parsePath, removeUndefined } from './utils';
 import { Cookies } from './cookies';
+import { nodeAdapter } from '@hyperspan/adapter-node';
 
 import type { Hyperspan as HS } from './types';
 
@@ -51,6 +44,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
     appDir: './app',
     publicDir: './public',
     plugins: [],
+    deployAdapter: config.deployAdapter ?? nodeAdapter(),
     responseOptions: {
       disableStreaming: hyperspanDisableStreaming,
     },
@@ -58,6 +52,7 @@ export function createConfig(config: Partial<HS.Config> = {}): HS.Config {
   return {
     ...defaultConfig,
     ...config,
+    deployAdapter: config.deployAdapter ?? defaultConfig.deployAdapter,
     responseOptions: {
       ...defaultConfig.responseOptions,
       ...config.responseOptions,
@@ -72,7 +67,8 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   const url = new URL(req.url);
   const query = new URLSearchParams(url.search);
   const method = req.method.toUpperCase();
-  const headers = new Headers(req.headers);
+  const requestHeaders = new Headers(req.headers);
+  const responseHeaders = new Headers();
   const path = route?._path() || '/';
   const requestParams = (req as Request & { params?: Record<string, string | undefined> }).params;
   const params: Record<string, string | undefined> = Object.assign(
@@ -92,12 +88,21 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
   // Status override for the response. Will use if set. (e.g. c.res.status = 400)
   let status: number | undefined = undefined;
 
+  const copyHeaders = (source: Headers, target: Headers) => {
+    source.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') return;
+      target.set(key, value);
+    });
+    const cookies = typeof source.getSetCookie === 'function' ? source.getSetCookie() : [];
+    for (const cookie of cookies) {
+      target.append('Set-Cookie', cookie);
+    }
+  };
+
   const merge = async (response: Response) => {
-    // Convert headers to plain objects and merge (response headers override context headers)
-    const mergedHeaders = {
-      ...Object.fromEntries(headers.entries()),
-      ...Object.fromEntries(response.headers.entries()),
-    };
+    const mergedHeaders = new Headers();
+    copyHeaders(responseHeaders, mergedHeaders);
+    copyHeaders(response.headers, mergedHeaders);
 
     return new Response(await response.text(), {
       status: context.res.status ?? response.status,
@@ -107,6 +112,10 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
 
   const context: HS.Context = {
     vars: {},
+    url: (diff, options) => {
+      const next = buildUrl(url, diff, options);
+      return `${next.pathname}${next.search}${next.hash}`;
+    },
     route: {
       name: route?._config.name || undefined,
       path,
@@ -117,7 +126,7 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       raw: req,
       url,
       method,
-      headers,
+      headers: requestHeaders,
       query,
       cookies: new Cookies(req),
       async text() {
@@ -134,8 +143,8 @@ export function createContext(req: Request, route?: HS.Route): HS.Context {
       },
     },
     res: {
-      cookies: new Cookies(req, headers),
-      headers,
+      cookies: new Cookies(req, responseHeaders),
+      headers: responseHeaders,
       status,
       html: (html: string, options?: ResponseInit) =>
         merge(
@@ -498,6 +507,20 @@ export async function createServer(config: HS.Config = {} as HS.Config): Promise
 }
 
 /**
+ * Shared route lifecycle for Vite dev, production entries, and `hyperspan start`.
+ * Always: `beforeRoutesAdded` → add routes → `afterRoutesAdded`.
+ */
+export async function initServerRoutes(
+  server: HS.Server,
+  config: Pick<HS.Config, 'beforeRoutesAdded' | 'afterRoutesAdded'>,
+  addRoutes: (server: HS.Server) => void | Promise<void>
+): Promise<void> {
+  await config.beforeRoutesAdded?.(server);
+  await addRoutes(server);
+  await config.afterRoutesAdded?.(server);
+}
+
+/**
  * Checks if a response is HTML content
  */
 function isHTMLContent(response: unknown): response is Response {
@@ -537,7 +560,7 @@ export async function returnHTMLResponse(
       if (!disableStreaming && (routeContent as HSHtml).asyncContent?.length > 0) {
         return new StreamResponse(
           renderStream(routeContent as HSHtml, {
-            renderChunk: (chunk) => {
+            renderChunk: (chunk: { id: string; content: string }) => {
               // Trailing <!--/hs:chunk--> marks the end of a streaming chunk boundary.
               return html`
                 <template id="${chunk.id}_content">${html.raw(chunk.content)}<!--end--></template>

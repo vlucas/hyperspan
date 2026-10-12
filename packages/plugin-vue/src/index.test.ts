@@ -1,6 +1,8 @@
-import { test, describe, expect } from 'bun:test';
+import { test, describe, expect } from 'vitest';
 import { defineComponent, h } from 'vue';
-import { buildIslandHtml, renderVueSSR, renderVueIsland } from './index';
+import { createJiti } from 'jiti';
+import { buildIslandHtml } from '@hyperspan/vite-plugin/islands';
+import { renderVueSSR, renderVueIsland } from './index';
 
 // ---------------------------------------------------------------------------
 // Simple Vue components defined inline — no .vue compilation needed
@@ -100,7 +102,7 @@ describe('renderVueSSR', () => {
 describe('renderVueIsland', () => {
   test('throws when component has no __HS_ISLAND property', async () => {
     const Bare = defineComponent({ render: () => h('div') });
-    await expect(renderVueIsland(Bare, {})).rejects.toThrow('was not loaded with an island plugin');
+    await expect(renderVueIsland(Bare, {})).rejects.toThrow(/not a Hyperspan island/i);
   });
 
   test('returns an html_safe object', async () => {
@@ -174,14 +176,25 @@ describe('renderVueIsland', () => {
       id: jsId,
       render: async (props: any, options: any = {}) => {
         if (options.ssr === false) {
-          return buildIslandHtml(jsId, '__hs_vue_component', 'hello-vue', 'console.log("mount")', '', options);
+          return buildIslandHtml(
+            jsId,
+            '__hs_vue_component',
+            'hello-vue',
+            'console.log("mount")',
+            '',
+            options
+          );
         }
         const ssrContent = await renderVueSSR(Hello, props);
         return buildIslandHtml(jsId, '__hs_vue_component', 'hello-vue', '', ssrContent, options);
       },
     };
 
-    const result = await renderVueIsland(mockComponent, { name: 'World' }, { ssr: false, loading: undefined });
+    const result = await renderVueIsland(
+      mockComponent,
+      { name: 'World' },
+      { ssr: false, loading: undefined }
+    );
     expect(result.content).not.toContain('Hello World!');
     expect(result.content).toContain(`<div id="${jsId}"></div>`);
   });
@@ -193,13 +206,31 @@ describe('renderVueIsland', () => {
       id: jsId,
       render: async (props: any, options: any = {}) => {
         const ssrContent = await renderVueSSR(Hello, props);
-        return buildIslandHtml(jsId, '__hs_vue_component', 'hello-vue', 'console.log(1)', ssrContent, options);
+        return buildIslandHtml(
+          jsId,
+          '__hs_vue_component',
+          'hello-vue',
+          'console.log(1)',
+          ssrContent,
+          options
+        );
       },
     };
 
-    const result = await renderVueIsland(mockComponent, { name: 'World' }, { ssr: true, loading: 'lazy' } as any);
+    const result = await renderVueIsland(mockComponent, { name: 'World' }, {
+      ssr: true,
+      loading: 'lazy',
+    } as any);
     expect(result.content).toContain('data-loading="lazy"');
     expect(result.content).toContain('<template>');
     expect(result.content).toContain('Hello World!');
+  });
+});
+
+describe('jiti can load the plugin', () => {
+  test('vuePlugin is importable without parsing invalid declare global syntax', async () => {
+    const jiti = createJiti(import.meta.url, { interopDefault: true });
+    const mod = (await jiti.import('./index.ts')) as { vuePlugin: () => unknown };
+    expect(typeof mod.vuePlugin).toBe('function');
   });
 });

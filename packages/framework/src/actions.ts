@@ -1,16 +1,13 @@
-import { html } from '@hyperspan/html';
+import { html } from './html';
 import { createRoute, HTTPResponseException, returnHTMLResponse } from './server';
 import * as z from 'zod';
 import type { Hyperspan as HS } from './types';
 import { assetHash, formDataToJSON } from './utils';
-import { buildClientJS } from './client/js';
+import { hyperspanActionsScriptTag } from './layout';
 import { validateBody, ZodValidationError } from './middleware';
-import { debug } from 'debug';
+import debug from 'debug';
 
 const log = debug('hyperspan:actions');
-const actionsClientJS = await buildClientJS(
-  import.meta.resolve('./client/_hs/hyperspan-actions.client')
-);
 
 /**
  * Actions = Form + route handler
@@ -25,12 +22,12 @@ const actionsClientJS = await buildClientJS(
  * 5. Replaces form content in place with HTML response content from server via the Idiomorph library
  * 6. Handles any Exception thrown on server as error displayed back to user on the page
  */
-export function createAction<S extends z.ZodType>(params: {
+export function createAction<S extends HS.AnyZodSchema>(params: {
   name: string;
   schema: S;
 }): HS.Action<S>;
 export function createAction(params: { name: string; schema?: undefined }): HS.Action<undefined>;
-export function createAction<S extends z.ZodType>(params: {
+export function createAction<S extends HS.AnyZodSchema>(params: {
   name: string;
   schema?: S;
 }): HS.Action<S | undefined> {
@@ -138,7 +135,7 @@ export function createAction<S extends z.ZodType>(params: {
       const formContent = api._form ? api._form(c, props || {}) : null;
       return formContent
         ? html`<hs-action url="${this._path()}">${formContent}</hs-action
-            >${actionsClientJS.renderScriptTag()}`
+            >${hyperspanActionsScriptTag()}`
         : null;
     },
     errorHandler(handler) {

@@ -1,10 +1,23 @@
-import { Glob } from 'bun';
-import { createServer, getRunnableRoute, IS_PROD } from '@hyperspan/framework';
-import { CSS_PUBLIC_PATH, CSS_ROUTE_MAP } from '@hyperspan/framework/client/css';
-import { isValidRoutePath, parsePath } from '@hyperspan/framework/utils';
+import {
+  createConfig,
+  createServer,
+  initServerRoutes,
+  setAssetManifest,
+  registerRouteModule,
+} from '@hyperspan/framework';
+import { nodeAdapter } from '@hyperspan/adapter-node';
+import { isValidRoutePath } from '@hyperspan/framework/utils';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import debug from 'debug';
-import tailwind from "bun-plugin-tailwind"
+import {
+  createAppJiti,
+  resolveAliasedSpecifier,
+  resolveModuleAliases,
+} from '@hyperspan/vite-plugin/tsconfig-aliases';
 
 import type { Hyperspan as HS } from '@hyperspan/framework';
 
@@ -12,54 +25,109 @@ type startConfig = {
   development?: boolean;
 };
 
-const CWD = process.cwd();
 const log = debug('hyperspan:server');
 
-export async function loadConfig(): Promise<HS.Config> {
-  const configFile = join(CWD, 'hyperspan.config.ts');
-  const configModule = await import(configFile)
-    .then((module) => module.default)
-    .catch((error) => {
-      console.error(`[Hyperspan] Unable to load config file: ${error}`);
-      console.error(
-        `[Hyperspan] Please create a hyperspan.config.ts file in the root of your project.`
-      );
-      console.log(`[Hyperspan] Example:
-import { createConfig } from '@hyperspan/framework';
+let loadersRegistered = false;
 
-export default createConfig({
-  appDir: './app',
-  publicDir: './public',
-});
-`);
-      process.exit(1);
-    });
-  return configModule;
+/**
+ * Register Node resolve hooks for tsconfig `paths` (e.g. `~/`) and CSS stubs.
+ * Must run before importing a generated `dist/server.ts` in production.
+ */
+export function registerAppLoaders(root: string = process.cwd()) {
+  if (loadersRegistered) return;
+  loadersRegistered = true;
+  const aliases = resolveModuleAliases(root);
+
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      // Stub stylesheet imports so Node can evaluate route/layout modules.
+      if (
+        specifier.endsWith('.css') ||
+        specifier.endsWith('.scss') ||
+        specifier.endsWith('.sass') ||
+        specifier.endsWith('.less')
+      ) {
+        return {
+          shortCircuit: true,
+          url: 'data:text/javascript,export default {}',
+        };
+      }
+
+      const resolved = resolveAliasedSpecifier(specifier, aliases);
+      if (resolved) {
+        for (const ext of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
+          const candidate = resolved + ext;
+          if (existsSync(candidate)) {
+            return { shortCircuit: true, url: pathToFileURL(candidate).href };
+          }
+        }
+      }
+
+      return nextResolve(specifier, context);
+    },
+  });
+}
+
+export async function loadConfig(): Promise<HS.Config> {
+  registerAppLoaders();
+  const root = process.cwd();
+  const configFile = join(root, 'hyperspan.config.ts');
+  const jiti = createAppJiti(root);
+  try {
+    const config = createConfig(jiti(configFile) as Partial<HS.Config>);
+    config.deployAdapter ??= nodeAdapter();
+    return config;
+  } catch (error) {
+    console.error(`[Hyperspan] Unable to load config file: ${error}`);
+    console.error(
+      `[Hyperspan] Please create a hyperspan.config.ts file in the root of your project.`
+    );
+    process.exit(1);
+  }
 }
 
 /**
- * Create a Hyperspan server instance with all routes and actions added
+ * Create a Hyperspan server instance with all routes and actions added.
+ * Used by `hyperspan start` (production Node adapter).
  */
 export async function createHyperspanServer(startConfig: startConfig = {}): Promise<HS.Server> {
+  registerAppLoaders();
+  const root = process.cwd();
+
   console.log('[Hyperspan] Loading config...');
   const config = await loadConfig();
+
+  // Load build manifest if present (production)
+  const manifestPath = join(root, 'dist/manifest.json');
+  if (existsSync(manifestPath)) {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
+    setAssetManifest(manifest);
+  }
+
+  // Prefer built assets directory when present
+  if (existsSync(join(root, 'dist'))) {
+    config.publicDir = './dist';
+  }
+
   const server = await createServer(config);
 
-  if (config.beforeRoutesAdded) {
-    config.beforeRoutesAdded(server);
-  }
-
   console.log('[Hyperspan] Adding routes...');
-  await addDirectoryAsRoutes(server, 'routes', startConfig);
-
-  console.log('[Hyperspan] Adding actions...');
-  await addDirectoryAsRoutes(server, 'actions', startConfig);
-
-  if (config.afterRoutesAdded) {
-    config.afterRoutesAdded(server);
-  }
+  await initServerRoutes(server, config, async (server) => {
+    await addDirectoryAsRoutes(server, 'routes', startConfig);
+    console.log('[Hyperspan] Adding actions...');
+    await addDirectoryAsRoutes(server, 'actions', startConfig);
+  });
 
   return server;
+}
+
+async function scanFiles(directoryPath: string): Promise<string[]> {
+  const fg = await import('fast-glob');
+  return fg.default('**/*.{ts,tsx,js,jsx}', {
+    cwd: directoryPath,
+    absolute: true,
+    onlyFiles: true,
+  });
 }
 
 export async function addDirectoryAsRoutes(
@@ -67,125 +135,60 @@ export async function addDirectoryAsRoutes(
   relativeDirectory: string,
   startConfig: startConfig = {}
 ) {
-  const routesGlob = new Glob('**/*.ts');
-  const files: string[] = [];
+  registerAppLoaders();
+  const root = process.cwd();
+
   const appDir = server._config.appDir || './app';
-  const relativeAppPath = join(appDir, relativeDirectory);
-  const directoryPath = join(CWD, appDir, relativeDirectory);
-  const buildDir = join(CWD, '.build');
-  const cssPublicDir = join(CWD, server._config.publicDir, CSS_PUBLIC_PATH);
+  const directoryPath = join(root, appDir, relativeDirectory);
 
-  // Read local package.json to get the dependencies, so we can exclude them from the build for CSS below.
-  const packageJson = await Bun.file(join(CWD, 'package.json')).json();
-  const dependencies = packageJson.dependencies;
-
-  log(`Scanning directory for routes: ${directoryPath}`);
-
-  try {
-    // Scan directory for TypeScript files
-    for await (const file of routesGlob.scan({ cwd: directoryPath, onlyFiles: true })) {
-      const filePath = join(directoryPath, file);
-
-      // Hidden directories and files start with a double underscore.
-      // These do not get added to the routes. Nothing nested under them gets added to the routes either.
-      if (filePath.includes('/__')) {
-        continue;
-      }
-
-      files.push(filePath);
-    }
-  } catch (error) {
-    console.error(`[Hyperspan] Directory not found: ${directoryPath}`);
+  if (!existsSync(directoryPath)) {
+    return;
   }
 
+  log(`Scanning directory for routes: ${directoryPath}`);
+  const files = await scanFiles(directoryPath);
   const routeMap: { route: string; file: string }[] = [];
-  const routes: Array<HS.Route> = (await Promise.all(
-    files.map(async (filePath) => {
-      try {
-        const relativeFilePath = filePath.split(relativeAppPath).pop() || '';
-        if (!isValidRoutePath(relativeFilePath)) {
-          return null;
-        }
 
-        log(`Loading route: ${filePath}`);
-
-        const module = await import(filePath);
-
-        const route = getRunnableRoute(module);
-
-        const parsedPath = parsePath(relativeFilePath);
-
-        // If route has a _path() method that returns a meaningful path, use it
-        // Otherwise, parse path from file path
-        let path = parsedPath.path;
-        if (typeof route._path === 'function') {
-          const routePath = route._path();
-          // If _path() returns a meaningful path (not just '/'), use it
-          if (routePath && routePath !== '/') {
-            path = routePath;
+  const routes: Array<HS.Route> = (
+    await Promise.all(
+      files.map(async (filePath) => {
+        try {
+          const relativeFilePath =
+            filePath.split(join(root, appDir, relativeDirectory)).pop() || '';
+          if (!isValidRoutePath(relativeFilePath)) {
+            return null;
           }
-        }
 
-        let cssFiles: string[] = [];
+          log(`Loading route: ${filePath}`);
+          const module = await import(pathToFileURL(filePath).href);
 
-        // Build the route just for the CSS files (expensive, but easiest way to do CSS compilation by route)
-        // @TODO: Optimize this at some later date... This is O(n) for each route and doesn't scale well for large projects.
-        // @TODO: This will also currently re-compile the same CSS file(s) that are included in multiple routes, which is dumb.
-        const buildResult = await Bun.build({
-          plugins: [tailwind],
-          entrypoints: [filePath],
-          outdir: buildDir,
-          naming: `${relativeAppPath}/${filePath.split('/').pop()}-[hash].[ext]`,
-          minify: IS_PROD,
-          format: 'esm',
-          target: 'node',
-          // Only extract CSS — don't bundle framework packages, dependencies, or component files.
-          external: [...Object.keys(dependencies), '@hyperspan/*', '*.vue', '*.svelte', '*.tsx', '*.jsx', '*.ts', '*.js'],
-        });
-
-        // Move CSS files to the public directory
-        for (const output of buildResult.outputs) {
-          if (output.path.endsWith('.css')) {
-            // Use content hash for filename so that we don't duplicate CSS files with the same content (helps browser caching).
-            const contentHash = output.hash;
-            const cssFileName = `${contentHash}.css`;
-            const cssOutputFile = Bun.file(output.path);
-            await Bun.write(join(cssPublicDir, cssFileName), cssOutputFile);
-            cssOutputFile.delete();
-            cssFiles.push(cssFileName);
+          let productionManifest;
+          try {
+            const manifestPath = join(root, 'dist/manifest.json');
+            if (existsSync(manifestPath)) {
+              productionManifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
+            }
+          } catch {
+            // manifest optional
           }
-        }
 
-        // Set route path based on the file path (if not already set)
-        if (!route._config.path) {
-          route._config.path = path;
-
-          // Initialize params object if it doesn't exist
-          if (parsedPath.params.length > 0) {
-            const params = route._config.params ?? {};
-            parsedPath.params.forEach(param => {
-              params[param] = undefined;
-            });
-            route._config.params = params;
+          const route = registerRouteModule(server, relativeFilePath, module, productionManifest);
+          if (!route) {
+            return null;
           }
+
+          const path = route._path();
+
+          routeMap.push({ route: path, file: filePath.replace(root, '') });
+          return route;
+        } catch (error) {
+          console.error(`[Hyperspan] Error loading route: ${filePath}`);
+          console.error(error);
+          process.exit(1);
         }
-
-        if (cssFiles.length > 0) {
-          route._config.cssImports = cssFiles;
-          CSS_ROUTE_MAP.set(path, cssFiles);
-        }
-
-        routeMap.push({ route: path, file: filePath.replace(CWD, '') });
-
-        return route;
-
-      } catch (error) {
-        console.error(`[Hyperspan] Error loading route: ${filePath}`);
-        console.error(error);
-        process.exit(1);
-      }
-    })
-  )).filter((route) => route !== null);
+      })
+    )
+  ).filter((route) => route !== null);
 
   if (routeMap.length === 0) {
     console.log(`[Hyperspan] No routes found in ${relativeDirectory}`);
@@ -195,6 +198,4 @@ export async function addDirectoryAsRoutes(
   if (startConfig.development) {
     console.table(routeMap);
   }
-
-  server._routes.push(...routes);
 }
